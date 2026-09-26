@@ -10,7 +10,7 @@
 
 [下载 Release 0.1.0](https://github.com/Fab1e2000/NeoDizzy/releases/tag/v0.1.0) · [CI 状态](https://github.com/Fab1e2000/NeoDizzy/actions/workflows/ci.yml)
 
-Release 附带未签名 IPA，需要 iOS 27，并使用自己的证书通过侧载工具重新签名。每次推送和 PR 自动运行核心测试、iOS 模拟器测试及设备构建；`v*` 标签在测试通过后发布对应 Release。发布前请同步 `project.yml` 与 Info.plist 版本，并准备 `docs/releases/v版本.md`。本地运行 `scripts/package-unsigned.sh` 可生成相同格式的 IPA 和 SHA-256 校验文件。
+Release 附带未签名 IPA，需要 iOS 27，并使用自己的证书通过侧载工具重新签名。每次推送和 PR 自动运行核心测试、iOS 测试目标编译检查及设备构建；`v*` 标签在测试通过后发布对应 Release。发布前请同步 `project.yml` 与 Info.plist 版本，并准备 `docs/releases/v版本.md`。本地运行 `scripts/package-unsigned.sh` 可生成相同格式的 IPA 和 SHA-256 校验文件。
 
 图标参考 NeoBili 的立体字母样式，使用黑底金色 D；矢量源文件为 [design/AppIcon.svg](design/AppIcon.svg)，运行 `xcrun swift scripts/generate-app-icon.swift` 可重新生成资源。
 
@@ -91,3 +91,5 @@ NeoDizzy 以 [GPLv3](LICENSE) 发布。播放相关代码将移植自同样以 G
 - repo 正文和图片原生展示，回复入口仍使用网站。
 
 写操作使用当前账号的 CSRF 表单，完成后重新读取网站状态；网络结果不确定时不自动重发。自动化测试使用模拟请求，不会替用户发短评、点赞或改变关注关系。
+
+CI 默认执行 156 项核心回归测试，并编译完整 iOS 应用及测试目标。GitHub 的 Xcode 27 模拟器曾在 173 项测试通过后卡住结果收集，因此运行模拟器测试暂作为 Actions 手动运行时的 `run_simulator_tests` 选项；它仍会报告实际失败，不会忽略错误。

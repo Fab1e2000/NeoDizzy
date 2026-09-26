@@ -5,6 +5,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_simulator_tests:
+        description: Run iOS tests on the hosted simulator (Xcode 27 may stall during result collection)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -22,7 +27,13 @@ jobs:
         run: xcodebuild -downloadComponent MetalToolchain
       - name: Core regression tests
         run: python3 scripts/test-core.py
+      - name: Compile iOS app and test target
+        run: |
+          xcodebuild -project NeoDizzy.xcodeproj -scheme NeoDizzy -configuration Debug \
+            -destination "generic/platform=iOS Simulator" -derivedDataPath build/tests \
+            -onlyUsePackageVersionsFromResolvedFile CODE_SIGN_IDENTITY="-" build-for-testing -quiet
       - name: Select iPhone simulator
+        if: inputs.run_simulator_tests == true
         run: |
           xcrun simctl list devices available --json > "$RUNNER_TEMP/devices.json"
           python3 - <<'PY'
@@ -36,11 +47,13 @@ jobs:
               env.write(f"SIMULATOR_ID={candidates[0]['udid']}\n")
           PY
       - name: Boot simulator
+        if: inputs.run_simulator_tests == true
         timeout-minutes: 5
         run: |
           xcrun simctl boot "$SIMULATOR_ID"
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: iOS tests
+        if: inputs.run_simulator_tests == true
         timeout-minutes: 12
         run: |
           xcodebuild -project NeoDizzy.xcodeproj -scheme NeoDizzy -configuration Debug \
@@ -48,7 +61,7 @@ jobs:
             -resultBundlePath build/Tests.xcresult -onlyUsePackageVersionsFromResolvedFile \
             -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
             -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
-            CODE_SIGN_IDENTITY="-" test
+            CODE_SIGN_IDENTITY="-" test-without-building
       - name: Package unsigned device IPA
         env:
           RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
