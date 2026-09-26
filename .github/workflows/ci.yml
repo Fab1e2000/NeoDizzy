@@ -47,7 +47,7 @@ jobs:
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build/tests \
             -resultBundlePath build/Tests.xcresult -onlyUsePackageVersionsFromResolvedFile \
             -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
-            -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
+            -collect-test-diagnostics never -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
             CODE_SIGN_IDENTITY="-" test
       - name: Package unsigned device IPA
         env:
