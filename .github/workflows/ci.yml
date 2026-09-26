@@ -35,12 +35,20 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write(f"SIMULATOR_ID={candidates[0]['udid']}\n")
           PY
+      - name: Boot simulator
+        timeout-minutes: 5
+        run: |
+          xcrun simctl boot "$SIMULATOR_ID"
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: iOS tests
+        timeout-minutes: 12
         run: |
           xcodebuild -project NeoDizzy.xcodeproj -scheme NeoDizzy -configuration Debug \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build/tests \
             -resultBundlePath build/Tests.xcresult -onlyUsePackageVersionsFromResolvedFile \
-            CODE_SIGNING_ALLOWED=NO test -quiet
+            -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 \
+            -test-timeouts-enabled YES -default-test-execution-time-allowance 60 \
+            CODE_SIGN_IDENTITY="-" test
       - name: Package unsigned device IPA
         env:
           RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
