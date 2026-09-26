@@ -150,4 +150,40 @@ struct StreamResolverTests {
             try await resolver.stream(for: track(7))
         }
     }
+
+    @Test func localFileWinsOverPreviewAndDoesNotNeedNetworkOrLogin() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
+        try Data([1, 2, 3]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let log = FetchLog()
+        let resolver = StreamResolver(fetch: { discID in
+            log.discIDs.append(discID)
+            throw PlaybackError.unavailable
+        }, localFile: { _ in file })
+        resolver.store(["1": signed], for: "fx4")
+        #expect(try await resolver.stream(for: track(1)) == file)
+        resolver.removeAll()
+        #expect(try await resolver.stream(for: track(1)) == file)
+        #expect(log.discIDs.isEmpty)
+    }
+
+    @Test func removedLocalFileFallsBackToNetwork() async throws {
+        let missing = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
+        let log = FetchLog()
+        let resolver = StreamResolver(fetch: { discID in
+            log.discIDs.append(discID)
+            return ["1": self.renewed]
+        }, localFile: { _ in missing })
+        #expect(try await resolver.stream(for: track(1)) == renewed)
+        #expect(log.discIDs == ["fx4"])
+    }
+
+    @Test func brokenLocalFileCanBeBypassedForSingleRetry() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
+        try Data([0]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let resolver = StreamResolver(fetch: { _ in ["1": self.renewed] }, localFile: { _ in file })
+        #expect(try await resolver.stream(for: track(1), preferLocal: false) == renewed)
+        #expect(try await resolver.stream(for: track(1)) == file)
+    }
 }

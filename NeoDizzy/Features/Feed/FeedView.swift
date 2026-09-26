@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// 关注动态：已关注社团的新作，按社团分组。需要有效的 token。
 @Observable
@@ -28,6 +29,9 @@ struct FeedView: View {
             } else {
                 LoginPrompt(systemImage: "newspaper.fill", message: "登录后，你关注的社团发布的新作会显示在这里。")
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .dizzyFollowingDidChange)) { _ in
+            Task { await model.groups?.reload() }
         }
         .onChange(of: account.account?.userID, initial: true) { _, userID in
             model.update(userID: userID)

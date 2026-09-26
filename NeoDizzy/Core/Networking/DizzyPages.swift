@@ -16,7 +16,7 @@ nonisolated struct DizzyPages: Sendable {
     }
 
     func label(name: String) async throws -> LabelPage {
-        let html = try await client.html(path: "/l/\(DizzyURL.pathSegment(name))/")
+        let html = try await client.html(path: "/l/\(DizzyURL.pathSegment(name))/", cachePolicy: .reloadIgnoringLocalCacheData)
         return try await Self.parse { try LabelPageParser.parse(html) }
     }
 
@@ -47,8 +47,24 @@ nonisolated struct DizzyPages: Sendable {
     }
 
     func profileMusic(userID: Int, page: Int = 1) async throws -> ProfileMusicPageParser.Result {
-        let html = try await client.html(path: "/u/\(userID)/music/", query: page > 1 ? [URLQueryItem(name: "page", value: String(page))] : [])
+        let html = try await client.html(path: "/u/\(userID)/music/", query: page > 1 ? [URLQueryItem(name: "page", value: String(page))] : [], cachePolicy: .reloadIgnoringLocalCacheData)
         return try await Self.parse { try ProfileMusicPageParser.parse(html) }
+    }
+
+    /// Signed download menus must be fetched immediately before starting or retrying a download.
+    func downloadOptions(discID: String) async throws -> [DownloadOption] {
+        guard client.credentials.cookieHeader() != nil else { throw DizzyError.notLoggedIn }
+        let html = try await client.html(path: "/d/\(DizzyURL.pathSegment(discID))/", cachePolicy: .reloadIgnoringLocalCacheData)
+        return try await Self.parse { try DownloadPageParser.parse(html, discID: discID) }
+    }
+
+    /// Price and sale status can change; never reuse a cached checkout offer.
+    func purchaseOffer(discID: String, isOwned: Bool) async throws -> PurchaseOffer {
+        guard client.credentials.cookieHeader() != nil else { throw DizzyError.notLoggedIn }
+        let html = try await client.html(path: "/d/\(DizzyURL.pathSegment(discID))/", cachePolicy: .reloadIgnoringLocalCacheData)
+        let offer = try await Self.parse { try PurchasePageParser.parse(html, discID: discID, isOwned: isOwned) }
+        guard !offer.requiresLogin else { throw DizzyError.notLoggedIn }
+        return offer
     }
 
     /// 曲号 → 完整版时长。

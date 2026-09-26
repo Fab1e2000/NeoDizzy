@@ -31,20 +31,21 @@ nonisolated struct DizzyAPI: Sendable {
     }
 
     /// 登录后自动带上 token：已购专辑的曲目地址是完整版，`ihavethis` 反映是否已购。
-    func discDetail(id: String) async throws -> DiscDetail {
+    func discDetail(id: String, fresh: Bool = false) async throws -> DiscDetail {
         let query = [URLQueryItem(name: "discid", value: id)]
+        let cachePolicy: URLRequest.CachePolicy = fresh ? .reloadIgnoringLocalCacheData : .useProtocolCachePolicy
         guard let token = client.credentials.token else {
-            return try await client.json(DiscDetailResponse.self, path: "/apis/getthisdicsinfo/", query: query).detail
+            return try await client.json(DiscDetailResponse.self, path: "/apis/getthisdicsinfo/", query: query, cachePolicy: cachePolicy).detail
         }
         do {
             return try await client.json(
                 DiscDetailResponse.self,
                 path: "/apis/getthisdicsinfo/",
-                query: query + [URLQueryItem(name: "token", value: token)]
+                query: query + [URLQueryItem(name: "token", value: token)], cachePolicy: cachePolicy
             ).detail
         } catch let error as DizzyError where error.isUnrecognizedResponse {
             // 带 token 拿到错误页：不带 token 再试一次。这次成功说明是 token 失效了，否则是专辑本身有问题。
-            let detail = try await client.json(DiscDetailResponse.self, path: "/apis/getthisdicsinfo/", query: query).detail
+            let detail = try await client.json(DiscDetailResponse.self, path: "/apis/getthisdicsinfo/", query: query, cachePolicy: cachePolicy).detail
             rejectToken()
             return detail
         }
@@ -60,7 +61,7 @@ nonisolated struct DizzyAPI: Sendable {
                 URLQueryItem(name: "r", value: String(start + Self.feedPageSize)),
                 URLQueryItem(name: "sort", value: "ad"),
                 URLQueryItem(name: "token", value: token),
-            ])
+            ], cachePolicy: .reloadIgnoringLocalCacheData)
             return Page(items: response.labels.map(\.group), hasMore: response.canshowmore)
         } catch let error as DizzyError where error.isUnrecognizedResponse {
             rejectToken()

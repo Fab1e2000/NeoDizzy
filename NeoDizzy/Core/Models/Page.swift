@@ -12,11 +12,12 @@ nonisolated struct HomeShowcase: Sendable {
     let packs: [PackSummary]
 }
 
-/// 搜索结果的一页。社团只出现在第一页；「用户」一栏要到 M5 才用得上，先不解析。
+/// 搜索结果的一页。社团与用户只出现在第一页。
 nonisolated struct SearchResults: Sendable {
     let labels: [SearchLabel]
     let discs: [SearchDisc]
     let hasMore: Bool
+    var users: [CommunityUser] = []
 }
 
 nonisolated struct SearchLabel: Hashable, Identifiable, Sendable {

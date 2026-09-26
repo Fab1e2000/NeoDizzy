@@ -1,0 +1,19 @@
+<!doctype html><html><head><title>Purchase fixture</title></head><body>
+<!-- Relevant elements reduced from https://www.dizzylab.net/d/ALCD0001/ on 2026-09-26. -->
+<a class="btn btn-warning" type="button" style="margin-bottom:6px;width:100%;" href="/albums/login">现在购买 38.0元</button>
+<div id="modalcheckout">
+<input type="number" step="1" min="38" id='yourprice' name='yourprice' value='38' class="form-control" oninput="valuecheck(this)" aria-label="input" aria-describedby="inputGroup-sizing-default">
+<textarea id="ordercommit" maxlength="100"></textarea>
+<script>
+discprice=38.0.toFixed(2)
+var checkoutref = '/albums/checkout_alipay/?id=ALCD0001&q=1&type=dig&price=' + $('#yourprice').val() + '&commit=' + $('#ordercommit').val()
+</script>
+</div>
+<div id="modalcheckoutboost">
+<input type="number" step="1" min="1" id='yourprice_boost' name='yourprice_boost' value='10' class="form-control" oninput="valuecheck_boost(this)" aria-label="input" aria-describedby="inputGroup-sizing-default">
+<textarea id="ordercommit_boost" maxlength="100"></textarea>
+<script>
+var checkoutref = '/albums/checkout_alipay/?id=ALCD0001&q=1&type=boost&price=' + $('#yourprice_boost').val() + '&commit=' + $('#ordercommit_boost').val()
+</script>
+</div>
+</body></html>

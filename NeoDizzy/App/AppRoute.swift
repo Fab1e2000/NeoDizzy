@@ -10,6 +10,7 @@ enum AppRoute: Hashable {
     case user(id: Int)
     case tag(String)
     case pack(id: String)
+    case review(id: Int)
     case rank
     case shuffle
 
@@ -20,6 +21,7 @@ enum AppRoute: Hashable {
         case .user: String(localized: "用户主页")
         case .tag(let tag): "#\(tag)"
         case .pack: String(localized: "合集")
+        case .review: "repo 长评"
         case .rank: String(localized: "排行榜")
         case .shuffle: String(localized: "随便听听")
         }

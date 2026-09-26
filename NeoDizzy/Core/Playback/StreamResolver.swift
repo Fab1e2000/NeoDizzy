@@ -9,13 +9,16 @@ final class StreamResolver {
     private var cache: [String: [String: URL]] = [:]
     private let fetch: (String) async throws -> [String: URL]
     private let now: () -> Date
+    private let localFile: (Track) -> URL?
 
     init(
-        fetch: @escaping (String) async throws -> [String: URL] = { try await DizzyAPI.shared.discDetail(id: $0).streams },
-        now: @escaping () -> Date = Date.init
+        fetch: @escaping (String) async throws -> [String: URL] = { try await DizzyAPI.shared.discDetail(id: $0, fresh: true).streams },
+        now: @escaping () -> Date = Date.init,
+        localFile: @escaping (Track) -> URL? = { _ in nil }
     ) {
         self.fetch = fetch
         self.now = now
+        self.localFile = localFile
     }
 
     /// 专辑页已经拿到的地址，直接放进缓存，播放时不用再请求一次。
@@ -24,7 +27,13 @@ final class StreamResolver {
         cache[discID] = streams
     }
 
-    func stream(for track: Track) async throws -> URL {
+    func stream(for track: Track, preferLocal: Bool = true) async throws -> URL {
+        // 每次换曲目都重新查询：刚下载的曲目立即可播，移走的文件可回退到串流。
+        // 本地地址不放入签名地址缓存，也不受登录/退出登录的缓存清理影响。
+        if preferLocal, let url = localFile(track), url.isFileURL,
+           FileManager.default.isReadableFile(atPath: url.path) {
+            return url
+        }
         if let url = cache[track.discID]?[track.number], isFresh(url) {
             return url
         }

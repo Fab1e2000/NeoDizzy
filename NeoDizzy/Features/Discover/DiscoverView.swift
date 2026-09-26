@@ -54,6 +54,10 @@ struct DiscoverView: View {
 
     var body: some View {
         MainTabPage(tab: .discover, onRefresh: { await model.refresh() }) {
+            HStack(spacing: 12) {
+                NavigationLink(value: AppRoute.shuffle) { Label("随便听听", systemImage: "shuffle").frame(maxWidth: .infinity) }
+                NavigationLink(value: AppRoute.rank) { Label("支持者榜", systemImage: "trophy").frame(maxWidth: .infinity) }
+            }.buttonStyle(.bordered).controlSize(.large)
             DiscoverSectionPicker(selection: $model.section)
             if let category = model.section.category, let list = model.lists[category] {
                 PagedContent(list: list, webURL: DizzyURL.site) { discs in

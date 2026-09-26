@@ -10,6 +10,7 @@ nonisolated struct PlaybackSnapshot: Codable, Sendable {
     let repeatMode: RepeatMode
     let isShuffled: Bool
     let shuffledOrder: [Int]
+    var isDiscovery: Bool? = nil
 }
 
 final class PlaybackPersistence {

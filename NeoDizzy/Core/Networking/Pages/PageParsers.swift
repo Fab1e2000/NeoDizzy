@@ -133,7 +133,11 @@ nonisolated enum SearchPageParser {
                 )
                 return SearchDisc(disc: disc, excerpt: try link.select("h3.truncate-limit").first()?.text() ?? "")
             }
-            return SearchResults(labels: labels, discs: discs, hasMore: HTML.hasNextPage(document))
+            let users = try document.select("a[href*=/u/]:has(h1)").array().compactMap { link -> CommunityUser? in
+                guard let id = LoggedInHomeParser.userID(fromHref: try link.attr("href")) else { return nil }
+                return CommunityUser(id: id, name: try link.select("h1").first()?.text() ?? String(id), avatarURL: HTML.imageURL(try link.select("img").first()))
+            }
+            return SearchResults(labels: labels, discs: discs, hasMore: HTML.hasNextPage(document), users: users)
         }
     }
 }

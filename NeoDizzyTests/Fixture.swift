@@ -1,8 +1,8 @@
 import Foundation
 import Testing
 
-/// 读取 `Fixtures/` 里保存的真实页面和接口样本。
-/// 样本删去了脚本、导航、页脚和其他用户的头像，解析用到的结构保持原样。
+/// 读取 `Fixtures/` 中的页面、接口和压缩包样本。
+/// 既有网页样本去掉了无关个人信息；download-* 为人工构造的解析及安全回归样本，不含音乐内容。
 enum Fixture {
     private final class BundleToken {}
 

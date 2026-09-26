@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><title>下载测试专辑 - DizzyLab</title></head><body>
+<!-- Synthetic fixture following docs/SITE_API.md's observed paid-album download menu.
+     No live account, signatures or personal information are included. -->
+<div class="dropdown">
+  <button class="btn btn-primary dropdown-toggle" data-toggle="dropdown">已有数字版，下载</button>
+  <div class="dropdown-menu">
+    <a class="dropdown-item" href="/albums/download/?d=TEST-001&amp;tp=128&amp;k=fixture-only&amp;v=0">MP3 (128 kbps) - 35MB</a>
+    <a class="dropdown-item" href="https://www.dizzylab.net/albums/download/?d=TEST-001&amp;tp=MP3&amp;k=fixture-only&amp;v=0">MP3 (320 kbps) - 82MB</a>
+    <a class="dropdown-item" href="/albums/download/?d=TEST-001&amp;tp=FLAC&amp;k=fixture-only&amp;v=0">FLAC (Level-5) - 145MB</a>
+  </div>
+</div>
+<a href="/albums/download/?d=TEST-001&amp;tp=FLAC&amp;k=duplicate">FLAC duplicate</a>
+<a href="https://example.com/albums/download/?d=TEST-001&amp;tp=MP3&amp;k=fake">External</a>
+<a href="/albums/download/?d=OTHER&amp;tp=MP3&amp;k=fake">Another disc</a>
+<a href="/albums/download/?d=TEST-001&amp;tp=WAV&amp;k=fake">Unknown format</a>
+<a href="/albums/download/?d=TEST-001&amp;tp=MP3">Missing signature</a>
+</body></html>

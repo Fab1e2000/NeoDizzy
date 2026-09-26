@@ -19,8 +19,9 @@ nonisolated final class DizzyHTTPClient: Sendable {
         self.credentials = credentials
     }
 
-    func data(path: String, query: [URLQueryItem] = [], referer: String? = nil) async throws -> Data {
-        var request = URLRequest(url: DizzyURL.page(path, query: query))
+    func data(path: String, query: [URLQueryItem] = [], referer: String? = nil,
+              cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy) async throws -> Data {
+        var request = URLRequest(url: DizzyURL.page(path, query: query), cachePolicy: cachePolicy)
         request.setValue(referer ?? DizzyURL.site.absoluteString + "/", forHTTPHeaderField: "Referer")
         return try await perform(request).0
     }
@@ -82,8 +83,9 @@ nonisolated final class DizzyHTTPClient: Sendable {
         (url?.absoluteString ?? "").replacing(#/token=[0-9a-fA-F]+/#, with: "token=<token>")
     }
 
-    func json<T: Decodable & Sendable>(_ type: T.Type, path: String, query: [URLQueryItem] = []) async throws -> T {
-        let data = try await data(path: path, query: query)
+    func json<T: Decodable & Sendable>(_ type: T.Type, path: String, query: [URLQueryItem] = [],
+                                       cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy) async throws -> T {
+        let data = try await data(path: path, query: query, cachePolicy: cachePolicy)
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
@@ -91,8 +93,9 @@ nonisolated final class DizzyHTTPClient: Sendable {
         }
     }
 
-    func html(path: String, query: [URLQueryItem] = []) async throws -> String {
-        let data = try await data(path: path, query: query)
+    func html(path: String, query: [URLQueryItem] = [],
+              cachePolicy: URLRequest.CachePolicy = .useProtocolCachePolicy) async throws -> String {
+        let data = try await data(path: path, query: query, cachePolicy: cachePolicy)
         return String(decoding: data, as: UTF8.self)
     }
 }

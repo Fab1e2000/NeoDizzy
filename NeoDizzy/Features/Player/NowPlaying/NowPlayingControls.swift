@@ -153,6 +153,8 @@ struct NowPlayingTransportControls: View {
                     .contentShape(.circle)
             }
             .buttonStyle(NowPlayingTransportButtonStyle(reducesMotion: accessibilityReduceMotion))
+            .disabled(!player.canPlayPrevious)
+            .opacity(player.canPlayPrevious ? 1 : 0.4)
             .accessibilityLabel("上一首")
 
             Spacer()
@@ -316,8 +318,12 @@ struct NowPlayingSongActions: View {
                 openRoute(.disc(id: discID))
             },
         ]
-        let webTitle = player.isPreview ? String(localized: "在网页中购买") : String(localized: "在网页中打开")
-        items.append(UIAction(title: webTitle, image: UIImage(systemName: "safari")) { _ in
+        if player.isPreview {
+            items.append(UIAction(title: String(localized: "前往专辑购买"), image: UIImage(systemName: "cart")) { _ in
+                openRoute(.disc(id: discID))
+            })
+        }
+        items.append(UIAction(title: String(localized: "在网页中打开"), image: UIImage(systemName: "safari")) { _ in
             openURL(DizzyURL.disc(discID))
         })
         return items

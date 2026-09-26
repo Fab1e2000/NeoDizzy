@@ -1,0 +1,77 @@
+name: CI
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  test-build:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Toolchain
+        run: xcodebuild -version
+      - name: Core regression tests
+        run: python3 scripts/test-core.py
+      - name: Select iPhone simulator
+        run: |
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/devices.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          devices = json.loads((Path(os.environ['RUNNER_TEMP']) / 'devices.json').read_text())['devices']
+          candidates = [d for runtime, group in devices.items() if 'iOS-27' in runtime for d in group if d['name'].startswith('iPhone')]
+          if not candidates:
+              raise SystemExit('iOS 27 iPhone simulator is required')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f"SIMULATOR_ID={candidates[0]['udid']}\n")
+          PY
+      - name: iOS tests
+        run: |
+          xcodebuild -project NeoDizzy.xcodeproj -scheme NeoDizzy -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build/tests \
+            -resultBundlePath build/Tests.xcresult -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO test -quiet
+      - name: Package unsigned device IPA
+        env:
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        run: scripts/package-unsigned.sh
+      - name: Upload IPA
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: NeoDizzy-unsigned
+          path: dist/*
+          if-no-files-found: error
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: test-results
+          path: build/Tests.xcresult
+          if-no-files-found: ignore
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: NeoDizzy-unsigned
+          path: dist
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/* --verify-tag \
+            --title "NeoDizzy ${RELEASE_TAG#v}" --notes-file "docs/releases/$RELEASE_TAG.md"

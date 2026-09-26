@@ -138,7 +138,7 @@ struct NowPlayingQueuePage: View {
                     .listRowBackground(Color.clear)
 
                 if upcoming.isEmpty {
-                    Text(player.repeatMode == .one ? "正在单曲循环" : "后面没有要播放的曲目了")
+                    Text(player.isDiscovery ? "随便听听：下一首获取新曲目，上一首返回收听历史。" : player.repeatMode == .one ? "正在单曲循环" : "后面没有要播放的曲目了")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.58))
                         .frame(maxWidth: .infinity)
@@ -152,10 +152,12 @@ struct NowPlayingQueuePage: View {
                     }
                 }
             } header: {
-                NowPlayingQueueModeControls()
-                    .padding(.vertical, 8)
-                    .textCase(nil)
-                    .listRowInsets(.init())
+                if !player.isDiscovery {
+                    NowPlayingQueueModeControls()
+                        .padding(.vertical, 8)
+                        .textCase(nil)
+                        .listRowInsets(.init())
+                }
             }
         }
         .listStyle(.plain)

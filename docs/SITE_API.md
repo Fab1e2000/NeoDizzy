@@ -75,6 +75,10 @@ https://streaming.dizzylab.net/<yyyyMMddHHmm>/<md5>/<discid>/full/<n>.mp3
 - `k` 解码后为「过期时间戳:签名」，有效期约 1 小时，需在下载前现取。
 - 下载结果为 ZIP 压缩包（文件名编码与目录结构待 M3 实测）。
 
+M3 实现会在启动和重试时重新读取此菜单，只接受同源且专辑 ID、格式和签名参数完整的下载链接。下载到临时目录后先校验 ZIP，再解压、匹配曲号并写入所选文件夹。本轮没有可用的已登录网页会话，真实下载包的文件名编码与结构仍未核实；编码和目录兼容性测试使用人工构造的 ZIP，不把它们作为网站现状的证据。
+
+后续真机验证：2026-09-26 使用 App 会话成功下载 ALCD0001 的 FLAC ZIP，解压、匹配并导入 5 首曲目。本次样本已验证实际下载流程，不代表所有作品均使用相同 ZIP 编码或目录结构。
+
 ### `getfeed` 字段
 
 `labels[]` 每项是一个社团：`labelid`、`title`（社团名）、`labelcover`、`add_date`（ISO 8601），以及这批新作 `discs[]`。
@@ -111,6 +115,19 @@ https://streaming.dizzylab.net/<yyyyMMddHHmm>/<md5>/<discid>/full/<n>.mp3
   - 手机 UA → `mclient.alipay.com/h5pay/landing`（H5 收银台，预期通过 `alipays://` 跳转支付宝 App，待真机验证）
 - 未付款订单不会出现在「全部订单」里。
 
+### M4 只读核验与实现约束
+
+2026-09-26 再次核验普通 ALCD0001、优惠 KSEP-001、免费 fx4、兑换 ALCD0003，以及已登录的 ALCD0001 页面：
+
+- 首次购买表单为 `#modalcheckout #yourprice`，最低价取 `min`，默认金额取 `value`；同面板脚本 `discprice` 是折后价。优惠示例原价 40、现价与最低价 18。
+- 已购追加支持为 `#modalcheckoutboost #yourprice_boost`，当前最低 1 元、默认 10 元。该表单没有发布累计 BOOST 百分比，不用专辑原价猜算。
+- 免费页面最低价与基价均为 0。兑换页面依然嵌入看似有效的隐藏付款表单，因此需同时验证可见购买入口；含收货字段的实体商品不在 M4 范围。
+- 附言是 `#ordercommit` / `#ordercommit_boost`，`maxlength=100`。所有查询值按 URL 参数分别编码，金额按整数分保存。
+- 数字已付订单为 `/albums/purchases/`，追加 BOOST 为 `/albums/purchases/boost/`，必须分别取快照。页面当前账号从导航确认，活动页签标明类型，卡片含专辑链接、价格、购买日期和订单号。
+- 观察到单张订单号包含账号、专辑和上海时区的秒级创建时间；历史购物车订单使用另一种编号。历史和未知编号计入基线，但不能仅凭“新出现”判定支付成功。
+- 后续已用真实付款记录确认非空 BOOST 卡片：价格字段与数字订单一致，订单编号为 `dizz_boost_<账号>_<专辑>_<yyyy-MM-dd-HH-mm-ss>_<后缀>`；普通单张购买没有 `boost_` 字段。类型错误的编号不能作为到账证据。原待核验记录经此修复后已在真机核验成功。
+- 支付宝 H5 页面返回网站与返回 App 是两种路由。NeoDizzy 接收 `neodizzy-pay://safepay`，只为已识别 SafePay 信封设置 `fromAppUrlScheme`，或替换已存在的外层 `MQPSourceAppScheme`。不改写签名订单里的 `return_url`；未知格式保留原始跳转，可能仍需手动返回 App。实际支付宝支付后的完整自动回跳尚待验收。测试不访问 `checkout_alipay`，不会创建订单。
+
 ## 社区
 
 | 操作 | 请求 |
@@ -120,7 +137,7 @@ https://streaming.dizzylab.net/<yyyyMMddHHmm>/<md5>/<discid>/full/<n>.mp3
 | 删自己的短评 | `POST /albums/deletemycomment/` |
 | 长评点赞 | `/ilikethisreviewornot/` |
 | 随便听听 | `POST /getatrack/`，字段 `csrfmiddlewaretoken`；返回 `discid`、`thisurl`、`thistrack`、`disctitle`、`disclabel`、`disccover`、`taglist` 等 |
-| 关注 / 取关社团 | `GET /l/<社团名>/?like` / `?dislike`（需会话 Cookie） |
+| 关注 / 取关社团 | `GET /l/<社团名>/?ilikeit` / `?dislike`（需会话 Cookie） |
 
 ## HTML 页面
 
@@ -135,3 +152,14 @@ https://streaming.dizzylab.net/<yyyyMMddHHmm>/<md5>/<discid>/full/<n>.mp3
 | pack | `/pack/?pk=<id>` | 包含的专辑、折扣说明，支付宝价格在付款链接的 `price` 参数里；付款链接的 `type` 为 `pack` |
 | 专辑页 | `/d/<discid>/` | 曲目标题含时长：`1. 标题 - 艺术家 (02:35)`；已购时含完整版 `data-audio` 和下载菜单 |
 | 排行榜 | `/ranking/` | 按用户排名的「支持者榜」，**不是专辑榜**。`/rank/` 是错误页，网站没有专辑排行榜 |
+
+### M5 再核验（2026-09-26）
+
+- 短评读取：`GET /albums/getdisccomment/?discid=&l=&r=`，每页 6 条。平行数组为 `disc_comment`、`user_names`、`user_url`、`avatar_url`、`prebuyer`、`redeemit`，另有 `canshowmore`。用户链接可能使用 `/albums/u/<id>`。
+- 发短评字段为 `discid`、`comment`、`csrfmiddlewaretoken`；删自己的短评只需 `discid` 和 CSRF，不使用他人的评论 ID。当前页面的 `#comment_txt_box` 与 `deletemycomment()` 控件用于判断可发 / 可删；上限按页面提示为 140 字。写入结果通过重新取专辑页确认。
+- 关注按钮 `button[name=likeit-on]` 对应 `?ilikeit`，已关注 `likeit-off` 对应 `?dislike`。旧记录的 `?like` 不正确。只接受这两个同页参数，操作前校验登录用户，操作后重新读取状态。
+- repo 列表每页 3 条；`review_id`、`review_title`、`review_desc`、`user_id`、`user_name`、`user_avatar`、`add_date` 均为平行数组。拒绝不等长数组，避免把正文归到错误作者。
+- `/review/<id>/` 正文在 `#reviewlikes` 按钮的父按钮组所在 `.card-body`，标题为其中 `h3`、正文为 `p.truncate-limit`；CSS 名字包含 truncate 但 HTML 是完整正文。图片原生显示，回复保留网站入口。
+- 用户页四个页签分别为 `music` / `review` / `following` / `likes`，用 `page` 翻页。浏览他人已购列表不会据此授予当前用户播放或下载权限。
+- 随机曲目包含 `thisauther`、`rndnum`、`full`、`gotourl` 等字段；播放曲号从已校验的 streaming URL 文件名取得，`thistrack` 的曲号前缀从显示标题移除。
+- 真机已完成上述读取、解析和页面显示检查。发短评、删短评、点赞和关注的网络写入用 mock 验证；没有在真实账户上自动执行这些操作，仍待用户验收。

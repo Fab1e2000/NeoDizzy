@@ -5,6 +5,7 @@ final class SearchModel {
     var query = ""
     private(set) var keyword: String?
     /// 社团只在第一页结果里。
+    private(set) var users: [CommunityUser] = []
     private(set) var labels: [SearchLabel] = []
     private(set) var discs: PagedList<SearchDisc>?
 
@@ -14,9 +15,10 @@ final class SearchModel {
         guard !keyword.isEmpty, keyword != self.keyword else { return }
         self.keyword = keyword
         labels = []
+        users = []
         discs = PagedList { [weak self] page in
             let results = try await DizzyPages.shared.search(keyword, page: page)
-            if page == 1 { self?.labels = results.labels }
+            if page == 1, self?.keyword == keyword { self?.labels = results.labels; self?.users = results.users }
             return Page(items: results.discs, hasMore: results.hasMore)
         }
     }
@@ -24,11 +26,12 @@ final class SearchModel {
     func clear() {
         keyword = nil
         labels = []
+        users = []
         discs = nil
     }
 }
 
-/// 搜索页：页头和搜索框固定在顶部，结果在下面滚动。
+/// 搜索页：标题和搜索框共同遵循标题栏的固定 / 滚动设置。
 /// 不用系统的 `.searchable`：它的搜索框放在导航栏里，而主页面都隐藏了导航栏，搜索框会跟着消失。
 struct SearchView: View {
     @State private var model = SearchModel()
@@ -37,6 +40,7 @@ struct SearchView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
+                ScrollingPageHeaderRow { searchHeader }
                 if let keyword = model.keyword, let discs = model.discs {
                     if !model.labels.isEmpty {
                         SectionHeading(title: "社团")
@@ -51,6 +55,10 @@ struct SearchView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                    }
+                    if !model.users.isEmpty {
+                        SectionHeading(title: "用户")
+                        ForEach(model.users) { CommunityUserLink(user: $0) }
                     }
                     SectionHeading(title: "作品")
                     PagedContent(list: discs, webURL: DizzyURL.search(keyword), emptyMessage: "没有找到相关作品。") { results in
@@ -79,16 +87,7 @@ struct SearchView: View {
             .padding(.bottom, 24)
         }
         .scrollDismissesKeyboard(.immediately)
-        .safeAreaBar(edge: .top, spacing: 0) {
-            VStack(spacing: 4) {
-                PageHeader(title: MainTab.search.title)
-                SearchField(text: $model.query, isFocused: $isSearchFieldFocused) {
-                    model.submit()
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
-        }
+        .pageHeaderPlacement { searchHeader }
         .dizzyPageBackground()
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: model.query) { _, query in
@@ -101,6 +100,16 @@ struct SearchView: View {
             }
         }
     }
+
+    private var searchHeader: some View {
+        VStack(spacing: 4) {
+            PageHeader(title: MainTab.search.title)
+            SearchField(text: $model.query, isFocused: $isSearchFieldFocused) {
+                model.submit()
+            }
+        }.padding(.bottom, 8)
+    }
+
 }
 
 /// 搜索框：按键盘上的「搜索」提交，右侧可以一键清空。
@@ -113,7 +122,7 @@ private struct SearchField: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(DizzyPalette.mutedText)
-            TextField("搜索专辑、社团", text: $text)
+            TextField("搜索专辑、社团、用户", text: $text)
                 .focused(isFocused)
                 .submitLabel(.search)
                 .onSubmit(onSubmit)

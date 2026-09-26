@@ -20,3 +20,7 @@ Config/Signing.local.xcconfig
 *.p12
 *.mobileprovision
 signing/
+
+# 发布产物
+dist/
+*.ipa

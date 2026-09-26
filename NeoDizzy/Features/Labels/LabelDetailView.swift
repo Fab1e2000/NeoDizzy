@@ -15,6 +15,7 @@ struct LabelDetailView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     header(label)
+                    FollowLabelButton(name: name, onChanged: { await page.load() })
                     if !label.description.isEmpty {
                         ExpandableText(title: "简介", text: label.description)
                     }

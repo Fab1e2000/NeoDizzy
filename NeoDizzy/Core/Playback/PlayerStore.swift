@@ -15,16 +15,23 @@ final class PlayerStore {
     private(set) var issue: String?
     private(set) var repeatMode: RepeatMode = .off
     private var queue = PlaybackQueue()
+    private(set) var isDiscovery = false
+    private var isFetchingDiscovery = false
+    @ObservationIgnored private var discoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var discoveryGeneration = 0
+    @ObservationIgnored private let fetchDiscovery: () async throws -> ShuffleTrack
     private var isResolving = false
     private var isBuffering = false
 
-    var isLoading: Bool { isResolving || isBuffering }
+    var isLoading: Bool { isResolving || isBuffering || isFetchingDiscovery }
     var isShuffled: Bool { queue.isShuffled }
-    var canPlayNext: Bool { queue.canMove(by: 1, wraps: repeatMode == .all) }
+    var canPlayNext: Bool { isDiscovery ? !isFetchingDiscovery : queue.canMove(by: 1, wraps: repeatMode == .all) }
+    var canPlayPrevious: Bool { !isDiscovery || queue.currentIndex > 0 }
 
     /// 接下来要播放的曲目，按播放顺序。
     var upcoming: [UpcomingTrack] {
-        queue.upcomingIndices(wraps: repeatMode == .all).map { UpcomingTrack(index: $0, track: queue.tracks[$0]) }
+        if isDiscovery { return [] }
+        return queue.upcomingIndices(wraps: repeatMode == .all).map { UpcomingTrack(index: $0, track: queue.tracks[$0]) }
     }
 
     @ObservationIgnored private let player: AVPlayer
@@ -42,13 +49,16 @@ final class PlayerStore {
     @ObservationIgnored private var pendingSeek: TimeInterval = 0
     /// 地址过期导致的失败只重试一次，避免无限重试。
     @ObservationIgnored private var retriedTrackID: String?
+    @ObservationIgnored private var loadedLocalFile = false
     @ObservationIgnored private var resumeAfterInterruption = false
     @ObservationIgnored private var isSeeking = false
     @ObservationIgnored private var lastSavedProgress: TimeInterval = 0
     /// `progress` 最近一次更新的时间，用来推算两次刷新之间的播放位置。
     @ObservationIgnored private var progressUpdatedAt = Date.now
 
-    init(resolver: StreamResolver = StreamResolver(), persistence: PlaybackPersistence = PlaybackPersistence()) {
+    init(resolver: StreamResolver = StreamResolver(), persistence: PlaybackPersistence = PlaybackPersistence(),
+         fetchDiscovery: @escaping () async throws -> ShuffleTrack = { try await DizzyCommunity.shared.shuffle() }) {
+        self.fetchDiscovery = fetchDiscovery
         let player = AVPlayer()
         self.player = player
         self.resolver = resolver
@@ -63,11 +73,59 @@ final class PlayerStore {
     /// 播放一组曲目。`streams` 是专辑页已经拿到的播放地址，可以省掉一次请求。
     func play(_ tracks: [Track], startAt index: Int, streams: [String: URL] = [:]) {
         guard !tracks.isEmpty else { return }
+        cancelDiscoveryRequest()
+        isDiscovery = false
         if let discID = tracks.first?.discID {
             resolver.store(streams, for: discID)
         }
         queue.replace(with: tracks, startingAt: index)
         load(autoplay: true)
+    }
+
+    /// A discovery session keeps only track metadata; expiring stream URLs stay in the resolver.
+    func playDiscovery(_ selection: ShuffleTrack, autoplay: Bool = true) {
+        cancelDiscoveryRequest()
+        isDiscovery = true
+        queue.restore(tracks: [selection.track], currentIndex: 0, isShuffled: false, shuffledOrder: [])
+        resolver.store([selection.track.number: selection.stream], for: selection.track.discID)
+        load(autoplay: autoplay)
+    }
+
+    private func cancelDiscoveryRequest() {
+        discoveryGeneration += 1
+        discoveryTask?.cancel()
+        discoveryTask = nil
+        isFetchingDiscovery = false
+    }
+
+    private func requestNextDiscovery() {
+        guard !isFetchingDiscovery else { return }
+        isFetchingDiscovery = true
+        issue = nil
+        let generation = discoveryGeneration
+        discoveryTask = Task { [weak self, fetchDiscovery] in
+            do {
+                let selection = try await fetchDiscovery()
+                try Task.checkCancellation()
+                guard let self, self.isDiscovery, self.discoveryGeneration == generation else { return }
+                self.isFetchingDiscovery = false
+                self.discoveryTask = nil
+                // After going back, next always requests new music and replaces the forward branch.
+                var history = Array(self.queue.tracks.prefix(self.queue.currentIndex + 1))
+                history.append(selection.track)
+                if history.count > 200 { history.removeFirst(history.count - 200) }
+                self.queue.restore(tracks: history, currentIndex: history.count - 1, isShuffled: false, shuffledOrder: [])
+                self.resolver.store([selection.track.number: selection.stream], for: selection.track.discID)
+                self.load(autoplay: self.isPlaying)
+            } catch {
+                guard let self, self.discoveryGeneration == generation else { return }
+                self.isFetchingDiscovery = false
+                self.discoveryTask = nil
+                if !(error is CancellationError) {
+                    self.issue = "获取下一首失败：\(error.localizedDescription)。可以再次点击下一首重试。"
+                }
+            }
+        }
     }
 
     /// 播放队列里的某一首（播放页的「继续播放」列表）。
@@ -107,12 +165,19 @@ final class PlayerStore {
     }
 
     func next() {
+        if isDiscovery { requestNextDiscovery(); return }
         guard queue.move(by: 1, wraps: repeatMode == .all) else { return }
         load(autoplay: isPlaying)
     }
 
     /// 播放超过 3 秒时回到开头，否则回到上一首。
     func previous() {
+        if isDiscovery {
+            cancelDiscoveryRequest()
+            guard queue.move(by: -1, wraps: false) else { return }
+            load(autoplay: isPlaying)
+            return
+        }
         guard progress <= 3, queue.move(by: -1, wraps: repeatMode == .all) else {
             seek(to: 0)
             return
@@ -138,11 +203,13 @@ final class PlayerStore {
     }
 
     func cycleRepeatMode() {
+        guard !isDiscovery else { return }
         repeatMode = repeatMode.next
         saveState()
     }
 
     func toggleShuffle() {
+        guard !isDiscovery else { return }
         queue.toggleShuffle()
         saveState()
     }
@@ -158,6 +225,7 @@ final class PlayerStore {
             isShuffled: snapshot.isShuffled,
             shuffledOrder: snapshot.shuffledOrder
         )
+        isDiscovery = snapshot.isDiscovery == true
         repeatMode = snapshot.repeatMode
         currentTrack = queue.currentTrack
         progress = snapshot.progress
@@ -176,13 +244,14 @@ final class PlayerStore {
             progress: progress,
             repeatMode: repeatMode,
             isShuffled: queue.isShuffled,
-            shuffledOrder: queue.persistedShuffleOrder
+            shuffledOrder: queue.persistedShuffleOrder,
+            isDiscovery: isDiscovery
         ))
     }
 
     // MARK: - 加载
 
-    private func load(autoplay: Bool, startAt position: TimeInterval = 0) {
+    private func load(autoplay: Bool, startAt position: TimeInterval = 0, preferLocal: Bool = true) {
         loadTask?.cancel()
         guard let track = queue.currentTrack else { return }
         if retriedTrackID != track.id {
@@ -199,6 +268,7 @@ final class PlayerStore {
         pendingSeek = position
         duration = 0
         isPreview = false
+        loadedLocalFile = false
         isResolving = true
         itemStatusObservation = nil
         player.replaceCurrentItem(with: nil)
@@ -212,7 +282,7 @@ final class PlayerStore {
 
         loadTask = Task { [weak self, resolver] in
             do {
-                let url = try await resolver.stream(for: track)
+                let url = try await resolver.stream(for: track, preferLocal: preferLocal)
                 try Task.checkCancellation()
                 self?.start(url: url, generation: generation)
             } catch is CancellationError {
@@ -225,6 +295,7 @@ final class PlayerStore {
     private func start(url: URL, generation: Int) {
         guard generation == loadGeneration else { return }
         isResolving = false
+        loadedLocalFile = url.isFileURL
         isPreview = DizzyURL.isPreviewStream(url)
         let item = AVPlayerItem(url: url)
         itemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] _, _ in
@@ -286,7 +357,18 @@ final class PlayerStore {
         })
         observers.append(center.addObserver(forName: .dizzyAccountDidChange, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
+                self?.cancelDiscoveryRequest()
                 self?.resolver.removeAll()
+            }
+        })
+        observers.append(center.addObserver(forName: .dizzyPurchaseDidComplete, object: nil, queue: .main) { [weak self] notification in
+            MainActor.assumeIsolated {
+                guard let self, let discID = notification.object as? String else { return }
+                self.resolver.invalidate(discID: discID)
+                // 已加载的试听 AVPlayerItem 也需要换成完整版，保留用户的暂停状态与进度。
+                if self.currentTrack?.discID == discID, self.isPreview || self.isResolving {
+                    self.load(autoplay: self.isPlaying, startAt: self.progress)
+                }
             }
         })
         // 文档没有说明这两个通知的 object 是什么，不按 object 过滤。
@@ -354,6 +436,13 @@ final class PlayerStore {
 
     private func handleItemEnded(_ object: Any?) {
         guard (object as AnyObject?) === player.currentItem else { return }
+        if isDiscovery {
+            isPlaying = false
+            player.pause()
+            seek(to: 0)
+            saveState()
+            return
+        }
         switch repeatMode {
         case .one:
             seek(to: 0)
@@ -377,7 +466,8 @@ final class PlayerStore {
         if retriedTrackID != track.id {
             retriedTrackID = track.id
             resolver.invalidate(discID: track.discID)
-            load(autoplay: isPlaying, startAt: progress)
+            // 本地文件可能被外部移走或损坏，只回退一次到串流，避免不断加载同一坏文件。
+            load(autoplay: isPlaying, startAt: progress, preferLocal: !loadedLocalFile)
         } else {
             fail(with: PlaybackError.failed.localizedDescription, generation: loadGeneration)
         }

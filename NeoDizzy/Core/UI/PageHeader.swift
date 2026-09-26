@@ -7,7 +7,7 @@ final class MinePresentation {
 }
 
 /// 各主页面共用的页头：左侧大标题，右侧头像玻璃按钮（「我的」的入口）。登录后显示账号头像。
-/// 样式沿用 NeoBili，页头是滚动内容的第一行，随内容滚走。
+/// 样式沿用 NeoBili；固定、滚动与下拉补偿行为移植自 MeloX_Modified。
 struct PageHeader: View {
     let title: String
     @Environment(MinePresentation.self) private var mine: MinePresentation?
@@ -62,13 +62,13 @@ struct MainTabPage<Content: View>: View {
     var body: some View {
         let page = ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                PageHeader(title: tab.title)
+                ScrollingPageHeaderRow { PageHeader(title: tab.title) }
                 content
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .pageHeaderPlacement { PageHeader(title: tab.title) }
         .dizzyPageBackground()
 
         if let onRefresh {
@@ -76,5 +76,60 @@ struct MainTabPage<Content: View>: View {
         } else {
             page
         }
+    }
+}
+
+// 移植自 MeloX_Modified（GPLv3）Shared/Components/PageHeader.swift。
+// 使用泛型页头，保留 NeoDizzy 的头像入口与水平边距。
+enum TitleBarSettings {
+    static let storageKey = "pinsPageHeader"
+    static let defaultValue = false
+}
+
+struct ScrollingPageHeaderRow<Header: View>: View {
+    @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
+    @Environment(\.pageHeaderPull) private var pull
+    @ViewBuilder var header: Header
+
+    var body: some View {
+        if !pinsTitleBar {
+            header.offset(y: -(pull?.distance ?? 0))
+        }
+    }
+}
+
+extension View {
+    func pageHeaderPlacement<Header: View>(@ViewBuilder header: () -> Header) -> some View {
+        modifier(PageHeaderPlacement(header: header()))
+    }
+}
+
+@MainActor @Observable
+final class PageHeaderPull {
+    var distance: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    @Entry var pageHeaderPull: PageHeaderPull? = nil
+}
+
+private struct PageHeaderPlacement<Header: View>: ViewModifier {
+    let header: Header
+    @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
+    @State private var pull = PageHeaderPull()
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaBar(edge: .top, spacing: 0) {
+                if pinsTitleBar { header.padding(.horizontal, 20) }
+            }
+            .scrollEdgeEffectStyle(pinsTitleBar ? .automatic : .soft, for: .top)
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                max(0, -(geometry.contentOffset.y + geometry.contentInsets.top))
+            } action: { _, distance in
+                pull.distance = distance
+            }
+            .environment(\.pageHeaderPull, pull)
     }
 }

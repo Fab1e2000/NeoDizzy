@@ -1,0 +1,18 @@
+{
+  "fill" : {
+    "solid" : "srgb:0.03137,0.03137,0.03137,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "Mark.svg",
+          "name" : "Gold D"
+        }
+      ]
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

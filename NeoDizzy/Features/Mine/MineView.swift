@@ -4,6 +4,7 @@ import SwiftUI
 struct MineView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AccountStore.self) private var account
+    @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
     @State private var isConfirmingLogout = false
     @State private var isLoggingOut = false
 
@@ -12,6 +13,18 @@ struct MineView: View {
             List {
                 accountSection
                     .listRowBackground(DizzyPalette.surface)
+
+                Section {
+                    Picker("标题栏", selection: $pinsTitleBar) {
+                        Text("固定").tag(true)
+                        Text("滚动").tag(false)
+                    }
+                } header: {
+                    Text("设置")
+                } footer: {
+                    Text(pinsTitleBar ? "主页面标题固定在顶部。" : "主页面标题随内容滚动，下拉时保持原位。")
+                }
+                .listRowBackground(DizzyPalette.surface)
 
                 Section("关于") {
                     LabeledContent("版本", value: Bundle.main.versionText)
@@ -25,6 +38,7 @@ struct MineView: View {
             }
             .scrollContentBackground(.hidden)
             .dizzyPageBackground()
+            .navigationDestination(for: AppRoute.self) { AppRouteDestination(route: $0) }
             .navigationTitle("我的")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -61,7 +75,7 @@ struct MineView: View {
                 if account.isSessionExpired {
                     NavigationLink("重新登录") { LoginView() }
                 }
-                Link("在网页中查看个人主页", destination: DizzyURL.page("/u/\(user.userID)"))
+                NavigationLink("个人主页", value: AppRoute.user(id: user.userID))
                 Button("退出登录", role: .destructive) {
                     isConfirmingLogout = true
                 }
