@@ -1,0 +1,4 @@
+// 签名设置。团队 ID 因人而异，写在同目录不入库的 Signing.local.xcconfig 里：
+//   cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig
+// 文件不存在时照常构建，只是签名时需要在 Xcode 里手动选择团队。
+#include? "Signing.local.xcconfig"

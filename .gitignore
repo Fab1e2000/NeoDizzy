@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Xcode 用户本地的窗口布局等个人状态，不入库
+xcuserdata/
+DerivedData/
+build/
+*.xcresult/
+
+# Swift Package Manager
+.build/
+
+# 本机的设备 UDID 等部署配置（模板见 .env.example）
+.env
+.env.*
+!.env.example
+
+# 签名：本机的团队 ID（模板见 Config/Signing.local.xcconfig.example）和证书文件
+Config/Signing.local.xcconfig
+*.p12
+*.mobileprovision
+signing/

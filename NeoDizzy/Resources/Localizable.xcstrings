@@ -1,0 +1,396 @@
+{
+  "sourceLanguage": "zh-Hans",
+  "strings": {
+    "DizzyLab 上的全部社团和厂牌会显示在这里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every circle and label on DizzyLab will appear here."
+          }
+        }
+      }
+    },
+    "NeoDizzy 是非官方的开源第三方客户端，与 DizzyLab 及其运营方不存在隶属、合作或授权关系。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NeoDizzy is an unofficial, open-source third-party client. It is not affiliated with, endorsed by or authorized by DizzyLab or its operators."
+          }
+        }
+      }
+    },
+    "专辑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Album"
+          }
+        }
+      }
+    },
+    "专辑和社团的搜索结果会显示在这里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matching albums and labels will appear here."
+          }
+        }
+      }
+    },
+    "专辑浏览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse Albums"
+          }
+        }
+      }
+    },
+    "免责声明": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disclaimer"
+          }
+        }
+      }
+    },
+    "关于": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        }
+      }
+    },
+    "关注": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Following"
+          }
+        }
+      }
+    },
+    "关注的社团": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Followed Labels"
+          }
+        }
+      }
+    },
+    "即将推出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coming Soon"
+          }
+        }
+      }
+    },
+    "发现": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discover"
+          }
+        }
+      }
+    },
+    "合集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pack"
+          }
+        }
+      }
+    },
+    "已购与已下载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Purchased & Downloaded"
+          }
+        }
+      }
+    },
+    "开源许可": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "License"
+          }
+        }
+      }
+    },
+    "我的": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Me"
+          }
+        }
+      }
+    },
+    "打开个人页面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens your account page"
+          }
+        }
+      }
+    },
+    "排行榜": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charts"
+          }
+        }
+      }
+    },
+    "搜索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      }
+    },
+    "搜索专辑、社团": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search albums and labels"
+          }
+        }
+      }
+    },
+    "搜索结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search Results"
+          }
+        }
+      }
+    },
+    "数字专辑、单曲 EP、下载商品和限时优惠会显示在这里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digital albums, singles & EPs, downloads and limited-time deals will appear here."
+          }
+        }
+      }
+    },
+    "未登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Signed In"
+          }
+        }
+      }
+    },
+    "本项目出于学习与研究目的开发，通过 DizzyLab 网站本身提供的页面和接口获取信息。网站变化可能导致功能随时失效。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It is built for learning and research and reads information from the pages and endpoints the DizzyLab website itself serves. Changes to the site may break features at any time."
+          }
+        }
+      }
+    },
+    "本项目按 GPLv3 许可证提供，不附带任何担保；使用本项目产生的风险由使用者自行承担。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This project is provided under the GPLv3 license without any warranty. You use it at your own risk."
+          }
+        }
+      }
+    },
+    "版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        }
+      }
+    },
+    "用户主页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile"
+          }
+        }
+      }
+    },
+    "登录 DizzyLab 账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign In to DizzyLab"
+          }
+        }
+      }
+    },
+    "登录后可以听完整版、购买和下载已购专辑。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to stream full tracks, buy albums and download your purchases."
+          }
+        }
+      }
+    },
+    "登录后显示你买过的专辑；下载到文件夹里的专辑可以离线播放。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to see the albums you bought. Albums downloaded to your folder play offline."
+          }
+        }
+      }
+    },
+    "登录后，你关注的社团发布的新作会显示在这里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to see new releases from the labels you follow."
+          }
+        }
+      }
+    },
+    "社团": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Labels"
+          }
+        }
+      }
+    },
+    "社团列表": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Labels"
+          }
+        }
+      }
+    },
+    "访问 DizzyLab 官网": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visit the DizzyLab Website"
+          }
+        }
+      }
+    },
+    "请支持并尊重创作者：购买后下载的作品仅供个人使用，不要上传发布到任何公开的网络空间（包括免费作品）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please support and respect the creators: downloaded works are for personal use only. Do not upload or publish them anywhere public, free releases included."
+          }
+        }
+      }
+    },
+    "账号凭据只保存在本机的钥匙串中，不会发送到 DizzyLab 以外的任何地方。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account credentials are kept only in this device's Keychain and are never sent anywhere other than DizzyLab."
+          }
+        }
+      }
+    },
+    "账号功能正在开发中。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account features are still being built."
+          }
+        }
+      }
+    },
+    "这个页面还在开发中。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This page is still being built."
+          }
+        }
+      }
+    },
+    "随便听听": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shuffle"
+          }
+        }
+      }
+    },
+    "音乐库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
