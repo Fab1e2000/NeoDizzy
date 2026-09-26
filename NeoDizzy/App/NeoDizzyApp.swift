@@ -35,6 +35,7 @@ final class NeoDizzyAppDelegate: NSObject, UIApplicationDelegate {
 
 /// 由 AppDelegate 持有一次，后台唤醒时也能恢复下载，不依赖某个页面出现。
 final class AppServices {
+    let browsingHistory = BrowsingHistoryStore()
     let account = AccountStore()
     let offlineLibrary: OfflineLibraryStore
     let downloads: DownloadStore

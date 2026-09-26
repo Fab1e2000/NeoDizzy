@@ -43,7 +43,7 @@ struct FeedView: View {
     }
 }
 
-/// 一个社团的新作：社团名（可进入社团页）和作品网格。
+/// 关注动态只展示社团信息；点击后在社团详情查看作品。
 private struct FeedGroupSection: View {
     let group: FeedGroup
 
@@ -72,7 +72,6 @@ private struct FeedGroupSection: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            DiscGrid(discs: group.discs, showsLabel: false)
         }
         .padding(.bottom, 8)
     }

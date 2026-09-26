@@ -58,8 +58,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleLocalizations: [zh-Hans]
         CFBundleDisplayName: NeoDizzy
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleShortVersionString: "0.2.0"
+        CFBundleVersion: "2"
         CFBundleURLTypes:
           - CFBundleURLName: com.elsterlee.NeoDizzy.payment
             CFBundleURLSchemes: [neodizzy-pay]

@@ -1,32 +1,5 @@
 import SwiftUI
 
-struct SupporterRankingView: View {
-    @State private var state = Loadable { try await DizzyCommunity.shared.ranking() }
-    var body: some View {
-        LoadableContent(state: state, webURL: DizzyURL.page("/ranking/")) { supporters in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    Text("感谢每一位支持音乐创作的人。")
-                        .font(.subheadline).foregroundStyle(DizzyPalette.mutedText)
-                    ForEach(supporters) { supporter in
-                        HStack(alignment: .top, spacing: 14) {
-                            Text(String(supporter.rank)).font(.title3.bold().monospacedDigit())
-                                .foregroundStyle(supporter.rank <= 3 ? DizzyPalette.accent : DizzyPalette.mutedText)
-                                .frame(width: 28)
-                            VStack(alignment: .leading, spacing: 8) {
-                                CommunityUserLink(user: supporter.user)
-                                if !supporter.bio.isEmpty { Text(supporter.bio).font(.caption).foregroundStyle(DizzyPalette.mutedText) }
-                            }
-                        }
-                        Divider()
-                    }
-                }.padding(20)
-            }.refreshable { await state.load() }
-        }
-        .navigationTitle("支持者榜").navigationBarTitleDisplayMode(.inline).dizzyPageBackground()
-    }
-}
-
 @Observable
 final class CommunityProfileModel {
     let userID: Int
@@ -106,36 +79,5 @@ struct CommunityProfileView: View {
         .navigationTitle("用户主页").navigationBarTitleDisplayMode(.inline).dizzyPageBackground()
         .task(id: model.section) { await model.reset() }
         .refreshable { await model.reset() }
-    }
-}
-
-struct ShuffleDiscoveryView: View {
-    @Environment(PlayerStore.self) private var player
-    @State private var state = Loadable { try await DizzyCommunity.shared.shuffle() }
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                Text("下一首，会遇见什么？").font(.title2.bold()).padding(.top, 12)
-                LoadableContent(state: state, webURL: DizzyURL.page("/shuffle/")) { selection in
-                    VStack(spacing: 16) {
-                        ArtworkImage(url: selection.track.coverURL, cornerRadius: 20).frame(maxWidth: 280)
-                        Text(selection.track.title).font(.title2.bold()).multilineTextAlignment(.center)
-                        NavigationLink(selection.track.albumTitle, value: AppRoute.disc(id: selection.track.discID)).font(.headline)
-                        NavigationLink(selection.label, value: AppRoute.label(name: selection.label)).font(.subheadline)
-                        if DizzyURL.isPreviewStream(selection.stream) { Text("试听片段").font(.caption).foregroundStyle(DizzyPalette.mutedText) }
-                        if !selection.tags.isEmpty { Text(selection.tags.map { "#" + $0 }.joined(separator: "  ")).font(.caption).foregroundStyle(DizzyPalette.mutedText) }
-                        Button {
-                            player.playDiscovery(selection)
-                        } label: { Label("播放这首", systemImage: "play.fill").frame(maxWidth: .infinity) }
-                            .buttonStyle(.borderedProminent).controlSize(.large)
-                    }
-                }
-                Button { Task { await state.load() } } label: {
-                    Label(state.isLoading ? "正在寻找…" : "换一首", systemImage: "shuffle").frame(maxWidth: .infinity)
-                }.buttonStyle(.bordered).controlSize(.large).disabled(state.isLoading)
-                Text("播放后可用播放器的上一首回听，下一首获取新的随机曲目。")
-                    .font(.caption).foregroundStyle(DizzyPalette.mutedText)
-            }.padding(24)
-        }.navigationTitle("随便听听").navigationBarTitleDisplayMode(.inline).dizzyPageBackground()
     }
 }

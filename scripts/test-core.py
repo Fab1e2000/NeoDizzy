@@ -34,7 +34,7 @@ def main():
         for directory in ("Models", "Networking", "OfflineLibrary", "Downloads", "Purchases", "Community"):
             files.extend((ROOT / "NeoDizzy/Core" / directory).rglob("*.swift"))
         files.extend(ROOT / "NeoDizzy/Core" / name for name in (
-            "DebugLog.swift", "Account/DizzyAuth.swift", "Playback/PlaybackQueue.swift",
+            "BrowsingHistory/BrowsingHistoryStore.swift", "DebugLog.swift", "UI/PagedList.swift", "Account/DizzyAuth.swift", "Playback/PlaybackQueue.swift",
             "Playback/PlaybackPersistence.swift", "Playback/StreamResolver.swift",
         ))
         for source in files:
@@ -43,7 +43,7 @@ def main():
             "PlaybackTests", "DownloadTests", "OfflineLibraryTests", "JSONDecodingTests",
             "PageParserTests", "DizzyURLTests", "AccountTests", "PurchaseTests",
             "PurchaseConfirmationTests", "CheckoutNavigationTests", "PurchaseStoreTests",
-            "AlipayReturnRouterTests", "CommunityTests",
+            "AlipayReturnRouterTests", "CommunityTests", "FeedPaginationTests", "BrowsingHistoryTests",
         ):
             shutil.copy2(ROOT / f"NeoDizzyTests/{name}.swift", tests / f"{name}.swift")
         # Xcode test bundles use Bundle(for:); SwiftPM puts resources in Bundle.module.

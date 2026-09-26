@@ -58,11 +58,16 @@ final class DiscDetailModel {
 }
 
 struct DiscDetailView: View {
+    @Environment(BrowsingHistoryStore.self) private var history
     @Environment(OfflineLibraryStore.self) private var offline
     @State private var model: DiscDetailModel
 
     init(id: String) {
         _model = State(initialValue: DiscDetailModel(id: id))
+    }
+
+    private var historySummary: DiscSummary? {
+        offline.album(id: model.id)?.detail.summary ?? model.detail.value?.summary
     }
 
     var body: some View {
@@ -86,6 +91,10 @@ struct DiscDetailView: View {
         .dizzyPageBackground()
         .navigationTitle(offline.album(id: model.id)?.title ?? model.detail.value?.summary.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { history.visit(id: model.id, summary: historySummary) }
+        .onChange(of: historySummary) { _, summary in
+            if let summary { history.update(summary) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .dizzyAccountDidChange)) { _ in
             // 重新读取当前账号的购买权限，不复用上一会话的下载入口。
             model = DiscDetailModel(id: model.id)

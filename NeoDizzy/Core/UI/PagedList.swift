@@ -12,7 +12,7 @@ final class PagedList<Item: Identifiable & Sendable> {
     private(set) var failure: String?
 
     private let fetch: (Int) async throws -> Page<Item>
-    private var loadedPages = 0
+    private(set) var loadedPages = 0
     private var loadTask: Task<Void, Never>?
     /// 重新加载后，还没返回的旧请求作废。
     private var generation = 0
@@ -56,8 +56,8 @@ final class PagedList<Item: Identifiable & Sendable> {
             let result = try await fetch(page)
             guard requestGeneration == generation else { return }
             // 翻页期间有新作品上架时，同一张专辑可能在相邻两页各出现一次。
-            let known = Set(items.map(\.id))
-            items += result.items.filter { !known.contains($0.id) }
+            var known = Set(items.map(\.id))
+            items += result.items.filter { known.insert($0.id).inserted }
             loadedPages = page
             hasMore = result.hasMore && !result.items.isEmpty
         } catch {

@@ -50,14 +50,12 @@ final class DiscoverModel {
 }
 
 struct DiscoverView: View {
+    let playDiscovery: (ShuffleTrack) -> Void
     @State private var model = DiscoverModel()
 
     var body: some View {
         MainTabPage(tab: .discover, onRefresh: { await model.refresh() }) {
-            HStack(spacing: 12) {
-                NavigationLink(value: AppRoute.shuffle) { Label("随便听听", systemImage: "shuffle").frame(maxWidth: .infinity) }
-                NavigationLink(value: AppRoute.rank) { Label("支持者榜", systemImage: "trophy").frame(maxWidth: .infinity) }
-            }.buttonStyle(.bordered).controlSize(.large)
+            ShufflePlayButton(play: playDiscovery)
             DiscoverSectionPicker(selection: $model.section)
             if let category = model.section.category, let list = model.lists[category] {
                 PagedContent(list: list, webURL: DizzyURL.site) { discs in
@@ -117,5 +115,46 @@ private struct DiscoverSectionPicker: View {
         }
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
+    }
+}
+
+/// 随机发现直接进入播放器，不再推入中间页面。
+private struct ShufflePlayButton: View {
+    let play: (ShuffleTrack) -> Void
+    @State private var isRequesting = false
+    @State private var failure: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                failure = nil
+                isRequesting = true
+            } label: {
+                HStack {
+                    if isRequesting { ProgressView() }
+                    Label(isRequesting ? "正在寻找…" : "随便听听", systemImage: "shuffle")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .disabled(isRequesting)
+            if let failure {
+                Text("获取歌曲失败：\(failure)\n点击「随便听听」重试。")
+                    .font(.caption)
+                    .foregroundStyle(DizzyPalette.mutedText)
+            }
+        }
+        .task(id: isRequesting) {
+            guard isRequesting else { return }
+            defer { isRequesting = false }
+            do {
+                let selection = try await DizzyCommunity.shared.shuffle()
+                try Task.checkCancellation()
+                play(selection)
+            } catch {
+                if !Task.isCancelled { failure = error.localizedDescription }
+            }
+        }
     }
 }

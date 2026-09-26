@@ -1,93 +1,180 @@
+<div align="center">
+
+<img src="NeoDizzy/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png" width="128" height="128" alt="NeoDizzy 黑金 D 图标">
+
 # NeoDizzy
 
-非官方的 [DizzyLab](https://www.dizzylab.net) iOS 第三方客户端，使用原生 SwiftUI 构建。
+**为 iPhone 打造的第三方 DizzyLab 音乐客户端**
 
-> NeoDizzy 与 DizzyLab 及其运营方不存在隶属、合作或授权关系。详见 [免责声明](DISCLAIMER.md)。
+SwiftUI 原生构建 · 黑金深色界面 · 在线试听与离线音乐
 
-*An unofficial, open-source SwiftUI client for the DizzyLab doujin music store. Not affiliated with DizzyLab.*
+[![Release](https://img.shields.io/github/v/release/Fab1e2000/NeoDizzy?style=flat-square&color=F0AD4E&label=release)](https://github.com/Fab1e2000/NeoDizzy/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Fab1e2000/NeoDizzy/total?style=flat-square&color=F0AD4E)](https://github.com/Fab1e2000/NeoDizzy/releases)
+[![CI](https://github.com/Fab1e2000/NeoDizzy/actions/workflows/ci.yml/badge.svg)](https://github.com/Fab1e2000/NeoDizzy/actions/workflows/ci.yml)
+[![iOS 27+](https://img.shields.io/badge/iOS-27%2B-111111?style=flat-square&logo=apple&logoColor=white)](#运行要求)
+[![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-F05138?style=flat-square&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
+[![GPLv3](https://img.shields.io/badge/license-GPLv3-8A8F98?style=flat-square)](LICENSE)
 
-## 下载与自动构建
+[下载](#安装) · [功能](#功能亮点) · [从源码构建](#从源码构建) · [更新日志](docs/releases) · [反馈问题](https://github.com/Fab1e2000/NeoDizzy/issues)
 
-[下载 Release 0.1.0](https://github.com/Fab1e2000/NeoDizzy/releases/tag/v0.1.0) · [CI 状态](https://github.com/Fab1e2000/NeoDizzy/actions/workflows/ci.yml)
+</div>
 
-Release 附带未签名 IPA，需要 iOS 27，并使用自己的证书通过侧载工具重新签名。每次推送和 PR 自动运行核心测试、iOS 模拟器测试及设备构建；`v*` 标签在测试通过后发布对应 Release。发布前请同步 `project.yml` 与 Info.plist 版本，并准备 `docs/releases/v版本.md`。本地运行 `scripts/package-unsigned.sh` 可生成相同格式的 IPA 和 SHA-256 校验文件。
+<br>
 
-图标参考 NeoBili 的立体字母样式，使用黑底金色 D；矢量源文件为 [design/AppIcon.svg](design/AppIcon.svg)，运行 `xcrun swift scripts/generate-app-icon.swift` 可重新生成资源。
+> [!IMPORTANT]
+> NeoDizzy 是独立开发的非官方第三方客户端，与 DizzyLab 及其运营方不存在隶属、合作或授权关系。使用前请阅读 [免责声明](DISCLAIMER.md)，并尊重创作者的作品与购买权限。
 
-## 当前状态
+## 关于 NeoDizzy
 
-目前可以浏览专辑、社团、标签和 pack，可以搜索和试听；登录 DizzyLab 账号后可以收听已购专辑的完整版，查看已购专辑和关注社团的新作。支持后台播放、锁屏控制、已购专辑下载、文件夹授权和离线播放。M4 已接入原生价格与 BOOST 面板、支付宝收银台和付款核验，真实付款链路待真机验收。M5 已接入社区互动、repo 阅读、用户主页和随机发现。界面只提供简体中文。
+NeoDizzy 将 [DizzyLab](https://www.dizzylab.net) 的音乐浏览、试听、已购库和社区内容带到 iPhone。使用原生 SwiftUI 界面，支持后台播放、锁屏控制，以及将已购音乐下载到自己选择的文件夹。界面提供简体中文。
 
-| 阶段 | 内容 | 状态 |
-| --- | --- | --- |
-| M0 骨架 | 工程、深色主题、标签页框架、真机部署脚本 | 已完成 |
-| M1 浏览 | 专辑列表与详情、限时优惠、pack、社团、标签、搜索、试听播放 | 已完成 |
-| M2 账号 | 登录、已购库、完整版串流、关注动态 | 已完成 |
-| M3 离线 | 下载到你选的文件夹，在 App 内离线播放 | 已实现，待真机验收 |
-| M4 购买 | 自定价格 / BOOST，支付宝付款 | 已实现，待付款验收 |
-| M5 社区 | 点赞、短评、repo、随便听听、用户主页、支持者排行榜、关注社团 | 已实现，待真机验收 |
+## 功能亮点
 
-完整规划见 [docs/PLAN.md](docs/PLAN.md)，网站接口梳理见 [docs/SITE_API.md](docs/SITE_API.md)。
+### 发现音乐
 
-### 离线音乐
+- **分类浏览**：数字专辑、单曲 EP、下载商品、pack 和限时优惠；支持专辑、社团、标签及用户搜索。
+- **随便听听**：点击后获取随机曲目，自动播放并展开播放器；上一首回听历史，下一首请求新歌曲。
+- **社团与关注**：浏览社团作品、关注或取消关注。关注页每个社团只显示一次，点击进入详情查看专辑。
 
-在「音乐库 → 已下载」选择保存音乐的文件夹，再到已购专辑详情点「下载」，选择网站提供的 MP3 或 FLAC 格式。下载队列支持查看进度、取消与重试。下载完成后会解压到所选文件夹下的「社团/专辑」目录，并保存 `.neodizzy.json` 曲目对应关系。
+### 播放与音乐库
 
-已下载专辑无需登录即可进入和播放；播放队列也会优先读取本地文件。在「文件」App 中移动或删除音乐后，回音乐库重新扫描。扫描只识别带 `.neodizzy.json` 的 NeoDizzy 专辑目录，普通音频文件夹不会自动加入。下载文件夹应保存在设备上；云盘中被移除本地副本的文件不能保证断网可用。
+- **试听与完整版**：未购买的作品按网站提供的试听地址播放，并标明「试听」；登录后可串流自己已购的完整版。
+- **后台与锁屏控制**：支持播放、暂停、切歌、进度控制，保存播放队列、模式和进度。
+- **迷你播放器**：在标签栏上方显示，随标签栏收缩；点按展开大封面播放页。
+- **离线播放**：下载已购专辑的 MP3 / FLAC ZIP，解压到所选文件夹；播放时优先读取本地音频。
 
-已在 iPhone 上验证真实已购 FLAC ZIP 下载、所选文件夹导入及本地音频读取；系统后台唤醒等场景仍待验收，详见规划中的 M3 验收记录。
+### 购买与社区
 
-### 购买与 BOOST
+- **数字专辑购买与 BOOST**：原生价格、追加支持及附言面板，通过支付宝收银台付款；返回 App 后按当前账号核验到账。
+- **待核验记录**：按账号保存在本机，重启后可继续核验；停止跟踪不会取消订单或退款。
+- **社区互动**：专辑 +dB、短评发表和删除、repo 长评及图片阅读、用户主页；repo 回复仍由网页提供。
 
-在专辑详情选择「购买 / 支持创作者」或「BOOST · 追加支持」，读取网站最新价格后填写金额和附言。金额支持两位小数和 +1 / +5 / +10 / +50 快捷增加；不能低于网站最低价。已购状态按当前登录账号重新核实，离线文件不会作为购买权限。
+### 我的与浏览记录
 
-点击付款后打开支付宝收银台，返回 App 或点「我已付款」即可核验。普通购买确认专辑权限；BOOST 核对新增的已付订单。核验完成后刷新已购库、下载入口及完整版播放。未确认的记录可在音乐库继续核验，关闭面板和重启不会丢失；每个账号分别保存。核验失败不会标为付款成功，停止跟踪也不等于取消订单或退款。
+- **专辑浏览记录**：仅记录进入专辑详情页，按最近访问排序并去重；点击重访，支持左滑删除和清空。
+- **本机保存**：保留最近 200 张专辑，重启后仍可查看；不记录搜索、社团或用户页面的访问。
+- **标题栏设置**：可选择固定在顶部，或随页面内容滚动。
 
-当前范围是数字专辑、免费领取及已购 BOOST；pack、购物车、实体商品、PayPal 和兑换码仍使用网站。开发验证没有创建真实订单或付款，支付宝 App 跳转和实际到账请在真机验收。
+## 运行要求
 
-已使用真实已付款 BOOST 验证到账核验。已识别的支付宝调起格式会带上返回 NeoDizzy 的地址；遇到未知的网页收银台格式，付款后可能仍需手动回到 App，系统会继续核验。
+- iPhone，**iOS 27.0 或更高版本**；当前为竖屏界面。
+- 构建需要 **Xcode 27**；工程使用 Swift 5 语言模式。
+- 真机安装需要自己的签名证书或可用于签名的 Apple 开发账号。
 
-## 构建
+## 安装
 
-最低要求 **Xcode 27**、**iOS 27** 设备，另需 [XcodeGen](https://github.com/yonaskolb/XcodeGen)。
+NeoDizzy 通过 **未签名 IPA** 分发，需要自行签名后安装。
+
+1. 从 [最新 Release](https://github.com/Fab1e2000/NeoDizzy/releases/latest) 下载 `NeoDizzy-vX.Y.Z-unsigned.ipa` 和 `SHA256SUMS.txt`。
+2. 将两个文件放在同一目录，校验下载完整性：
+   ```sh
+   shasum -a 256 -c SHA256SUMS.txt
+   ```
+3. 使用自己的证书或侧载工具重新签名，将 IPA 安装到 iPhone。
+
+发布包不包含开发者的证书或描述文件，也不能直接点击安装。
+
+## 离线音乐的使用
+
+在「音乐库 → 已下载」选择保存文件夹，再从已购专辑详情进入下载，选择网站提供的音频格式。文件保存到所选目录下的社团 / 专辑文件夹，附带 `.neodizzy.json` 曲目对应关系。
+
+下载完成后，可在断网或退出账号时播放本地音乐。在「文件」App 中移动或删除音频后，需要回音乐库重新扫描。扫描仅识别 NeoDizzy 生成的专辑目录，目前不支持任意本地音乐文件夹导入。云盘中没有保留本地副本的文件不保证离线可用。
+
+## 从源码构建
+
+安装 Xcode 27；修改工程配置时另需 [XcodeGen](https://github.com/yonaskolb/XcodeGen)。
 
 ```sh
-cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig   # 填写你的开发团队 ID
-xcodegen generate          # 根据 project.yml 生成 NeoDizzy.xcodeproj
+git clone https://github.com/Fab1e2000/NeoDizzy.git
+cd NeoDizzy
+cp Config/Signing.local.xcconfig.example Config/Signing.local.xcconfig
 open NeoDizzy.xcodeproj
 ```
 
-`Config/Signing.local.xcconfig` 不入库，团队 ID 只保存在你本机。`NeoDizzy/` 是 Xcode 的同步文件夹，新增的 `.swift` 文件会自动参与编译；只有改了 `project.yml` 才需要重新生成工程。
+1. 在 `Config/Signing.local.xcconfig` 中填写自己的开发团队 ID；该文件不会提交到 Git。
+2. 等待 Swift Package Manager 解析 SwiftSoup、Nuke 和 ZIPFoundation。
+3. 选择 `NeoDizzy` Scheme 和 iPhone，构建运行；如有需要，修改 Bundle Identifier。
 
-### 推送到真机
+通过脚本安装到已连接的手机：
 
 ```sh
-cp .env.example .env       # 填写 iPhone 的 UDID
-scripts/deploy-device.sh   # 默认 Release；加 Debug 或 --no-launch 可调整
+cp .env.example .env       # 填写设备 UDID
+scripts/deploy-device.sh Release
 ```
 
-脚本使用 Xcode 自动签名，Bundle ID 默认为 `com.elsterlee.NeoDizzy`，可在 `.env` 里用 `NEODIZZY_BUNDLE_ID` 改成你自己的。
+生成未签名 IPA 和校验文件：
 
-### 核心测试
+```sh
+scripts/package-unsigned.sh
+# 输出到 dist/
+```
+
+工程配置由 `project.yml` 管理，修改后运行 `xcodegen generate`。源代码目录使用 Xcode 同步文件夹，新增 Swift 文件无需重新生成工程。
+
+## 测试与 CI
 
 ```sh
 python3 scripts/test-core.py
 ```
 
-可在没有 iOS 模拟器的 Mac 上运行解析、账号网络、离线目录、ZIP、购买金额与到账核验、收银台导航策略和播放队列测试。脚本在临时 Swift Package 中编译实际核心源文件，沿用工程锁定的依赖版本与并发设置。UI、真实支付、后台下载唤醒、文件夹授权和 AVPlayer 播放仍需要 iOS 设备或模拟器验收。
+核心回归测试在 macOS 上直接运行，覆盖解析、账号网络、下载解压、离线目录、购买核验、社区、分页与浏览记录。完整 iOS 测试可在 Xcode 的 Test 操作中运行。
+
+GitHub Actions 在推送和 PR 时自动安装所需 Metal 工具链，执行核心测试与 iOS 模拟器测试，并构建设备版 IPA。推送 `v*` 标签时，测试和构建通过后自动发布 Release，附带 IPA 与 SHA-256 校验文件。版本号必须与 Info.plist 一致，并提供对应的 `docs/releases/vX.Y.Z.md`。
+
+## 项目结构
+
+```text
+NeoDizzy/
+├── App/                 # App 入口、共享服务、标签栏与导航
+├── Core/
+│   ├── Account/         # 登录与本机会话
+│   ├── BrowsingHistory/ # 专辑浏览记录
+│   ├── Community/      # 社区接口与解析
+│   ├── Downloads/      # 下载任务与 ZIP 解压
+│   ├── OfflineLibrary/ # 文件夹授权、扫描与音轨索引
+│   ├── Playback/       # 播放队列、恢复及系统媒体控制
+│   ├── Purchases/      # 购买、收银台导航与到账核验
+│   └── …               # Models、Networking、UI
+├── Features/            # 发现、社团、关注、音乐库、播放页与我的
+└── Resources/           # 图标与界面资源
+NeoDizzyTests/           # 测试与脱敏 / 人工构造的样本
+scripts/                 # 真机部署、打包、测试与图标生成
+design/                  # 可编辑的图标矢量源文件
+docs/                    # 规划、接口记录与发布说明
+```
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [更新日志](docs/releases) | 各版本改动与安装说明 |
+| [项目规划](docs/PLAN.md) | 阶段目标、实现及验收记录 |
+| [网站接口](docs/SITE_API.md) | 已使用的接口与解析约定 |
+| [第三方声明](THIRD_PARTY_NOTICES.md) | 依赖和参考项目的来源、许可证 |
+| [免责声明](DISCLAIMER.md) | 与平台的关系、内容权利及使用责任 |
+
+## 已知限制
+
+- DizzyLab 网站接口并无兼容性保证，网站改版可能影响解析和部分功能。
+- 完整版串流和下载依赖账号的实际购买权限；随机曲目可能是试听片段。
+- pack 整包购买、PayPal、购物车、兑换码、实体商品，以及注册和找回密码仍使用网站。
+- repo 目前支持原生阅读，未提供原生长评编辑与回复。
+- 未识别的支付宝回跳格式可能需要手动返回 App；付款结果以服务端订单核验为准。
+- 后台下载唤醒、网络中断和文件夹授权失效等异常场景仍需持续真机验证。
+- 当前不提供歌词、均衡器、AutoMix、灵动岛或 Apple Watch 功能。
+
+## 参与项目
+
+欢迎通过 [Issues](https://github.com/Fab1e2000/NeoDizzy/issues) 反馈问题。请说明系统版本、App 版本和复现步骤，避免上传登录凭据、付款链接或其他私人信息。提交 PR 前请确认工程可构建，并通过核心回归测试。
 
 ## 许可证与致谢
 
-NeoDizzy 以 [GPLv3](LICENSE) 发布。播放相关代码将移植自同样以 GPLv3 发布的 [MeloX](https://github.com/youshen2/MeloX)，界面组织参考了 NeoBili。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+NeoDizzy 以 [GNU GPLv3](LICENSE) 发布。此许可证不授予任何 DizzyLab 内容、商标或服务的权利；音乐和社区内容的版权归各自权利人所有。请支持创作者，购买和下载的作品仅供个人使用，不要重新上传或公开分发。
 
-请支持并尊重创作者：在 DizzyLab 购买后下载的作品仅供个人使用，不要上传发布到任何公开的网络空间。
+- [MeloX](https://github.com/youshen2/MeloX) / MeloX_Modified：播放队列、系统媒体控制、播放器界面与标题栏逻辑的来源或参考。
+- [NeoBili](https://github.com/Fab1e2000/NeoBili)：界面组织、立体字母图标和本 README 的排版参考。
+- [SwiftSoup](https://github.com/scinfu/SwiftSoup)：HTML 解析。
+- [Nuke](https://github.com/kean/Nuke)：封面加载与缓存。
+- [ZIPFoundation](https://github.com/weichsel/ZIPFoundation)：ZIP 解压。
 
-### M5 社区入口
-
-- 发现页顶部：随便听听、支持者榜。随机发现可换曲，点「播放这首」进入随便听听播放模式：播放器上一首直接回听历史，下一首请求新曲目。历史与模式随播放状态保存；第一首没有历史时禁用上一首。
-- 专辑曲目下方：展开「社区」，可点赞、发 140 字短评、删除自己的短评和阅读 repo；列表按需分页。
-- 社团页：关注 / 取消关注，成功后同步更新关注动态。
-- 搜索用户，或点击短评、repo、支持者榜中的头像昵称，可进入已购 / repo / 关注 / +2 dB 主页；「我的」也可进入个人主页。
-- repo 正文和图片原生展示，回复入口仍使用网站。
-
-写操作使用当前账号的 CSRF 表单，完成后重新读取网站状态；网络结果不确定时不自动重发。自动化测试使用模拟请求，不会替用户发短评、点赞或改变关注关系。
+具体来源与许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -70,8 +70,8 @@ struct PaginationFooter<Item: Identifiable & Sendable>: View {
                 }
             } else {
                 ProgressView()
-                    .task(id: list.items.count) {
-                        // 一页加载完、条目数变化时任务会立即重启，而此时底栏马上会被新内容推出屏幕。
+                    .task(id: list.loadedPages) {
+                        // 页码变化后继续触发，整页都是重复条目时也能翻到下一页。
                         // 先等一会儿：离开屏幕的底栏会在发请求前被取消，内容不满一屏时再接着加载。
                         try? await Task.sleep(for: .milliseconds(300))
                         guard !Task.isCancelled else { return }

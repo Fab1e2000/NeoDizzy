@@ -15,6 +15,13 @@ struct MineView: View {
                     .listRowBackground(DizzyPalette.surface)
 
                 Section {
+                    NavigationLink { BrowsingHistoryView() } label: {
+                        Label("浏览记录", systemImage: "clock.arrow.circlepath")
+                    }
+                }
+                .listRowBackground(DizzyPalette.surface)
+
+                Section {
                     Picker("标题栏", selection: $pinsTitleBar) {
                         Text("固定").tag(true)
                         Text("滚动").tag(false)

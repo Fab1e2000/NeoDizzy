@@ -25,5 +25,6 @@ nonisolated struct FeedGroup: Hashable, Identifiable, Sendable {
     let addDate: String?
     let discs: [DiscSummary]
 
-    var id: String { "\(labelID)-\(addDate ?? "")" }
+    // 关注列表展示社团，同一社团不同日期的动态共用一个身份。
+    var id: Int { labelID }
 }

@@ -57,6 +57,7 @@ struct RootView: View {
             .preferredColorScheme(.dark)
         }
         // 放在所有 sheet 外层，弹出的页面也能拿到播放器和账号。
+        .environment(services.browsingHistory)
         .environment(player)
         .environment(account)
         .environment(offlineLibrary)
@@ -102,7 +103,11 @@ struct RootView: View {
     @ViewBuilder
     private func page(for tab: MainTab) -> some View {
         switch tab {
-        case .discover: DiscoverView()
+        case .discover:
+            DiscoverView { selection in
+                player.playDiscovery(selection)
+                isNowPlayingPresented = true
+            }
         case .labels: LabelsView()
         case .feed: FeedView()
         case .library: LibraryView()
