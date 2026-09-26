@@ -1,5 +1,4 @@
-// 移植自 MeloX（GPLv3）Features/Player/MiniPlayer/MiniPlayerView.swift：
-// 去掉封面转场和播放按钮的点击死区。
+// 移植自 MeloX（GPLv3）Features/Player/MiniPlayer/MiniPlayerView.swift：去掉播放按钮的点击死区。
 
 import SwiftUI
 
@@ -9,6 +8,8 @@ struct MiniPlayerView: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
     @Environment(PlayerStore.self) private var player
 
+    /// 封面是播放页缩放展开的起点。
+    let transitionNamespace: Namespace.ID
     let onExpand: () -> Void
 
     var body: some View {
@@ -18,6 +19,7 @@ struct MiniPlayerView: View {
                     HStack(spacing: isInline ? 8 : 10) {
                         ArtworkImage(url: track.coverURL, cornerRadius: 6)
                             .frame(width: artworkSize, height: artworkSize)
+                            .matchedTransitionSource(id: NowPlayingView.transitionID, in: transitionNamespace)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(track.title)
                                 .font(.subheadline.weight(.semibold))

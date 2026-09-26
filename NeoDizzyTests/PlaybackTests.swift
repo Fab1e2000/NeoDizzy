@@ -33,6 +33,25 @@ struct PlaybackQueueTests {
         #expect(queue.currentTrack?.number == "5")
     }
 
+    @Test func upcomingFollowsPlayOrderAndWrapsWhenRepeatingAll() {
+        var queue = PlaybackQueue()
+        queue.replace(with: tracks, startingAt: 2)
+        #expect(queue.upcomingIndices(wraps: false) == [3, 4])
+        #expect(queue.upcomingIndices(wraps: true) == [3, 4, 0, 1])
+    }
+
+    @Test func selectingFromQueueKeepsShuffleOrder() {
+        var queue = PlaybackQueue()
+        queue.restore(tracks: tracks, currentIndex: 0, isShuffled: true, shuffledOrder: [0, 3, 1, 4, 2])
+        #expect(queue.upcomingIndices(wraps: false) == [3, 1, 4, 2])
+        let selected = queue.select(index: 4)
+        #expect(selected)
+        #expect(queue.currentTrack?.number == "5")
+        // 随机顺序不变，只是当前位置跳到了第 4 个。
+        #expect(queue.upcomingIndices(wraps: false) == [2])
+        #expect(queue.persistedShuffleOrder == [0, 3, 1, 4, 2])
+    }
+
     @Test func shuffleStartsFromCurrentTrackAndVisitsEveryTrackOnce() {
         var queue = PlaybackQueue()
         queue.replace(with: tracks, startingAt: 2)

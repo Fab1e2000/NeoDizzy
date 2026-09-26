@@ -41,6 +41,11 @@ final class StreamResolver {
         cache[discID] = nil
     }
 
+    /// 登录或退出登录后，同一张专辑的地址可能从试听变成完整版（或反过来），全部重新获取。
+    func removeAll() {
+        cache.removeAll()
+    }
+
     private func isFresh(_ url: URL) -> Bool {
         // 看不出过期时间时照常使用，真的失效了会在播放出错后重新获取。
         guard let expiry = DizzyURL.streamExpiry(url) else { return true }

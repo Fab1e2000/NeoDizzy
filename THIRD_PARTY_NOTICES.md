@@ -8,7 +8,8 @@
   - `Core/Playback/PlaybackQueue.swift`、`PlaybackPersistence.swift`、`NowPlayingSession.swift`、`AudioSessionConfigurator.swift`
   - `Core/UI/ArtworkImage.swift`，`Core/UI/LoadStateViews.swift` 里的分页底栏
   - `Features/Player/MiniPlayerView.swift`
-- `PlayerStore` 和播放页参考了 MeloX 的结构和布局，按需重写。本地文件夹扫描将在 M3 移植。
+  - 播放页 `Features/Player/NowPlaying/`：Apple Music 式动态背景（`AppleMusicBackdropShaders.metal` 原样移植）、播放控制按钮样式（原样移植）、大封面页、队列页、底部控件和「…」菜单（按 NeoDizzy 精简）
+- `PlayerStore` 参考了 MeloX 的结构，按需重写。本地文件夹扫描将在 M3 移植。
 
 ## Nuke
 

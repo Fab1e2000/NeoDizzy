@@ -132,7 +132,11 @@ private struct DiscDetailContent: View {
                 .buttonStyle(.plain)
             }
             HStack(spacing: 12) {
-                if let price = summary.price {
+                if summary.isOwned {
+                    Label("已购", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(DizzyPalette.success)
+                        .fontWeight(.semibold)
+                } else if let price = summary.price {
                     PriceText(price: price)
                 }
                 if let date = detail.releaseDate {

@@ -1,0 +1,61 @@
+{
+ "canshowmore": true,
+ "labels": [
+  {
+   "labelid": 490,
+   "title": "Flexible X",
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/LOGO.JPG!cover",
+   "add_date": "2026-06-28T04:00:00.000Z",
+   "discs": [
+    {
+     "id": "fx4",
+     "title": "Glassy Tears 44.1kHz",
+     "cover": "https://cdn.dizzylab.net/media/cover/fx4.jpg!cover",
+     "price": 0.0,
+     "tags": [
+      "电子音乐"
+     ],
+     "description": "",
+     "onlyhavegift": false,
+     "add_date": "2026-06-28T04:00:00.000Z",
+     "release_date": "2026-06-28"
+    }
+   ]
+  },
+  {
+   "labelid": 440,
+   "title": "obscuRE TRAX",
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/封面logo_00000.png!cover",
+   "add_date": "2026-09-20T11:00:11.375Z",
+   "discs": [
+    {
+     "id": "obs-CD06BP",
+     "title": "【实体】Quiddity:2「PART B」",
+     "cover": "https://cdn.dizzylab.net/media/cover/海报_2.jpg!cover",
+     "price": 45.0,
+     "tags": [
+      "hardcore",
+      "电子音乐"
+     ],
+     "description": "来自obscuRE TRAX的首张实体专辑B侧已在Dizzylab开启通贩！",
+     "onlyhavegift": false,
+     "add_date": "2026-09-20T11:00:11.375Z",
+     "release_date": "2026-09-20"
+    },
+    {
+     "id": "obs-CD06B",
+     "title": "Quiddity:2「PART B」",
+     "cover": "https://cdn.dizzylab.net/media/cover/obs-CD06B.jpg!cover",
+     "price": 0.0,
+     "tags": [
+      "电子音乐"
+     ],
+     "description": "",
+     "onlyhavegift": false,
+     "add_date": "2026-09-20T11:00:11.375Z",
+     "release_date": "2026-09-20"
+    }
+   ]
+  }
+ ]
+}

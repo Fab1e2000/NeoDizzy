@@ -1,5 +1,5 @@
 // 移植自 MeloX（GPLv3）Core/Playback/Queue/PlaybackQueue.swift：
-// 曲目类型换成 Track，去掉 M1 用不到的插播和拖动排序。
+// 曲目类型换成 Track，去掉用不到的插播和拖动排序。
 
 import Foundation
 
@@ -52,6 +52,25 @@ nonisolated struct PlaybackQueue: Sendable {
     /// 当前曲目在播放顺序里的位置，随机播放时按随机顺序计。
     var position: Int {
         isShuffled ? shuffledPosition : currentIndex
+    }
+
+    /// 接下来要播放的曲目下标，按播放顺序（随机时按随机顺序）。列表循环时接上开头的曲目。
+    func upcomingIndices(wraps: Bool) -> [Int] {
+        guard !tracks.isEmpty else { return [] }
+        let order = isShuffled ? shuffledOrder : Array(tracks.indices)
+        let position = isShuffled ? shuffledPosition : currentIndex
+        let nextPosition = min(position + 1, order.count)
+        let remaining = Array(order.dropFirst(nextPosition))
+        guard wraps, position > 0 else { return remaining }
+        return remaining + Array(order.prefix(position))
+    }
+
+    /// 跳到队列里的某一首。随机播放时保持随机顺序，只移动当前位置。
+    mutating func select(index: Int) -> Bool {
+        guard tracks.indices.contains(index) else { return false }
+        currentIndex = index
+        alignShufflePosition()
+        return true
     }
 
     mutating func restore(tracks: [Track], currentIndex: Int, isShuffled: Bool, shuffledOrder: [Int]) {
@@ -126,6 +145,15 @@ nonisolated struct PlaybackQueue: Sendable {
         }
         shuffledOrder = [currentIndex] + tracks.indices.filter { $0 != currentIndex }.shuffled()
         shuffledPosition = 0
+    }
+
+    private mutating func alignShufflePosition() {
+        guard isShuffled else { return }
+        if let position = shuffledOrder.firstIndex(of: currentIndex) {
+            shuffledPosition = position
+        } else {
+            rebuildShuffleOrder()
+        }
     }
 
     private func isValidShuffleOrder(_ order: [Int]) -> Bool {

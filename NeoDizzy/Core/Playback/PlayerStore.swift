@@ -22,6 +22,11 @@ final class PlayerStore {
     var isShuffled: Bool { queue.isShuffled }
     var canPlayNext: Bool { queue.canMove(by: 1, wraps: repeatMode == .all) }
 
+    /// 接下来要播放的曲目，按播放顺序。
+    var upcoming: [UpcomingTrack] {
+        queue.upcomingIndices(wraps: repeatMode == .all).map { UpcomingTrack(index: $0, track: queue.tracks[$0]) }
+    }
+
     @ObservationIgnored private let player: AVPlayer
     @ObservationIgnored private let resolver: StreamResolver
     @ObservationIgnored private let persistence: PlaybackPersistence
@@ -40,6 +45,8 @@ final class PlayerStore {
     @ObservationIgnored private var resumeAfterInterruption = false
     @ObservationIgnored private var isSeeking = false
     @ObservationIgnored private var lastSavedProgress: TimeInterval = 0
+    /// `progress` 最近一次更新的时间，用来推算两次刷新之间的播放位置。
+    @ObservationIgnored private var progressUpdatedAt = Date.now
 
     init(resolver: StreamResolver = StreamResolver(), persistence: PlaybackPersistence = PlaybackPersistence()) {
         let player = AVPlayer()
@@ -61,6 +68,19 @@ final class PlayerStore {
         }
         queue.replace(with: tracks, startingAt: index)
         load(autoplay: true)
+    }
+
+    /// 播放队列里的某一首（播放页的「继续播放」列表）。
+    func playFromQueue(at index: Int) {
+        guard queue.select(index: index) else { return }
+        load(autoplay: true)
+    }
+
+    /// 某一时刻的播放位置：进度每 0.5 秒刷新一次，中间按流逝的时间推算。动态背景用它驱动动画，
+    /// 暂停时停住、继续播放时接着动。
+    func estimatedProgress(at date: Date = .now) -> TimeInterval {
+        guard isPlaying, !isLoading else { return progress }
+        return progress + max(date.timeIntervalSince(progressUpdatedAt), 0)
     }
 
     func togglePlayback() {
@@ -103,6 +123,7 @@ final class PlayerStore {
     func seek(to seconds: TimeInterval) {
         let target = max(0, duration > 0 ? min(seconds, duration) : seconds)
         progress = target
+        progressUpdatedAt = .now
         guard player.currentItem != nil else { return }
         isSeeking = true
         player.seek(
@@ -174,6 +195,7 @@ final class PlayerStore {
         issue = nil
         isPlaying = autoplay
         progress = position
+        progressUpdatedAt = .now
         pendingSeek = position
         duration = 0
         isPreview = false
@@ -262,6 +284,11 @@ final class PlayerStore {
                 self.handleFailure()
             }
         })
+        observers.append(center.addObserver(forName: .dizzyAccountDidChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.resolver.removeAll()
+            }
+        })
         // 文档没有说明这两个通知的 object 是什么，不按 object 过滤。
         observers.append(center.addObserver(forName: AVAudioSession.didBecomeInactiveNotification, object: nil, queue: .main) { [weak self] notification in
             MainActor.assumeIsolated {
@@ -286,6 +313,7 @@ final class PlayerStore {
     private func handleTick(_ seconds: Double) {
         guard !isSeeking, !isResolving, seconds.isFinite, player.currentItem != nil else { return }
         progress = max(seconds, 0)
+        progressUpdatedAt = .now
         updateNowPlaying()
         if abs(progress - lastSavedProgress) >= 10 {
             saveState()
@@ -383,4 +411,13 @@ final class PlayerStore {
             isPlaying: isPlaying
         )
     }
+}
+
+/// 「继续播放」里的一首。同一首曲目可能在队列里出现多次，所以用队列下标区分。
+nonisolated struct UpcomingTrack: Identifiable, Sendable {
+    /// 在队列里的下标，用于点播。
+    let index: Int
+    let track: Track
+
+    var id: Int { index }
 }

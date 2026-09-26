@@ -8,17 +8,32 @@ nonisolated final class DizzyHTTPClient: Sendable {
     /// iPhone Safari 的 UA。网站按 UA 区分手机和桌面页面，付款跳转也依赖手机 UA。
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 27_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1"
 
+    /// 登录后的 Cookie 和 token。
+    let credentials: DizzyCredentials
+
     private let session: URLSession
     private let gate = RequestGate(limit: 4)
 
-    init(session: URLSession = URLSession(configuration: .dizzy)) {
+    init(session: URLSession = URLSession(configuration: .dizzy), credentials: DizzyCredentials = DizzyCredentials()) {
         self.session = session
+        self.credentials = credentials
     }
 
-    func data(path: String, query: [URLQueryItem] = []) async throws -> Data {
+    func data(path: String, query: [URLQueryItem] = [], referer: String? = nil) async throws -> Data {
         var request = URLRequest(url: DizzyURL.page(path, query: query))
-        request.setValue(DizzyURL.site.absoluteString + "/", forHTTPHeaderField: "Referer")
+        request.setValue(referer ?? DizzyURL.site.absoluteString + "/", forHTTPHeaderField: "Referer")
         return try await perform(request).0
+    }
+
+    /// 提交网页表单（登录等）。返回响应页面的 HTML。
+    func postForm(path: String, fields: [(String, String)], referer: String) async throws -> String {
+        var request = URLRequest(url: DizzyURL.page(path))
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.setValue(referer, forHTTPHeaderField: "Referer")
+        request.setValue(DizzyURL.site.absoluteString, forHTTPHeaderField: "Origin")
+        request.httpBody = Data(DizzyURL.formEncoded(fields).utf8)
+        return String(decoding: try await perform(request).0, as: UTF8.self)
     }
 
     /// 文件大小（字节），用 HEAD 请求获取，不下载内容。
@@ -32,6 +47,11 @@ nonisolated final class DizzyHTTPClient: Sendable {
     private func perform(_ request: URLRequest) async throws -> (Data, URLResponse) {
         var request = request
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        // Cookie 只发给网站本身，不发给 CDN 和播放地址。
+        let isSite = request.url?.host == DizzyURL.site.host
+        if isSite, let cookie = credentials.cookieHeader() {
+            request.setValue(cookie, forHTTPHeaderField: "Cookie")
+        }
 
         await gate.acquire()
         defer { Task { await gate.release() } }
@@ -43,14 +63,23 @@ nonisolated final class DizzyHTTPClient: Sendable {
         } catch let error as URLError where error.code == .cancelled {
             throw CancellationError()
         } catch let error as URLError {
-            debugLog("请求失败 \(request.url?.absoluteString ?? "")：\(error.code.rawValue) \(error.localizedDescription)")
+            debugLog("请求失败 \(Self.redacted(request.url))：\(error.code.rawValue) \(error.localizedDescription)")
             throw DizzyError.network(error.localizedDescription)
         }
+        if isSite, let response = result.1 as? HTTPURLResponse, let url = response.url,
+           let setCookie = response.value(forHTTPHeaderField: "Set-Cookie") {
+            credentials.store(HTTPCookie.cookies(withResponseHeaderFields: ["Set-Cookie": setCookie], for: url))
+        }
         if let status = (result.1 as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
-            debugLog("请求失败 \(request.url?.absoluteString ?? "")：HTTP \(status)")
+            debugLog("请求失败 \(Self.redacted(request.url))：HTTP \(status)")
             throw DizzyError.httpStatus(status)
         }
         return result
+    }
+
+    /// 写日志用：去掉地址里的 token。
+    static func redacted(_ url: URL?) -> String {
+        (url?.absoluteString ?? "").replacing(#/token=[0-9a-fA-F]+/#, with: "token=<token>")
     }
 
     func json<T: Decodable & Sendable>(_ type: T.Type, path: String, query: [URLQueryItem] = []) async throws -> T {
@@ -75,6 +104,10 @@ nonisolated extension URLSessionConfiguration {
         configuration.waitsForConnectivity = false
         configuration.timeoutIntervalForRequest = 15
         configuration.timeoutIntervalForResource = 30
+        // Cookie 由 DizzyCredentials 自己管理，登录后存进钥匙串，不交给系统的 Cookie 存储。
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieAcceptPolicy = .never
         return configuration
     }
 }

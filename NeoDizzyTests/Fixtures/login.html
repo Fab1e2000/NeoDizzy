@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head><meta charset="utf-8"><title>登录 - dizzylab</title></head>
+<body>
+<div class="container">
+<form class="form-inline m-3" action="/search">
+<input class="form-control search-field form-control-sm text-light border bg-transparent" type="search" name="s" id="search-field-m" aria-label="Search" placeholder='在这里搜索'>
+</form>
+<form method="post"><input type='hidden' name='csrfmiddlewaretoken' value='TESTcsrfTokenValue0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJ' />
+<input type="hidden" value="" name="next" />
+<label class="text-white" style="font-size:small;"><b>😃昵称或邮箱</b></label>
+<div class="form-group"><input class="form-control" type="text" name="username" required="" placeholder="username or email" value="" autofocus></div>
+<label class="text-white" style="font-size:small;"><b>🗂密码</b></label>
+<div class="form-group"><input class="form-control" type="password" name="password" required="" placeholder="password"></div>
+<div class="form-group"><button id="btn_login" class="btn btn-info btn-block" type="submit" style="margin-top: 36px;">登录</button></div>
+</form>
+</div>
+</body>
+</html>

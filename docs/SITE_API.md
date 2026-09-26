@@ -8,6 +8,7 @@
 - 两套凭证：
   - **会话 Cookie**（`sessionid`，另有 `csrftoken`）：网页页面、POST 操作使用。
   - **API token**（40 位十六进制）：`/apis/*` 只认 URL 里的 `&token=`，**会话 Cookie 对它无效**。登录后在 `/u/<id>/music/` 的 HTML 里以 `var token = '…'` 出现。
+  - 实测**只带 token、不带任何 Cookie** 调 `/apis/*` 完全可用；token 错误时返回 HTML 错误页而不是 JSON。
 - POST 请求需要 `csrfmiddlewaretoken` 字段（或请求头）以及同源 `Referer`。
 - **出错时也返回 HTTP 200**：不存在的页面、不存在的专辑都返回标题为「出错了！」的 HTML 错误页，JSON 接口出错时返回的也是这个页面。不能只看状态码判断成功。
 - `/apis/*` 返回的 `Content-Type` 是 `text/html`，内容其实是 JSON。
@@ -20,7 +21,7 @@
 | `GET /apis/getdiscs/?l=&r=&sort=&type=` | 专辑列表。`l`/`r` 为左闭右开区间（网页每页 24），`type` 为 `album`（数字专辑）/`ep`（单曲 EP）/`dig`（下载商品）。`sort` 网页固定用 `ad`，实测传其他值（`likes`、`hot`、`new` 等）结果完全一样。返回 `total_count`、`canshowmore`、`discs[]` |
 | `GET /apis/getthisdicsinfo/?discid=[&token=]` | 专辑详情与曲目。带 token 时 `ihavethis` 反映是否已购，已购专辑的曲目地址为完整版 |
 | `GET /apis/getlabels/?l=&r=&sort=` | 社团列表，`total_count` 约 670，字段见下 |
-| `GET /apis/getfeed/?l=&r=&sort=&token=` | 已关注社团的新作动态 |
+| `GET /apis/getfeed/?l=&r=&sort=&token=` | 已关注社团的新作动态，需要 token。`l`/`r` 按社团分组计数（网页每页 6 组），`sort=ad`。返回 `canshowmore` 和 `labels[]`，**没有 `total_count`** |
 | `GET /albums/getthisdisclikes/?discid=` | 点赞数与我是否点过：`{likes, ilikethis}`，网页显示为 `likes × 2` dB |
 | `GET /getreviews/?discid=&l=&r=` | repo 长评，按字段分列的数组 |
 | `GET /getreviewlikesanddislikes/?id=` | 长评的赞 / 踩 |
@@ -74,11 +75,25 @@ https://streaming.dizzylab.net/<yyyyMMddHHmm>/<md5>/<discid>/full/<n>.mp3
 - `k` 解码后为「过期时间戳:签名」，有效期约 1 小时，需在下载前现取。
 - 下载结果为 ZIP 压缩包（文件名编码与目录结构待 M3 实测）。
 
+### `getfeed` 字段
+
+`labels[]` 每项是一个社团：`labelid`、`title`（社团名）、`labelcover`、`add_date`（ISO 8601），以及这批新作 `discs[]`。
+新作只有 `id`、`title`、`cover`、`price`、`tags`、`description`、`onlyhavegift`、`add_date`、`release_date`，**没有在售状态**。
+
 ## 账号
 
-- **登录**：`GET /albums/login/` 取 `csrftoken` Cookie 和表单里的 `csrfmiddlewaretoken`；`POST /albums/login/`，字段 `csrfmiddlewaretoken`、`username`（用户名或邮箱）、`password`、`next`。无验证码。
-- **登录后导航**：`/u/<id>`（个人信息）、`/feed/`（我的关注）、`/albums/purchases/`（全部订单）、`/albums/msgbox/`（收件箱）、`/albums/logout`。
-- **用户页**（HTML）：`/u/<id>/music`（已购）、`/review`（repo）、`/following`（关注的社团）、`/likes`（点赞过的专辑）。
+- **登录**：`GET /albums/login/` 取 `csrftoken` Cookie 和表单里的 `csrfmiddlewaretoken`；`POST /albums/login/`（带同源 `Referer`），字段 `csrfmiddlewaretoken`、`next`、`username`（昵称或邮箱）、`password`。无验证码。
+  - 成功时设置 `sessionid` Cookie，**响应是 200 而不是跳转**，所以要看 Cookie 或重新请求首页来判断是否登录成功。
+  - 失败时返回的仍是登录页，页面上有 Bootstrap 提示框，文字是「抱歉！登录信息错误」（末尾是 × 关闭按钮）。
+- **token 不随退出登录失效**：`/albums/logout` 只结束网页会话，之后 token 调 `/apis/*` 仍然有效，是长期凭据。
+  - 另有阿里云 WAF 的 `acw_tc` Cookie（30 分钟），随请求带上即可。
+- **登录后导航**：首页导航栏的下拉菜单 `.dropdown-menu` 里有 `a.dropdown-item`：`/u/<id>`（个人信息）、`/feed/`（我的关注）、`/albums/purchases/`（全部订单）、`/albums/msgbox/`（收件箱）、`/albums/logout`（退出登录）。菜单按钮 `#dropdownMenu2` 里是头像（`!labellittle` 样式），没有昵称。
+- **用户页**（HTML）：`/u/<id>/music`（已购）、`/review`（repo）、`/following`（关注的社团）、`/likes`（点赞过的专辑）、`/deflate`、`/options`。页头左列是头像原图，右列 `h1` 是昵称、`h2` 是「dizzylab的第 N 位用户，加入于…」。
+- **已购专辑** `/u/<id>/music/?page=<n>[&q=<关键词>]`：
+  - **不登录也能看到**任何用户的已购列表；只有以本人身份登录时，页面脚本里才有 `var token = '…'`，卡片底部才有「购买于 YYYY-MM-DD」。
+  - 专辑卡片在 `#discs` 里：封面链接 `a[href="/d/<id>"]` 内有 `.album_cover img[data-src]`，Hi-Res 专辑另有 `static/hires.jpg` 角标；卡片底部 `[onclick="updateplayer('<id>')"]` 的 `title` 是专辑名，`h4 a[href^="/l/"]` 是社团。
+  - 分页在 `#profile-music-pagination`，和其他列表一样有「下一页」按钮。
+- **会话是否有效**：带会话 Cookie 请求本人的已购专辑页，看页面里有没有 token。
 - **全部订单**只列出已付款订单。
 
 ## 购买

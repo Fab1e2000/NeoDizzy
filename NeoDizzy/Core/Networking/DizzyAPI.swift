@@ -5,6 +5,8 @@ nonisolated struct DizzyAPI: Sendable {
     static let shared = DizzyAPI()
     /// 网页每页 24 张，这里保持一致。
     static let pageSize = 24
+    /// 关注动态每页的社团数，与网页一致。
+    static let feedPageSize = 6
 
     let client: DizzyHTTPClient
 
@@ -28,12 +30,49 @@ nonisolated struct DizzyAPI: Sendable {
         )
     }
 
+    /// 登录后自动带上 token：已购专辑的曲目地址是完整版，`ihavethis` 反映是否已购。
     func discDetail(id: String) async throws -> DiscDetail {
-        try await client.json(
-            DiscDetailResponse.self,
-            path: "/apis/getthisdicsinfo/",
-            query: [URLQueryItem(name: "discid", value: id)]
-        ).detail
+        let query = [URLQueryItem(name: "discid", value: id)]
+        guard let token = client.credentials.token else {
+            return try await client.json(DiscDetailResponse.self, path: "/apis/getthisdicsinfo/", query: query).detail
+        }
+        do {
+            return try await client.json(
+                DiscDetailResponse.self,
+                path: "/apis/getthisdicsinfo/",
+                query: query + [URLQueryItem(name: "token", value: token)]
+            ).detail
+        } catch let error as DizzyError where error.isUnrecognizedResponse {
+            // 带 token 拿到错误页：不带 token 再试一次。这次成功说明是 token 失效了，否则是专辑本身有问题。
+            let detail = try await client.json(DiscDetailResponse.self, path: "/apis/getthisdicsinfo/", query: query).detail
+            rejectToken()
+            return detail
+        }
+    }
+
+    /// 已关注社团的新作动态，按社团分组，每页 6 组。需要登录。
+    func feed(page: Int) async throws -> Page<FeedGroup> {
+        guard let token = client.credentials.token else { throw DizzyError.notLoggedIn }
+        let start = (max(page, 1) - 1) * Self.feedPageSize
+        do {
+            let response = try await client.json(FeedResponse.self, path: "/apis/getfeed/", query: [
+                URLQueryItem(name: "l", value: String(start)),
+                URLQueryItem(name: "r", value: String(start + Self.feedPageSize)),
+                URLQueryItem(name: "sort", value: "ad"),
+                URLQueryItem(name: "token", value: token),
+            ])
+            return Page(items: response.labels.map(\.group), hasMore: response.canshowmore)
+        } catch let error as DizzyError where error.isUnrecognizedResponse {
+            rejectToken()
+            throw DizzyError.sessionExpired
+        }
+    }
+
+    /// 网站不再接受这个 token：之后的请求不再带它，并通知账号页提示重新登录。
+    private func rejectToken() {
+        debugLog("token 被网站拒绝")
+        client.credentials.setToken(nil)
+        NotificationCenter.default.post(name: .dizzyTokenRejected, object: nil)
     }
 
     /// 试听片段的时长。各专辑的试听长度不同（实测有 30 秒、76 秒），但都是 128 kbps 的 MP3，
@@ -87,6 +126,7 @@ nonisolated struct DiscJSON: Decodable, Sendable {
     let likes: Int?
     let onsell: Bool
     let ispreselling: Bool
+    let ihavethis: Bool?
 
     var summary: DiscSummary {
         DiscSummary(
@@ -98,7 +138,8 @@ nonisolated struct DiscJSON: Decodable, Sendable {
             price: PriceTag(price: price, onSell: onsell, isPreselling: ispreselling),
             tags: tags ?? [],
             likes: likes,
-            isHiRes: ishires ?? false
+            isHiRes: ishires ?? false,
+            isOwned: ihavethis ?? false
         )
     }
 }
@@ -207,6 +248,51 @@ nonisolated struct LabelJSON: Decodable, Sendable {
                     labelID: labelid
                 )
             }
+        )
+    }
+}
+
+nonisolated struct FeedResponse: Decodable, Sendable {
+    let canshowmore: Bool
+    let labels: [FeedLabelJSON]
+}
+
+nonisolated struct FeedLabelJSON: Decodable, Sendable {
+    let labelid: Int
+    let title: String
+    let labelcover: String?
+    let add_date: String?
+    let discs: [FeedDiscJSON]
+
+    var group: FeedGroup {
+        FeedGroup(
+            labelID: labelid,
+            labelName: title,
+            labelCoverURL: DizzyURL.image(labelcover),
+            addDate: add_date,
+            discs: discs.map { $0.summary(labelName: title, labelID: labelid) }
+        )
+    }
+}
+
+/// 关注动态里的专辑只有这些字段，没有在售状态。
+nonisolated struct FeedDiscJSON: Decodable, Sendable {
+    let id: String
+    let title: String
+    let cover: String?
+    let price: Double?
+    let tags: [String]?
+    let release_date: String?
+
+    func summary(labelName: String, labelID: Int) -> DiscSummary {
+        DiscSummary(
+            id: id,
+            title: title,
+            coverURL: DizzyURL.image(cover),
+            labelName: labelName,
+            labelID: labelID,
+            price: price.map { PriceTag(price: $0, onSell: true, isPreselling: false) },
+            tags: tags ?? []
         )
     }
 }

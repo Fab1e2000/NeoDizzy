@@ -27,6 +27,8 @@ nonisolated struct DiscSummary: Hashable, Identifiable, Sendable {
     var tags: [String] = []
     var likes: Int?
     var isHiRes = false
+    /// 登录后专辑详情里的 `ihavethis`：当前账号已购买。
+    var isOwned = false
 }
 
 /// 网页上的价格标注。
@@ -61,7 +63,7 @@ nonisolated enum PriceTag: Hashable, Sendable {
     static func yuan(_ value: Double) -> String {
         value.rounded() == value
             ? "¥\(Int(value))"
-            : "¥" + value.formatted(.number.precision(.fractionLength(0...2)))
+            : "¥" + value.formatted(.number.precision(.fractionLength(0...2)).locale(Locale(identifier: "zh_Hans_CN")))
     }
 }
 

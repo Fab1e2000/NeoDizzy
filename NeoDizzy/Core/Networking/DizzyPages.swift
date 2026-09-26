@@ -41,6 +41,16 @@ nonisolated struct DizzyPages: Sendable {
         return try await Self.parse { try PackPageParser.parse(html, id: id) }
     }
 
+    /// 已购专辑，一页一页地翻。这个页面公开可见，不需要会话 Cookie。
+    func purchases(userID: Int, page: Int) async throws -> Page<PurchasedDisc> {
+        try await profileMusic(userID: userID, page: page).purchases
+    }
+
+    func profileMusic(userID: Int, page: Int = 1) async throws -> ProfileMusicPageParser.Result {
+        let html = try await client.html(path: "/u/\(userID)/music/", query: page > 1 ? [URLQueryItem(name: "page", value: String(page))] : [])
+        return try await Self.parse { try ProfileMusicPageParser.parse(html) }
+    }
+
     /// 曲号 → 完整版时长。
     func trackDurations(discID: String) async throws -> [String: TimeInterval] {
         let html = try await client.html(path: "/d/\(DizzyURL.pathSegment(discID))/")

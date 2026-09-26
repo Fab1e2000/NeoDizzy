@@ -29,6 +29,15 @@ nonisolated enum DizzyURL {
         return components.url!
     }
 
+    /// 用户的已购专辑页。
+    static func purchases(userID: Int) -> URL { page("/u/\(userID)/music/") }
+    static let login = page("/albums/login/")
+
+    /// 表单内容（`application/x-www-form-urlencoded`），值的转义规则与查询参数相同。
+    static func formEncoded(_ fields: [(String, String)]) -> String {
+        fields.map { "\(queryValue($0.0))=\(queryValue($0.1))" }.joined(separator: "&")
+    }
+
     /// 路径中的一段，例如社团名 `obscuRE TRAX`、`雪人Snowman`。`/` 也要转义，避免被拆成两段。
     static func pathSegment(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: unreservedCharacters) ?? value
