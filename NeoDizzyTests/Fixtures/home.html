@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head><meta charset="utf-8"><title>dizzylab</title></head>
+<body>
+<div class="container" style="margin-top: 24px;padding-inline: 7px;">
+<div class="container p-0 m-0 scroll-group sticky-top" id="stickytab" style="z-index: 113;">
+<ul class="nav nav-tabs bg-primary border-bottom border-light p-0 row" id="catTab" role="tablist" style="margin: 7px">
+<li class="nav-item col-auto p-0 m-0 mr-3" role="presentation">
+<button class="nav-link bg-primary text-light p-2 active" id="music-tab" data-toggle="tab" data-target="#music" type="button" role="tab" aria-controls="music" aria-selected="true" style='font-size:small' onclick="$(this).tab('show');changetype('album');scrollup(0);"><i class="fa fa-music"></i> 数字专辑</button>
+</li>
+<li class="nav-item col-auto p-0 m-0 mr-3" role="presentation">
+<button class="nav-link bg-primary text-light p-2" id="music-tab" data-toggle="tab" data-target="#music" type="button" role="tab" aria-controls="music" aria-selected="true" style='font-size:small' onclick="$(this).tab('show');changetype('ep');scrollup(1);"><i class="fa fa-music"></i> 单曲EP</button>
+</li>
+<li class="nav-item col-auto p-0 m-0 mr-3" role="presentation">
+<button class="nav-link bg-primary text-light p-2" id="music-tab" data-toggle="tab" data-target="#music" type="button" role="tab" aria-controls="music" aria-selected="false" style='font-size:small' onclick="$(this).tab('show');changetype('dig');scrollup(2);"><i class="fa fa-floppy-o"></i> 下载商品</button>
+</li>
+<li class="nav-item col-auto p-0 m-0 mr-3" role="presentation">
+<button class="nav-link bg-primary text-light p-2" id="pack-tab" data-toggle="tab" data-target="#pack" type="button" role="tab" aria-controls="pack" aria-selected="false" style='font-size:small' onclick="$(this).tab('show');dealpacktab();scrollup(3);"><i class="fa fa-clone"></i> pack</button>
+</li>
+<li class="nav-item col-auto p-0 m-0" role="presentation">
+<button class="nav-link bg-primary text-light p-2" id="deal-tab" data-toggle="tab" data-target="#deal" type="button" role="tab" aria-controls="deal" aria-selected="false" style='font-size:small' onclick="$(this).tab('show');dealpacktab();scrollup(4);"><i class="fa fa-bullhorn text-warning"></i> 限时优惠</button>
+</li>
+</ul>
+</div>
+<hr style="border: 0; margin-bottom:24px"/>
+<div class="tab-content" id="catTabContent">
+<div class="tab-pane active" id="music" role="tabpanel" aria-labelledby="music-tab">
+<div id="discs" class="row justify-content-start align-items-end p-0 m-0">
+</div>
+</div>
+<div class="tab-pane" id="deal" role="tabpanel" aria-labelledby="deal-tab">
+<div class="row justify-content-start align-items-end p-0 m-0">
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card bg-primary">
+<div class="card-body p-1" style="margin-bottom: 16px;">
+<a href='/d/KSEP-001' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/KSEP-001.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0 border border-warning"/>
+</div>
+<div class="caption post-content">
+<span class="badge badge-light" style="margin:4px;">2026年9月30日 截止</span>
+</div>
+</div>
+</a>
+<div id="deal_btn" class="row p-0 m-0 justify-content-start align-items-center" role="button" title='' onclick="updateplayer('KSEP-001')">
+<div class="col-auto p-0 m-0">
+<p class="text-center align-self-baseline text-muted" style="margin-right: 6px;">
+<i class="fa fa-play" aria-hidden="true"></i>
+</p>
+</div>
+<div class="col-10 p-0 m-0">
+<p class="text-light text-truncate" style="font-size:small;">RE：Spring</p>
+</div>
+</div>
+<h4 class="text-success" style="margin-top: -12px"><del class="text-muted">¥ 40.0</del> 18.0</h4>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="tab-pane" id="pack" role="tabpanel" aria-labelledby="pack-tab">
+<div class="row justify-content-start align-items-end p-0 m-0">
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=obs-PACK01' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/新主海报300DPI_-_副本_xvIbSC2.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=obs-PACK01' target="_blank">【实体】Quiddity:2</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/obscuRE TRAX" target="_blank">@ obscuRE TRAX</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 85.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=nhdarkbundle' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/gold22.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=nhdarkbundle' target="_blank">Nami Haven 黑暗慈善包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Nami Haven" target="_blank">@ Nami Haven</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 22.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=nhsoulbundle' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/path_upeSNEr.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=nhsoulbundle' target="_blank">Nami Haven 失落的奥德赛</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Nami Haven" target="_blank">@ Nami Haven</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 180.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=PNP-001' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/PNP-001_2SavAOV.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=PNP-001' target="_blank">Pure Nebula 3 in 1</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/琉净星云" target="_blank">@ 琉净星云</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 84.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=Magic' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/cover_final_zEmA3D9.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=Magic' target="_blank">UnD3ath Magic Pack</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/UnD3ath" target="_blank">@ UnD3ath</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 100.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=Cyber' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/cover_TfWicxn.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=Cyber' target="_blank">UnD3ath Cyber Pack</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/UnD3ath" target="_blank">@ UnD3ath</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 60.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=ESM-TH-ALLIN' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/Image_1755312950954_atbuKXc.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=ESM-TH-ALLIN' target="_blank">ESM ALL IN</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/蜂幽音声" target="_blank">@ 蜂幽音声</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 155.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=NTP-ALLCD' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/CDpack_qz5lHv0.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=NTP-ALLCD' target="_blank">NullTech全实体</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/NullTech_PARAMECIUM" target="_blank">@ NullTech_PARAMECIUM</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 325.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=THCL04' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/bundle.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=THCL04' target="_blank">Touhou Colours: A&amp;C Bundle</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Chroma_Sounds虹彩" target="_blank">@ Chroma_Sounds虹彩</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 110.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=ChillMeAnniversaryPack2' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/社团二周年贺图.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=ChillMeAnniversaryPack2' target="_blank">ChillMe二周年捆绑包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/ChillMe" target="_blank">@ ChillMe</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 91.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=PACKIF01' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/组合套装_QlYhSdJ.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=PACKIF01' target="_blank">ILLUSION FRAGMENTS（组合套装）</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/板烧鹅尼子" target="_blank">@ 板烧鹅尼子</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 100.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=DLSPack-DM02' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/form_ZbpWNq0.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=DLSPack-DM02' target="_blank">DizzyMart 02 Collections</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/DON&#39;T LΣT STU" target="_blank">@ DON&#39;T LΣT STU</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 45.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=ChillMeAnniversaryPack1' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/社团一周年贺图.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=ChillMeAnniversaryPack1' target="_blank">ChillMe一周年捆绑包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/ChillMe" target="_blank">@ ChillMe</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 30.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=TiuroSampleAndSound' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/红魔情傀Puppa_Scarlettiana_m8hkfD6.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=TiuroSampleAndSound' target="_blank">ESM-TH-003 Pack</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/蜂幽音声" target="_blank">@ 蜂幽音声</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 60.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=TBU2A-S' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/双_cVdmJVS.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=TBU2A-S' target="_blank">TECH BOOT UP!!!! 02 采样包以及电子版专辑</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/NullTech_PARAMECIUM" target="_blank">@ NullTech_PARAMECIUM</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 99.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=ProofOfExistence' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/0015512428_20_1qrchmd.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=ProofOfExistence' target="_blank">1HzMusic Bundled Package</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/1HzMusic" target="_blank">@ 1HzMusic</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 70.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=AIRH1to3' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/1000_x_1000_ALL_IN_RHYX_Vol.6.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=AIRH1to3' target="_blank">ALL IN RHYX-ALL PACKS</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/NullTech_PARAMECIUM" target="_blank">@ NullTech_PARAMECIUM</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 24.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=pack-dm1' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/example.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=pack-dm1' target="_blank">DizzyMart 2024 Pack</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/DON&#39;T LΣT STU" target="_blank">@ DON&#39;T LΣT STU</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 60.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=yini2' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/cover_ux7DvZH.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=yini2' target="_blank">特惠乙妮4张专辑-入坑大礼包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/乙妮" target="_blank">@ 乙妮</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 240.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=legacy' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/QQ图片20230118230409_V33J50y.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=legacy' target="_blank">遗产组合包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/东方SixMoon六月社" target="_blank">@ 东方SixMoon六月社</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 32.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=DLSP-01' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/kollektions3by4_wSguEuB.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=DLSP-01' target="_blank">[SSS] DLS KOLLECTIONS #1</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/DON&#39;T LΣT STU" target="_blank">@ DON&#39;T LΣT STU</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 3.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=GLXR-P002' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/galaxian_KAsJwr9.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=GLXR-P002' target="_blank">Touhou &amp; Super Euroheroes Pack</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Galaxian Recordings" target="_blank">@ Galaxian Recordings</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 120.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=OSALE01' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/Image_1777190144792_363.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=OSALE01' target="_blank">OUOD全作品限量补给包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Odoriin&#39;s Upanishad of Destiny" target="_blank">@ Odoriin&#39;s Upanishad of Destiny</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 180.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=EASTS' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/合集_WnnWuQL.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=EASTS' target="_blank">东方甲乙木Series</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/六五八乱奏" target="_blank">@ 六五八乱奏</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 28.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=LSROLD' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/Liberal_Spark_T32RfJC.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=LSROLD' target="_blank">过往的火花</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Liberal Spark" target="_blank">@ Liberal Spark</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 56.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=hellisfxxkingsweet' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/pack01_TpR9szj.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=hellisfxxkingsweet' target="_blank">地狱超甜三合一促销包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/地狱超甜" target="_blank">@ 地狱超甜</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 120.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=ReVerse' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/rev_AZvZEyH_1_ZhBT6U7.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=ReVerse' target="_blank">ReVerse</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Kiriyakujyou Studio" target="_blank">@ Kiriyakujyou Studio</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 30.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=FUNPK1' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/39A1E978-857A-47B4-8D84-8407D8D221FC.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=FUNPK1' target="_blank">FUN_webjectF二周年全作品</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/FUN_webjectF" target="_blank">@ FUN_webjectF</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 40.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=ESPK001' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/1423535.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=ESPK001' target="_blank">Endless Sound 计划通</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Endless Sound Records" target="_blank">@ Endless Sound Records</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 158.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=TCS2015-2020' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/0學刊logoclear_77eUPV9.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=TCS2015-2020' target="_blank">東方文化學刊1至14期合集</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/恆萃工坊" target="_blank">@ 恆萃工坊</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 580.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=MhT·Music202202' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/未标题-1_KTanxT1.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=MhT·Music202202' target="_blank">疯帽子茶会实体专辑绝版包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/疯帽子茶会" target="_blank">@ 疯帽子茶会</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 50.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=BearPack001' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/QQ截图20220520004659_HocgMsw.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=BearPack001' target="_blank">散装熊猫包1</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Zuxin" target="_blank">@ Zuxin</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 20.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=RMR3' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/rmr003-1_QTF7fd8.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=RMR3' target="_blank">欢迎来到红魔咖啡馆</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/TsuBaKi" target="_blank">@ TsuBaKi</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 90.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=Exploration' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/XPT0XGPT7VJAH_UJ.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=Exploration' target="_blank">梦开始的三张作品</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Art of Heart" target="_blank">@ Art of Heart</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 65.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=turkeyandbremen' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/同捆包封面_t7aR6jP.png!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=turkeyandbremen' target="_blank">Turkey And Bremen大全集</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/植川理一" target="_blank">@ 植川理一</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 272.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=MRPCK-02' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/revelation_0jbig9e.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=MRPCK-02' target="_blank">啓示錄 -Revelation-</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Matthiola Records" target="_blank">@ Matthiola Records</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 99.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=MRPCK-01' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/old_testament_画板_1_CdtH2u8.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=MRPCK-01' target="_blank">舊約 -OLD TESTAMENT-</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Matthiola Records" target="_blank">@ Matthiola Records</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 72.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=MhT·FreePack' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/签名板1_Sx3Hbn5_0ujBRBa_O1JYQxq.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=MhT·FreePack' target="_blank">疯帽子茶会※免费专辑PACK包</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/疯帽子茶会" target="_blank">@ 疯帽子茶会</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 1.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=akanepoems-full' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/21003791051471142619_U1uSZPx.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=akanepoems-full' target="_blank">茜色诗集 完整电子版</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/泠鸢yousa" target="_blank">@ 泠鸢yousa</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 34.0</span>
+</div>
+</div>
+</div>
+<div class="col-xs-12 col-sm-12 col-md-6 col-lg-4 col-xl-3" style="padding: 4px">
+<div class="card border-0 bg-primary">
+<div class="card-body p-1" style="margin-bottom: 24px;">
+<a href='/pack/?pk=dayscollection' target="_blank">
+<div class="thumbnail" style="margin-bottom: 12px">
+<div class='album_cover'>
+<img data-src="https://cdn.dizzylab.net/media/cover/collection.jpg!cover" src='https://cdn.dizzylab.net/static/holder_cover.jpg' width="100%" class="lazyload p-0" />
+</div>
+</div>
+</a>
+<h4 class="text-truncate" style="margin-top: 12px;">
+<a class="text-light" href='/pack/?pk=dayscollection' target="_blank">Days乐团专辑合集 4in1 Collection</a>
+</h4>
+<h3 class="text-truncate">
+<a class="text-light" href="/l/Days乐团" target="_blank">@ Days乐团</a>
+</h3>
+<span class="badge badge-success" style="margin:4px;">¥ 65.0</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

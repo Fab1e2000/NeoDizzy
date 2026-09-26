@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6CC6FFB1533EA361B0420189 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1C2A642678125560CE0A97F3 /* NukeUI */; };
+		97C905530F6452DFE66DF69E /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 8C14917B9BC11B86CFC74577 /* SwiftSoup */; };
+		EB01F93C9E7DF72EA0C787D1 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 105A3BCA6B90A96E1D42BEBB /* Nuke */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		7BD4CCDC4A4C39D2082F5F72 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -56,6 +62,19 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		1EB468E0F2EED31986FFEE6E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				97C905530F6452DFE66DF69E /* SwiftSoup in Frameworks */,
+				EB01F93C9E7DF72EA0C787D1 /* Nuke in Frameworks */,
+				6CC6FFB1533EA361B0420189 /* NukeUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
 		1B175AE3D509711C8319F80D /* Config */ = {
 			isa = PBXGroup;
@@ -93,6 +112,7 @@
 			buildPhases = (
 				231809BA963B45D2F8D06DB8 /* Sources */,
 				7FEECD489E3FF506BF8930A3 /* Resources */,
+				1EB468E0F2EED31986FFEE6E /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -103,6 +123,9 @@
 			);
 			name = NeoDizzy;
 			packageProductDependencies = (
+				8C14917B9BC11B86CFC74577 /* SwiftSoup */,
+				105A3BCA6B90A96E1D42BEBB /* Nuke */,
+				1C2A642678125560CE0A97F3 /* NukeUI */,
 			);
 			productName = NeoDizzy;
 			productReference = 893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */;
@@ -156,6 +179,10 @@
 			);
 			mainGroup = 7D5CB492A423B3F2AB3B03BD;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */,
+				1171EEEEDD225D914850D491 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6CD405DB60C4F274B4821664 /* Products */;
 			projectDirPath = "";
@@ -224,10 +251,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.elsterlee.NeoDizzy;
 				SDKROOT = iphoneos;
-				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
@@ -392,10 +417,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.elsterlee.NeoDizzy;
 				SDKROOT = iphoneos;
-				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
@@ -450,6 +473,43 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1171EEEEDD225D914850D491 /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/scinfu/SwiftSoup";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.13.0;
+			};
+		};
+		FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kean/Nuke";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		105A3BCA6B90A96E1D42BEBB /* Nuke */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = Nuke;
+		};
+		1C2A642678125560CE0A97F3 /* NukeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */;
+			productName = NukeUI;
+		};
+		8C14917B9BC11B86CFC74577 /* SwiftSoup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1171EEEEDD225D914850D491 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
+			productName = SwiftSoup;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F1E373040D3D8959D3BE1747 /* Project object */;
 }

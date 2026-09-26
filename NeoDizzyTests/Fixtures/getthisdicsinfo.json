@@ -1,0 +1,126 @@
+{
+ "price": 0.0,
+ "ishires": false,
+ "label_description": "",
+ "tags": [
+  "电子音乐"
+ ],
+ "disc_description": "",
+ "cover": "https://cdn.dizzylab.net/media/cover/fx4.jpg!cover",
+ "release_date": "2026-06-28",
+ "title": "Glassy Tears 44.1kHz",
+ "labelid": 490,
+ "tracks": [
+  {
+   "discid": "fx4",
+   "id": "1",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "Chikanya",
+   "title": "Story Left in Snow",
+   "url": "https://streaming.dizzylab.net/202609261738/47b9396aaf5e70bc3fc219be690419bd/fx4/preview/1.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "2",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "SiLENTORANGE",
+   "title": "Floating Free Will(沉浮之我)",
+   "url": "https://streaming.dizzylab.net/202609261738/c79ae69b6c9adebd20b0d5c49334fccf/fx4/preview/2.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "3",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "StarSavior",
+   "title": "Plus de souffle…je flotte.(再无呼吸…于此间漂浮。)",
+   "url": "https://streaming.dizzylab.net/202609261738/c22f127d57f6a2a3f36b1b888219aa43/fx4/preview/3.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "4",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "SaikaS C.",
+   "title": "Cσllαρsed Ëdeη",
+   "url": "https://streaming.dizzylab.net/202609261738/f108c7fc4e3188e70ffa5e407fb33201/fx4/preview/4.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "5",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "watch",
+   "title": "Frangible Reflection",
+   "url": "https://streaming.dizzylab.net/202609261738/2bffecdf747725a21262ae71dc15e894/fx4/preview/5.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "6",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "Aamuvalo",
+   "title": "Alkaid",
+   "url": "https://streaming.dizzylab.net/202609261738/15a3875522975a152ea69b5af40d64cd/fx4/preview/6.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "7",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "NaN",
+   "title": "電車の少女",
+   "url": "https://streaming.dizzylab.net/202609261738/8ee4a0e635e93c6889a99d545f4bdc46/fx4/preview/7.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "8",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "AiSS",
+   "title": "Out of Range",
+   "url": "https://streaming.dizzylab.net/202609261738/4a04ce4ee43c2166c0fb9c884723959a/fx4/preview/8.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "9",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "Moment｜Heun",
+   "title": "REVSTAR",
+   "url": "https://streaming.dizzylab.net/202609261738/b7640eedf98c39a32c8a2bb7999500df/fx4/preview/9.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "10",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "米虾Fomiki",
+   "title": "Guiding Light",
+   "url": "https://streaming.dizzylab.net/202609261738/e4ab1dd00ccd5ceefb9ca8ad2aa8e660/fx4/preview/10.mp3"
+  },
+  {
+   "discid": "fx4",
+   "id": "11",
+   "album": "Glassy Tears 44.1kHz",
+   "coverurl": "https://cdn.dizzylab.net/media/cover/fx4.jpg",
+   "authers": "StarSavior vs. Cvyleop vs. Heun",
+   "title": "闇の中、朝もやの中、夜明けに。",
+   "url": "https://streaming.dizzylab.net/202609261738/c53db9b4071359af06c6333d6a6f1425/fx4/preview/11.mp3"
+  }
+ ],
+ "ilikeit": false,
+ "ihavethis": false,
+ "disc_description_2": "",
+ "label_description_2": "",
+ "hasgift": false,
+ "likes": 2,
+ "label": "Flexible X",
+ "labelcover": "https://cdn.dizzylab.net/media/label_cover/LOGO.JPG!cover",
+ "id": "fx4",
+ "onsell": true,
+ "onlyhavegift": false,
+ "ispreselling": false
+}

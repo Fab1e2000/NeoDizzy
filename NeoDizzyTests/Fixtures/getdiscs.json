@@ -1,0 +1,147 @@
+{
+ "total_count": 1572,
+ "discs": [
+  {
+   "price": 45.0,
+   "ishires": false,
+   "tags": [
+    "hardcore",
+    "Hardstyle",
+    "rawstyle",
+    "Extra Raw",
+    "Frenchcore",
+    "Gabba",
+    "Full Flavor",
+    "Speedcore",
+    "Mainstream Hardcore",
+    "圆舞曲",
+    "古典",
+    "电子音乐"
+   ],
+   "title": "【实体】Quiddity:2「PART B」",
+   "onlyhavegift": false,
+   "cover": "https://cdn.dizzylab.net/media/cover/海报_2.jpg!cover",
+   "likes": 1,
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/封面logo_00000.png!cover",
+   "id": "obs-CD06BP",
+   "label": "obscuRE TRAX",
+   "labelid": 440,
+   "onsell": true,
+   "ihavethis": false,
+   "ispreselling": false
+  },
+  {
+   "price": 0.0,
+   "ishires": false,
+   "tags": [
+    "电子音乐"
+   ],
+   "title": "Glassy Tears 44.1kHz",
+   "onlyhavegift": false,
+   "cover": "https://cdn.dizzylab.net/media/cover/fx4.jpg!cover",
+   "likes": 2,
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/LOGO.JPG!cover",
+   "id": "fx4",
+   "label": "Flexible X",
+   "labelid": 490,
+   "onsell": true,
+   "ihavethis": false,
+   "ispreselling": false
+  },
+  {
+   "price": 25.0,
+   "ishires": true,
+   "tags": [
+    "HL Records",
+    "专辑",
+    "周年专"
+   ],
+   "title": "HLRecords Vol.4 LUMINA",
+   "onlyhavegift": false,
+   "cover": "https://cdn.dizzylab.net/media/cover/HLRVOL4.jpg!cover",
+   "likes": 2,
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/e42ad6321d934e620af926fa3b9a47ef27c36306.jpg!cover",
+   "id": "HLRVOL4",
+   "label": "Hilarity Leap Records",
+   "labelid": 249,
+   "onsell": true,
+   "ihavethis": false,
+   "ispreselling": false
+  },
+  {
+   "price": 5.0,
+   "ishires": true,
+   "tags": [
+    "东方Project",
+    "CARDIOID",
+    "Garage",
+    "Synthwave",
+    "Fusion"
+   ],
+   "title": "MOONS",
+   "onlyhavegift": false,
+   "cover": "https://cdn.dizzylab.net/media/cover/CRD-02.jpg!cover",
+   "likes": 4,
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/IMG_4646.png!cover",
+   "id": "CRD-02",
+   "label": "CARDIOID",
+   "labelid": 670,
+   "onsell": true,
+   "ihavethis": false,
+   "ispreselling": false
+  },
+  {
+   "price": 45.0,
+   "ishires": true,
+   "tags": [
+    "Trance",
+    "House",
+    "Dubstep",
+    "Trancestep",
+    "UK Hardcore",
+    "Color Bass",
+    "Hi-Tech",
+    "Artcore",
+    "电子音乐",
+    "J-Core"
+   ],
+   "title": "【实体】Quiddity:2「PART A」",
+   "onlyhavegift": false,
+   "cover": "https://cdn.dizzylab.net/media/cover/海报.jpg!cover",
+   "likes": 3,
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/封面logo_00000.png!cover",
+   "id": "obs-CD06AP",
+   "label": "obscuRE TRAX",
+   "labelid": 440,
+   "onsell": true,
+   "ihavethis": false,
+   "ispreselling": false
+  },
+  {
+   "price": 40.0,
+   "ishires": false,
+   "tags": [
+    "地下",
+    "前卫",
+    "实验",
+    "Breakcore",
+    "Noise",
+    "Trance",
+    "失落媒体",
+    "失传媒体"
+   ],
+   "title": "失落媒體#1",
+   "onlyhavegift": false,
+   "cover": "https://cdn.dizzylab.net/media/cover/DFPJ-6.jpg!cover",
+   "likes": 5,
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/Screenshot_20250202_115352_edit_16051462035050.jpg!cover",
+   "id": "DFPJ-6",
+   "label": "DreamFlower1981",
+   "labelid": 491,
+   "onsell": true,
+   "ihavethis": false,
+   "ispreselling": false
+  }
+ ],
+ "canshowmore": true
+}

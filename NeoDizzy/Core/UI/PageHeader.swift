@@ -43,13 +43,15 @@ struct PageHeader: View {
 }
 
 /// 主页面的骨架：隐藏系统导航栏，页头作为滚动内容的第一行。
+/// 内容放在 LazyVStack 里，分页底栏滚到屏幕上时才触发加载。
 struct MainTabPage<Content: View>: View {
     let tab: MainTab
+    var onRefresh: (() async -> Void)?
     @ViewBuilder var content: Content
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        let page = ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 PageHeader(title: tab.title)
                 content
             }
@@ -58,5 +60,11 @@ struct MainTabPage<Content: View>: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .dizzyPageBackground()
+
+        if let onRefresh {
+            page.refreshable { await onRefresh() }
+        } else {
+            page
+        }
     }
 }

@@ -1,0 +1,120 @@
+{
+ "labels": [
+  {
+   "discs": [],
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/mmexport1790080690702.jpg!cover",
+   "title": "ArtemisianSound",
+   "tags": [],
+   "labelid": 729,
+   "description": "",
+   "isgift": [],
+   "covers": [],
+   "titles": []
+  },
+  {
+   "discs": [
+    "2026-1005",
+    "2026-1004"
+   ],
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/logo-彩色灰底.png!cover",
+   "title": "梦境少女",
+   "tags": [
+    [
+     "洛天依",
+     "成都洛天依only路展",
+     "同人演唱会"
+    ],
+    [
+     "洛天依",
+     "成都洛天依only路展",
+     "成都线下活动"
+    ]
+   ],
+   "labelid": 728,
+   "description": "",
+   "isgift": [
+    false,
+    false
+   ],
+   "covers": [
+    "cover/2026-1005.jpg",
+    "cover/2026-1004.jpg"
+   ],
+   "titles": [
+    "梦境少女·成都洛天依only路展·同人演唱会",
+    "梦境少女·成都洛天依only路展"
+   ]
+  },
+  {
+   "discs": [],
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/IMG_8300.jpeg!cover",
+   "title": "Toxic",
+   "tags": [],
+   "labelid": 727,
+   "description": "",
+   "isgift": [],
+   "covers": [],
+   "titles": []
+  },
+  {
+   "discs": [
+    "ZCHBCD002"
+   ],
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/3335D917E06010FA69434E8F920533B4.png!cover",
+   "title": "Postcard Music",
+   "tags": [
+    [
+     "Shoegaze"
+    ]
+   ],
+   "labelid": 726,
+   "description": "漫长的希望，来自于每一束光。",
+   "isgift": [
+    false
+   ],
+   "covers": [
+    "cover/ZCHBCD002.jpg"
+   ],
+   "titles": [
+    "Self-Redemption of the Unfinished"
+   ]
+  },
+  {
+   "discs": [
+    "THE-TRINITY"
+   ],
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/BASSKNIVESLOGO_.png!cover",
+   "title": "BASSKNIVES",
+   "tags": [
+    [
+     "HARDSTYLE",
+     "HARDCORE"
+    ]
+   ],
+   "labelid": 725,
+   "description": "",
+   "isgift": [
+    false
+   ],
+   "covers": [
+    "cover/THE-TRINITY.jpg"
+   ],
+   "titles": [
+    "THE TRINITY"
+   ]
+  },
+  {
+   "discs": [],
+   "labelcover": "https://cdn.dizzylab.net/media/label_cover/墨斯卡林之翼_拷贝.jpg!cover",
+   "title": "墨斯卡林之翼",
+   "tags": [],
+   "labelid": 724,
+   "description": "",
+   "isgift": [],
+   "covers": [],
+   "titles": []
+  }
+ ],
+ "total_count": 670,
+ "canshowmore": true
+}
