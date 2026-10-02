@@ -9,6 +9,7 @@ struct ArtworkImage: View {
     let url: URL?
     var cornerRadius: CGFloat = 10
     var aspectRatio: CGFloat = 1
+    var decodeSize: CGSize? = nil
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
@@ -32,7 +33,7 @@ struct ArtworkImage: View {
         guard let url else { return nil }
         var request = ImageRequest(url: url)
         request.thumbnail = ImageRequest.ThumbnailOptions(
-            size: CGSize(width: max(size.width, 1), height: max(size.height, 1)),
+            size: decodeSize ?? CGSize(width: max(size.width, 1), height: max(size.height, 1)),
             contentMode: .aspectFill
         )
         return request

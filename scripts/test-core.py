@@ -17,7 +17,7 @@ def main():
     if sys.platform != "darwin":
         raise SystemExit("此脚本需要 macOS 和 Xcode 27 的 Swift 工具链。")
     pins = {pin["identity"]: pin for pin in json.loads(PINS.read_text())["pins"]}
-    dependencies = []
+    dependencies = ['.package(path: "' + str(ROOT / "Packages/AudioTags") + '")']
     for name in ("swiftsoup", "zipfoundation"):
         pin = pins[name]
         dependencies.append(
@@ -31,7 +31,7 @@ def main():
         sources.mkdir(parents=True)
         tests.mkdir(parents=True)
         files = []
-        for directory in ("Models", "Networking", "OfflineLibrary", "Downloads", "Purchases", "Community"):
+        for directory in ("Models", "TagEditing", "Lyrics", "Networking", "OfflineLibrary", "Downloads", "Purchases", "Community"):
             files.extend((ROOT / "NeoDizzy/Core" / directory).rglob("*.swift"))
         files.extend(ROOT / "NeoDizzy/Core" / name for name in (
             "BrowsingHistory/BrowsingHistoryStore.swift", "DebugLog.swift", "UI/PagedList.swift", "Account/DizzyAuth.swift", "Playback/PlaybackQueue.swift",
@@ -40,7 +40,7 @@ def main():
         for source in files:
             shutil.copy2(source, sources / source.name)
         for name in (
-            "PlaybackTests", "DownloadTests", "OfflineLibraryTests", "JSONDecodingTests",
+            "AudioTagEditingTests", "LocalLyricsTests", "LocalLibraryTests", "PlaybackTests", "DownloadTests", "OfflineLibraryTests", "JSONDecodingTests",
             "PageParserTests", "DizzyURLTests", "AccountTests", "PurchaseTests",
             "PurchaseConfirmationTests", "CheckoutNavigationTests", "PurchaseStoreTests",
             "AlipayReturnRouterTests", "CommunityTests", "FeedPaginationTests", "BrowsingHistoryTests",
@@ -64,7 +64,7 @@ let package = Package(
     name: "NeoDizzyCoreChecks", platforms: [.macOS(.v15)],
     dependencies: [{', '.join(dependencies)}],
     targets: [
-        .target(name: "NeoDizzy", dependencies: ["SwiftSoup", "ZIPFoundation"], swiftSettings: {settings}),
+        .target(name: "NeoDizzy", dependencies: ["SwiftSoup", "ZIPFoundation", .product(name: "AudioTagBridge", package: "AudioTags")], swiftSettings: {settings}),
         .testTarget(name: "NeoDizzyTests", dependencies: ["NeoDizzy"],
             resources: [.copy("Fixtures")], swiftSettings: {settings})
     ]

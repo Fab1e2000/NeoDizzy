@@ -9,6 +9,15 @@ final class DownloadStore {
     @ObservationIgnored private var operations: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var eventTask: Task<Void, Never>?
     @ObservationIgnored private var restored = false
+    @ObservationIgnored private var progressByID: [UUID: DownloadProgress] = [:]
+
+    /// Only the progress view observes this object; byte updates never mutate jobs.
+    func progress(for job: DownloadJob) -> DownloadProgress {
+        if let progress = progressByID[job.id] { return progress }
+        let progress = DownloadProgress(fraction: job.progress)
+        progressByID[job.id] = progress
+        return progress
+    }
 
     init(library: OfflineLibraryStore) {
         self.library = library
@@ -23,10 +32,8 @@ final class DownloadStore {
     func restore() async {
         guard !restored else { return }
         restored = true
-        // The process may have been terminated after the atomic library commit but before job persistence.
-        for job in jobs where library.album(id: job.discID) != nil {
-            update(job.id) { $0.state = .completed; $0.progress = 1; $0.failureMessage = nil }
-        }
+        // Existing albums may belong to an earlier download. Resume this job
+        // from its own task/archive; never infer completion from the library.
         cleanupInactiveFiles()
         let tasks = await transport.tasks()
         var liveIDs = Set<UUID>()
@@ -57,8 +64,7 @@ final class DownloadStore {
 
     /// Inserts immediately so the sheet can dismiss while fresh authorization is fetched.
     func enqueue(detail: DiscDetail, option: DownloadOption) async {
-        guard library.album(id: detail.id) == nil,
-              !jobs.contains(where: { $0.discID == detail.id && $0.isActive }) else { return }
+        guard !jobs.contains(where: { $0.discID == detail.id && $0.isGift == option.isGift && $0.isActive }) else { return }
         let job = DownloadJob(id: UUID(), album: DownloadAlbum(detail), format: option.format)
         jobs.insert(job, at: 0)
         save()
@@ -83,12 +89,12 @@ final class DownloadStore {
 
     func retry(_ job: DownloadJob) async {
         guard let current = jobs.first(where: { $0.id == job.id }), current.canRetry,
-              library.album(id: current.discID) == nil,
-              !jobs.contains(where: { $0.discID == current.discID && $0.isActive }) else { return }
+              !jobs.contains(where: { $0.discID == current.discID && $0.isGift == current.isGift && $0.isActive }) else { return }
         try? FileManager.default.removeItem(at: transport.archiveURL(job.id))
         try? FileManager.default.removeItem(at: extractionURL(job.id))
         // A new ID prevents a late cancellation/error from an old URLSession task affecting the retry.
         let replacement = DownloadJob(id: UUID(), album: current.album, format: current.format)
+        progressByID.removeValue(forKey: job.id)
         jobs.removeAll { $0.id == job.id }
         jobs.insert(replacement, at: 0)
         save()
@@ -112,7 +118,7 @@ final class DownloadStore {
             defer { operations[id] = nil; pump() }
             do {
                 guard library.folderName != nil else { throw DownloadFailure.folderMissing }
-                let options = try await DizzyPages.shared.downloadOptions(discID: job.discID)
+                let options = try await DizzyPages.shared.downloadOptions(discID: job.discID, gift: job.isGift)
                 guard let fresh = options.first(where: { $0.format == job.format }) else { throw DownloadFailure.unavailable }
                 let url = try await DownloadLinkResolver.resolve(fresh.url, credentials: DizzyHTTPClient.shared.credentials)
                 try Task.checkCancellation()
@@ -128,8 +134,8 @@ final class DownloadStore {
     private func handle(_ event: DownloadEvent) async {
         switch event {
         case .progress(let id, let written, let expected):
-            guard jobs.first(where: { $0.id == id })?.state == .downloading else { return }
-            update(id) { $0.progress = expected > 0 ? min(1, max(0, Double(written) / Double(expected))) : nil }
+            guard let job = jobs.first(where: { $0.id == id }), job.state == .downloading else { return }
+            progress(for: job).fraction = expected > 0 ? min(1, max(0, Double(written) / Double(expected))) : nil
         case .downloaded(let id):
             // A completed task can disappear from allTasks just before its final delegate callback.
             if let job = jobs.first(where: { $0.id == id }), job.state == .failed,
@@ -159,23 +165,27 @@ final class DownloadStore {
             let extraction = extractionURL(id)
             defer {
                 operations[id] = nil
-                try? FileManager.default.removeItem(at: extraction)
-                try? FileManager.default.removeItem(at: zip)
                 pump()
             }
             do {
-                try? FileManager.default.removeItem(at: extraction)
-                try await SafeZipExtractor.extract(zip, into: extraction, expectedTracks: job.album.tracks)
+                await SafeZipExtractor.removeTemporaryFiles([extraction])
                 try Task.checkCancellation()
-                guard jobs.first(where: { $0.id == id })?.isActive == true else { return }
+                try await SafeZipExtractor.extract(zip, into: extraction, expectedTracks: job.isGift ? [] : job.album.tracks)
+                try Task.checkCancellation()
+                guard jobs.first(where: { $0.id == id })?.isActive == true else { throw CancellationError() }
                 update(id) { $0.state = .importing }
                 save()
-                try await library.importAlbum(from: extraction, detail: job.album.detail)
+                if job.isGift {
+                    try await library.importGift(from: extraction, detail: job.album.detail)
+                } else {
+                    try await library.importAlbum(from: extraction, detail: job.album.detail)
+                }
                 // A successful atomic import wins a late cancellation; the album really exists.
                 update(id) { $0.state = .completed; $0.progress = 1 }
                 save()
             } catch is CancellationError { }
             catch { fail(id, DownloadTransport.message(for: error)) }
+            await SafeZipExtractor.removeTemporaryFiles([extraction, zip])
         }
     }
 
@@ -193,6 +203,9 @@ final class DownloadStore {
     private func update(_ id: UUID, _ change: (inout DownloadJob) -> Void) {
         guard let index = jobs.firstIndex(where: { $0.id == id }) else { return }
         change(&jobs[index])
+        if jobs[index].state != .downloading {
+            progressByID.removeValue(forKey: id)
+        }
     }
 
     private func fail(_ id: UUID, _ message: String) {

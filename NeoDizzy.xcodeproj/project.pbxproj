@@ -10,6 +10,7 @@
 		6CC6FFB1533EA361B0420189 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1C2A642678125560CE0A97F3 /* NukeUI */; };
 		8F8DEA3D7F0F789F9A551E87 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F2CDE0A42D050399B21C3B9F /* ZIPFoundation */; };
 		97C905530F6452DFE66DF69E /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 8C14917B9BC11B86CFC74577 /* SwiftSoup */; };
+		AD1000000000000000000001 /* AudioTagBridge in Frameworks */ = {isa = PBXBuildFile; productRef = AD1000000000000000000002 /* AudioTagBridge */; };
 		EB01F93C9E7DF72EA0C787D1 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 105A3BCA6B90A96E1D42BEBB /* Nuke */; };
 /* End PBXBuildFile section */
 
@@ -25,12 +26,12 @@
 
 /* Begin PBXFileReference section */
 		89175AF12F06E62B7BC35428 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
-		893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NeoDizzy.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NeoDizzyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NeoDizzy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NeoDizzyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E015CD3412C03FCB4E9E7A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		E015CD3412C03FCB4E9E7A0E /* Exceptions for "NeoDizzy" folder in "NeoDizzy" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -43,21 +44,13 @@
 		0D8FCDB38B251488A6FA8FEC /* NeoDizzy */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				E015CD3412C03FCB4E9E7A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
+				E015CD3412C03FCB4E9E7A0E /* Exceptions for "NeoDizzy" folder in "NeoDizzy" target */,
 			);
 			path = NeoDizzy;
 			sourceTree = "<group>";
 		};
 		976EFF2EBCA4EB2742D677A7 /* NeoDizzyTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
 			path = NeoDizzyTests;
 			sourceTree = "<group>";
 		};
@@ -72,6 +65,7 @@
 				EB01F93C9E7DF72EA0C787D1 /* Nuke in Frameworks */,
 				6CC6FFB1533EA361B0420189 /* NukeUI in Frameworks */,
 				8F8DEA3D7F0F789F9A551E87 /* ZIPFoundation in Frameworks */,
+				AD1000000000000000000001 /* AudioTagBridge in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,6 +123,7 @@
 				105A3BCA6B90A96E1D42BEBB /* Nuke */,
 				1C2A642678125560CE0A97F3 /* NukeUI */,
 				F2CDE0A42D050399B21C3B9F /* ZIPFoundation */,
+				AD1000000000000000000002 /* AudioTagBridge */,
 			);
 			productName = NeoDizzy;
 			productReference = 893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */;
@@ -183,6 +178,7 @@
 			mainGroup = 7D5CB492A423B3F2AB3B03BD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				AD1000000000000000000003 /* XCLocalSwiftPackageReference "Packages/AudioTags" */,
 				FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */,
 				1171EEEEDD225D914850D491 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				39BDCE3049C11DDAFB54709B /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
@@ -478,6 +474,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		AD1000000000000000000003 /* XCLocalSwiftPackageReference "Packages/AudioTags" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/AudioTags;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		1171EEEEDD225D914850D491 /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -520,6 +523,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 1171EEEEDD225D914850D491 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
 			productName = SwiftSoup;
+		};
+		AD1000000000000000000002 /* AudioTagBridge */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AudioTagBridge;
 		};
 		F2CDE0A42D050399B21C3B9F /* ZIPFoundation */ = {
 			isa = XCSwiftPackageProductDependency;

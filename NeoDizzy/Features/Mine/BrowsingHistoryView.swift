@@ -26,6 +26,7 @@ struct BrowsingHistoryView: View {
                                 }
                             }
                             .padding(.vertical, 4)
+                            .prefetchAlbumArtwork(url: entry.coverURL)
                         }
                     }
                     .onDelete { offsets in

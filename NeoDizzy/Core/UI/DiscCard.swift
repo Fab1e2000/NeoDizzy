@@ -43,6 +43,7 @@ struct DiscCard: View {
         }
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
+        .prefetchAlbumArtwork(url: disc.coverURL)
     }
 }
 

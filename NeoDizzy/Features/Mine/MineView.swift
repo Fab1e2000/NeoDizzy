@@ -3,12 +3,14 @@ import SwiftUI
 /// 「我的」：账号卡片和关于。从各页页头的头像按钮弹出。
 struct MineView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(TabSettings.self) private var tabs
     @Environment(AccountStore.self) private var account
     @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
     @State private var isConfirmingLogout = false
     @State private var isLoggingOut = false
 
     var body: some View {
+        @Bindable var tabs = tabs
         NavigationStack {
             List {
                 accountSection
@@ -22,6 +24,14 @@ struct MineView: View {
                 .listRowBackground(DizzyPalette.surface)
 
                 Section {
+                    Picker("启动页面", selection: $tabs.startupTab) {
+                        ForEach(MainTab.primary) { tab in
+                            Text(tab.title + (tabs.isVisible(tab) ? "" : "（已隐藏）")).tag(tab)
+                        }
+                    }
+                    NavigationLink("扫描目录") { LibraryFoldersView() }
+                    NavigationLink("标签栏") { TabSettingsView() }
+                    NavigationLink("歌词") { LyricsSettingsView() }
                     Picker("标题栏", selection: $pinsTitleBar) {
                         Text("固定").tag(true)
                         Text("滚动").tag(false)

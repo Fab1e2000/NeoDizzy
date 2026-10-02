@@ -124,7 +124,7 @@ private struct PageHeaderPlacement<Header: View>: ViewModifier {
             .safeAreaBar(edge: .top, spacing: 0) {
                 if pinsTitleBar { header.padding(.horizontal, 20) }
             }
-            .scrollEdgeEffectStyle(pinsTitleBar ? .automatic : .soft, for: .top)
+            .scrollEdgeEffectStyle(.soft, for: .top)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(0, -(geometry.contentOffset.y + geometry.contentInsets.top))
             } action: { _, distance in

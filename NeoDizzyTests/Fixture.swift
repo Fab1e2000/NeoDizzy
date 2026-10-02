@@ -3,6 +3,7 @@ import Testing
 
 /// 读取 `Fixtures/` 中的页面、接口和压缩包样本。
 /// 既有网页样本去掉了无关个人信息；download-* 为人工构造的解析及安全回归样本，不含音乐内容。
+/// audio-local-tags.* 为 0.1 秒静音及人工标签/封面，可用 scripts/generate-local-audio-fixtures.py 重建。
 enum Fixture {
     private final class BundleToken {}
 

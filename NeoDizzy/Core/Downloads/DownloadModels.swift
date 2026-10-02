@@ -1,4 +1,13 @@
 import Foundation
+import Observation
+
+@Observable
+@MainActor
+final class DownloadProgress {
+    var fraction: Double?
+
+    init(fraction: Double?) { self.fraction = fraction }
+}
 
 /// A menu choice, not a cached authorization: enqueue and retry always fetch a new page.
 nonisolated struct DownloadOption: Identifiable, Hashable, Sendable {
@@ -6,6 +15,7 @@ nonisolated struct DownloadOption: Identifiable, Hashable, Sendable {
     let format: String
     let url: URL
     var id: String { format }
+    var isGift: Bool { format == "gift" }
 }
 
 nonisolated enum DownloadFailure: LocalizedError {
@@ -71,7 +81,8 @@ nonisolated struct DownloadJob: Identifiable, Codable, Sendable {
     var progress: Double?
     var failureMessage: String?
     var discID: String { album.id }
-    var title: String { album.title }
+    var isGift: Bool { format == "gift" }
+    var title: String { isGift ? "\(album.title) · 特典" : album.title }
     var isActive: Bool { state.isActive }
     var canRetry: Bool { state == .failed || state == .cancelled }
     var statusText: String {
