@@ -1,6 +1,6 @@
 // Layout adapted from MeloX (GPLv3), StandardMusicCollectionDetailHero.
 import Nuke
-import NukeUI
+import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 struct AlbumHero<Subtitle: View, Actions: View>: View {
@@ -12,7 +12,7 @@ struct AlbumHero<Subtitle: View, Actions: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ArtworkImage(url: artworkURL, cornerRadius: 12)
+            ArtworkImage(url: artworkURL, cornerRadius: 12, decodeSize: AlbumArtworkPreload.heroSize)
                 .containerRelativeFrame(.horizontal) { width, _ in min(width * 0.68, 300) }
                 .shadow(color: .black.opacity(0.18), radius: 18, y: 10)
             Text(title)
@@ -24,7 +24,7 @@ struct AlbumHero<Subtitle: View, Actions: View>: View {
             actions().padding(.top, 17)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 70).padding(.bottom, 22)
+        .padding(.top, 24).padding(.bottom, 22)
     }
 }
 
@@ -80,38 +80,83 @@ struct AlbumPlaybackActions: View {
     }
 }
 
-/// Nuke owns cancellation and caches the downsampled request; URL identity prevents stale artwork reuse.
+// Adapted from MeloX v1.2.1 AlbumDetailContent / MusicCollectionArtworkBackdrop
+// and ArtworkAccentColorProvider (GPL-3.0).
+struct AlbumDetailScrollView<Content: View>: View {
+    let artworkURL: URL?
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ZStack {
+            AlbumArtworkBackground(url: artworkURL)
+                .id(artworkURL)
+            ScrollView { content }
+                .scrollIndicators(.hidden)
+        }
+    }
+}
+
 struct AlbumArtworkBackground: View {
     let url: URL?
-    @Environment(\.colorScheme) private var colorScheme
+    @State private var backdrop: CGImage?
+
+    init(url: URL?) {
+        self.url = url
+        // URL identity is owned by AlbumDetailScrollView; seed the first frame from cache.
+        _backdrop = State(initialValue: url.flatMap { AlbumBackdropCache.shared.image(for: $0) })
+    }
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                colorScheme == .dark ? Color(white: 0.1) : Color(white: 0.96)
-                LazyImage(request: request) { state in
-                    if let image = state.image {
-                        image.resizable().scaledToFill()
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                            .blur(radius: 60).opacity(0.22)
-                    }
+                DizzyPalette.background
+                if let backdrop {
+                    Image(decorative: backdrop, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .opacity(0.22)
                 }
-                .id(url)
-                LinearGradient(colors: colorScheme == .dark
-                    ? [.black.opacity(0.08), .black.opacity(0.24), .black.opacity(0.4)]
-                    : [.white.opacity(0.06), .white.opacity(0.16), .white.opacity(0.3)],
-                    startPoint: .top, endPoint: .bottom)
+                LinearGradient(
+                    colors: [.black.opacity(0.08), .black.opacity(0.24), .black.opacity(0.40)],
+                    startPoint: .top, endPoint: .bottom
+                )
             }
-            .frame(width: proxy.size.width, height: proxy.size.height).clipped()
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
         }
-        .ignoresSafeArea().accessibilityHidden(true)
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+        .task(id: url) {
+            guard backdrop == nil, let url else { return }
+            let image = await AlbumBackdropProvider.shared.image(for: url)
+            guard !Task.isCancelled else { return }
+            backdrop = image
+        }
     }
+}
 
-    private var request: ImageRequest? {
-        guard let url else { return nil }
+/// Cache preblurred images; extend edge pixels before blurring, as upstream does.
+private actor AlbumBackdropProvider {
+    static let shared = AlbumBackdropProvider()
+    private let context = CIContext()
+
+    func image(for url: URL) async -> CGImage? {
+        if let cached = AlbumBackdropCache.shared.image(for: url) { return cached }
         var request = ImageRequest(url: url)
-        request.thumbnail = .init(size: CGSize(width: 160, height: 160), contentMode: .aspectFill)
-        return request
+        request.thumbnail = .init(size: CGSize(width: 160, height: 160), unit: .pixels, contentMode: .aspectFill)
+        guard let loaded = try? await ImagePipeline.shared.image(for: request),
+              let source = CIImage(image: loaded), !Task.isCancelled else { return nil }
+        if let cached = AlbumBackdropCache.shared.image(for: url) { return cached }
+        let extent = source.extent.integral
+        guard !extent.isEmpty, !extent.isInfinite else { return nil }
+        let filter = CIFilter.gaussianBlur()
+        filter.inputImage = source.clampedToExtent()
+        filter.radius = 18
+        guard let output = filter.outputImage?.cropped(to: extent),
+              let image = context.createCGImage(output, from: extent) else { return nil }
+        AlbumBackdropCache.shared.insert(image, for: url)
+        return image
     }
 }
 
@@ -211,3 +256,34 @@ struct AlbumTrackRow: View {
     }
 }
 
+
+// NSCache is thread-safe; immutable CGImages can be read synchronously by the view
+// while the background actor inserts completed results.
+private nonisolated final class AlbumBackdropCache: @unchecked Sendable {
+    static let shared = AlbumBackdropCache()
+    private let cache = NSCache<NSURL, CGImage>()
+    private init() { cache.totalCostLimit = 8 * 1024 * 1024 }
+    func image(for url: URL) -> CGImage? { cache.object(forKey: url as NSURL) }
+    func insert(_ image: CGImage, for url: URL) {
+        cache.setObject(image, forKey: url as NSURL, cost: image.bytesPerRow * image.height)
+    }
+}
+
+enum AlbumArtworkPreload {
+    // Match the detail hero request so Nuke reuses the decoded image, not just file data.
+    static let heroSize = CGSize(width: 300, height: 300)
+}
+
+extension View {
+    func prefetchAlbumArtwork(url: URL?) -> some View {
+        task(id: url) {
+            guard let url else { return }
+            async let backdrop = AlbumBackdropProvider.shared.image(for: url)
+            var request = ImageRequest(url: url)
+            request.thumbnail = .init(size: AlbumArtworkPreload.heroSize, contentMode: .aspectFill)
+            request.priority = .low
+            _ = try? await ImagePipeline.shared.image(for: request)
+            _ = await backdrop
+        }
+    }
+}

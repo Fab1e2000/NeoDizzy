@@ -63,6 +63,7 @@ struct DiscoverSearchResults: View {
                             subtitle: result.disc.labelName,
                             excerpt: result.excerpt
                         )
+                        .prefetchAlbumArtwork(url: result.disc.coverURL)
                     }
                     .buttonStyle(.plain)
                 }

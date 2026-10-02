@@ -133,8 +133,9 @@ struct RootView: View {
     @ViewBuilder
     private func page(for tab: MainTab) -> some View {
         switch tab {
-        case .discover:
-            DiscoverView { selection in
+        case .discover: DiscoverView()
+        case .shuffle:
+            ShuffleView { selection in
                 player.playDiscovery(selection)
                 isNowPlayingPresented = true
             }

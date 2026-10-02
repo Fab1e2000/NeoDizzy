@@ -24,6 +24,12 @@ final class TabSettings {
         order = ((snapshot?.order.compactMap(MainTab.init(rawValue:)) ?? []) + MainTab.primary)
             .filter { seen.insert($0).inserted }
         hidden = Set(snapshot?.hidden.compactMap(MainTab.init(rawValue:)) ?? [])
+        // 升级已有配置时把新入口放在发现之后，保留旧标签之间的顺序。
+        if let snapshot, !snapshot.order.contains(MainTab.shuffle.rawValue) {
+            order.removeAll { $0 == .shuffle }
+            let insertion = order.firstIndex(of: .discover).map { $0 + 1 } ?? 0
+            order.insert(.shuffle, at: insertion)
+        }
         if order.allSatisfy({ hidden.contains($0) }) { hidden.remove(order[0]) }
     }
 

@@ -30,7 +30,23 @@ struct TabSettingsTests {
         #expect(settings.initialTab == .discover)
         #expect(settings.order.first == .localLibrary)
         #expect(settings.hidden == [.feed])
-        #expect(settings.visibleTabs.count == 4)
+        #expect(settings.order == [.localLibrary, .discover, .shuffle, .labels, .feed, .purchased])
+        #expect(settings.isVisible(.shuffle))
+        #expect(settings.visibleTabs.count == 5)
+    }
+
+    @Test func shuffleTabCanBeStartupAndHiddenWithoutLosingPreferences() throws {
+        let suite = "ShuffleTabTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = TabSettings(defaults: defaults)
+        settings.startupTab = .shuffle
+        #expect(TabSettings(defaults: defaults).initialTab == .shuffle)
+        settings.setVisible(false, for: .shuffle)
+        let restored = TabSettings(defaults: defaults)
+        #expect(restored.startupTab == .shuffle)
+        #expect(restored.initialTab == .discover)
+        #expect(!restored.isVisible(.shuffle))
     }
 
     @Test func startupTabPersistsAndHiddenTabFallsBackWithoutChangingPreference() throws {
@@ -55,7 +71,7 @@ struct TabSettingsTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = TabSettings(defaults: defaults)
-        #expect(settings.visibleTabs == [.discover, .labels, .feed, .purchased, .localLibrary])
+        #expect(settings.visibleTabs == [.discover, .shuffle, .labels, .feed, .purchased, .localLibrary])
         settings.reorder(Array(MainTab.primary.reversed()))
         for tab in MainTab.primary { settings.setVisible(false, for: tab) }
         #expect(settings.visiblePrimary.count == 1)

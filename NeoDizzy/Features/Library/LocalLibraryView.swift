@@ -43,6 +43,7 @@ struct LocalLibraryView: View {
                             .multilineTextAlignment(.leading)
                             .contentShape(.rect)
                             .accessibilityElement(children: .combine)
+                            .prefetchAlbumArtwork(url: album.coverURL)
                         }
                         .buttonStyle(.plain)
                     }
@@ -62,7 +63,7 @@ struct LocalAlbumDetailView: View {
     var body: some View {
         Group {
             if let album = library.localAlbum(id: id) {
-                ScrollView {
+                AlbumDetailScrollView(artworkURL: album.coverURL) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         AlbumHero(artworkURL: album.coverURL, title: album.title,
                                   metadata: "\(album.tracks.count) 首") {
@@ -92,8 +93,6 @@ struct LocalAlbumDetailView: View {
                     }
                     .padding(.horizontal, 20).padding(.bottom, 32)
                 }
-                .scrollIndicators(.hidden)
-                .background { AlbumArtworkBackground(url: album.coverURL) }
             } else {
                 ContentUnavailableView("找不到本地专辑", systemImage: "folder.badge.questionmark",
                                        description: Text("请检查扫描目录授权和音乐文件，然后重新扫描。"))
@@ -103,8 +102,7 @@ struct LocalAlbumDetailView: View {
         .sheet(item: $editing) { AudioTagEditorSheet(target: $0) }
         .sheet(item: $batchAlbum) { BatchAudioTagEditorSheet(album: $0) }
         .navigationTitle("")
-        .gestureOnlyNavigation()
-        .albumLeftEdgeDeadZone()
+        .toolbar(.visible, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }

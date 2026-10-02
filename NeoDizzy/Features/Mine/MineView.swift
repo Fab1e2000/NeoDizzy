@@ -30,7 +30,6 @@ struct MineView: View {
                         }
                     }
                     NavigationLink("扫描目录") { LibraryFoldersView() }
-                    NavigationLink("专辑页面") { AlbumInteractionSettingsView() }
                     NavigationLink("标签栏") { TabSettingsView() }
                     NavigationLink("歌词") { LyricsSettingsView() }
                     Picker("标题栏", selection: $pinsTitleBar) {

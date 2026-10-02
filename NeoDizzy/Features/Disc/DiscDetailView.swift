@@ -90,8 +90,7 @@ struct DiscDetailView: View {
         }
         .dizzyPageBackground()
         .navigationTitle("")
-        .gestureOnlyNavigation()
-        .albumLeftEdgeDeadZone()
+        .toolbar(.visible, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear { history.visit(id: model.id, summary: historySummary) }
@@ -134,7 +133,7 @@ private struct DiscDetailContent: View {
     }
 
     var body: some View {
-        ScrollView {
+        AlbumDetailScrollView(artworkURL: artworkURL ?? summary.coverURL) {
             LazyVStack(alignment: .leading, spacing: 24) {
                 header
                 trackList
@@ -151,8 +150,6 @@ private struct DiscDetailContent: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 32)
         }
-        .scrollIndicators(.hidden)
-        .background { AlbumArtworkBackground(url: artworkURL ?? summary.coverURL) }
         .task(id: LocalAvailabilityRequest(discID: detail.id, revision: offline.contentRevision)) {
             checkedLocalTrackIDs = nil
             do {

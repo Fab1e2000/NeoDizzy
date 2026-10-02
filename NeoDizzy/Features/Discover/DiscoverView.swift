@@ -50,7 +50,6 @@ final class DiscoverModel {
 }
 
 struct DiscoverView: View {
-    let playDiscovery: (ShuffleTrack) -> Void
     @State private var model = DiscoverModel()
     @State private var search = SearchModel()
 
@@ -60,7 +59,6 @@ struct DiscoverView: View {
             else { await model.refresh() }
         }) {
             DiscoverSearchBar(text: $search.query) { search.submit() }
-            ShufflePlayButton(play: playDiscovery)
             if search.keyword != nil {
                 DiscoverSearchResults(model: search)
                     .id(search.keyword)
@@ -129,46 +127,5 @@ private struct DiscoverSectionPicker: View {
         }
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
-    }
-}
-
-/// 随机发现直接进入播放器，不再推入中间页面。
-private struct ShufflePlayButton: View {
-    let play: (ShuffleTrack) -> Void
-    @State private var isRequesting = false
-    @State private var failure: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                failure = nil
-                isRequesting = true
-            } label: {
-                HStack {
-                    if isRequesting { ProgressView() }
-                    Label(isRequesting ? "正在寻找…" : "随便听听", systemImage: "shuffle")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(isRequesting)
-            if let failure {
-                Text("获取歌曲失败：\(failure)\n点击「随便听听」重试。")
-                    .font(.caption)
-                    .foregroundStyle(DizzyPalette.mutedText)
-            }
-        }
-        .task(id: isRequesting) {
-            guard isRequesting else { return }
-            defer { isRequesting = false }
-            do {
-                let selection = try await DizzyCommunity.shared.shuffle()
-                try Task.checkCancellation()
-                play(selection)
-            } catch {
-                if !Task.isCancelled { failure = error.localizedDescription }
-            }
-        }
     }
 }
