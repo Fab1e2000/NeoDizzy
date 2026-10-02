@@ -100,7 +100,7 @@ nonisolated struct OfflineManifest: Codable, Sendable {
     }
 }
 
-nonisolated struct OfflineAlbum: Identifiable, Sendable {
+nonisolated struct OfflineAlbum: Identifiable, Codable, Sendable {
     let manifest: OfflineManifest
     let directoryURL: URL
 

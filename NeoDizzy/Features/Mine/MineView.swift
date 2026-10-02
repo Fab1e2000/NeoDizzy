@@ -56,6 +56,7 @@ struct MineView: View {
             .scrollContentBackground(.hidden)
             .dizzyPageBackground()
             .navigationDestination(for: AppRoute.self) { AppRouteDestination(route: $0) }
+            .safeAreaPadding(.top, 5)
             .navigationTitle("我的")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

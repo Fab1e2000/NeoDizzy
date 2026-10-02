@@ -75,6 +75,7 @@ struct AudioTagEditorSheet: View {
                 } else if busy { ProgressView("读取文件标签") }
                 else { Button("重新读取") { Task { await load() } } }
             }
+            .safeAreaPadding(.top, 5)
             .navigationTitle("编辑音乐标签")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

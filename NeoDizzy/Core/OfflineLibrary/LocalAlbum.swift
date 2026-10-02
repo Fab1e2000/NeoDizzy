@@ -1,7 +1,7 @@
 import Foundation
 
-nonisolated struct LocalAlbum: Identifiable, Sendable {
-    struct Entry: Sendable {
+nonisolated struct LocalAlbum: Identifiable, Codable, Sendable {
+    struct Entry: Codable, Sendable {
         let track: Track
         let fileURL: URL
         let discNumber: Int

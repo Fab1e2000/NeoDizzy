@@ -33,6 +33,7 @@ struct DownloadAlbumView: View {
                 .padding(20)
             }
             .dizzyPageBackground()
+            .safeAreaPadding(.top, 5)
             .navigationTitle(isGift ? "下载特典" : "下载专辑")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

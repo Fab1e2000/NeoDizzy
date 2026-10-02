@@ -14,6 +14,13 @@ final class OfflineLibraryStore {
     @ObservationIgnored private var scanAccess: [UUID: OfflineFolderAccess] = [:]
     @ObservationIgnored private let scanner: LocalLibraryScanner
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+    private static let snapshotKey = "localLibrary.indexSnapshot.v1"
+    private struct IndexSnapshot: Codable {
+        let downloadBookmark: Data?
+        let sources: Data?
+        let albums: [OfflineAlbum]
+        let localAlbums: [LocalAlbum]
+    }
     private static let sourcesKey = "localLibrary.scanFolders.v1"
     private(set) var contentRevision = 0
     private(set) var folderName: String?
@@ -34,6 +41,14 @@ final class OfflineLibraryStore {
     init(defaults: UserDefaults = .standard, scanner: LocalLibraryScanner = LocalLibraryScanner()) {
         self.defaults = defaults
         self.scanner = scanner
+        // Seed UI before the first frame. Bookmarks are still restored before file access.
+        if let data = defaults.data(forKey: Self.snapshotKey),
+           let snapshot = try? JSONDecoder().decode(IndexSnapshot.self, from: data),
+           snapshot.downloadBookmark == defaults.data(forKey: Self.bookmarkKey),
+           snapshot.sources == defaults.data(forKey: Self.sourcesKey) {
+            albums = snapshot.albums
+            localAlbums = snapshot.localAlbums
+        }
     }
 
     func restore() async {
@@ -177,12 +192,22 @@ final class OfflineLibraryStore {
                 $0.title.localizedStandardCompare($1.title) == .orderedAscending
             }
             localAlbums = local.albums
+            saveIndexSnapshot()
             issues += local.issues
             issue = issues.isEmpty ? nil : issues.prefix(5).joined(separator: "\n")
         } catch is CancellationError {
             // A superseded scan cannot replace the newer index.
         } catch {
             if scanID == scanGeneration, folderID == folderGeneration { issue = error.localizedDescription }
+        }
+    }
+
+    private func saveIndexSnapshot() {
+        let snapshot = IndexSnapshot(downloadBookmark: defaults.data(forKey: Self.bookmarkKey),
+                                     sources: defaults.data(forKey: Self.sourcesKey),
+                                     albums: albums, localAlbums: localAlbums)
+        if let data = try? JSONEncoder().encode(snapshot) {
+            defaults.set(data, forKey: Self.snapshotKey)
         }
     }
 

@@ -32,6 +32,7 @@ struct PackDetailView: View {
             }
         }
         .dizzyPageBackground()
+        .safeAreaPadding(.top, 5)
         .navigationTitle(pack.value?.title ?? AppRoute.pack(id: id).title)
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -28,6 +28,7 @@ struct ReviewDetailView: View {
                     Link("在网页查看回复", destination: DizzyURL.page("/review/\(id)/")).font(.subheadline)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
             }.refreshable { await state.load() }
-        }.navigationTitle("repo 长评").navigationBarTitleDisplayMode(.inline).dizzyPageBackground()
+        }.safeAreaPadding(.top, 5)
+        .navigationTitle("repo 长评").navigationBarTitleDisplayMode(.inline).dizzyPageBackground()
     }
 }

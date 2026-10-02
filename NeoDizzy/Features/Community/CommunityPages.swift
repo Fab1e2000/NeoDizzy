@@ -76,6 +76,7 @@ struct CommunityProfileView: View {
                 }
             }.padding(20)
         }
+        .safeAreaPadding(.top, 5)
         .navigationTitle("用户主页").navigationBarTitleDisplayMode(.inline).dizzyPageBackground()
         .task(id: model.section) { await model.reset() }
         .refreshable { await model.reset() }

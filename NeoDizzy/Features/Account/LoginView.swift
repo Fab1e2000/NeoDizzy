@@ -72,6 +72,7 @@ struct LoginView: View {
         }
         .scrollContentBackground(.hidden)
         .dizzyPageBackground()
+        .safeAreaPadding(.top, 5)
         .navigationTitle("登录 DizzyLab")
         .navigationBarTitleDisplayMode(.inline)
         .task { focusedField = .username }

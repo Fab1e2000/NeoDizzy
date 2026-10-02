@@ -16,6 +16,7 @@ struct DisclaimerView: View {
             .padding(20)
         }
         .dizzyPageBackground()
+        .safeAreaPadding(.top, 5)
         .navigationTitle("免责声明")
         .navigationBarTitleDisplayMode(.inline)
     }

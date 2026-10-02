@@ -89,6 +89,7 @@ struct DiscDetailView: View {
             }
         }
         .dizzyPageBackground()
+        .safeAreaPadding(.top, 5)
         .navigationTitle("")
         .toolbar(.visible, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)

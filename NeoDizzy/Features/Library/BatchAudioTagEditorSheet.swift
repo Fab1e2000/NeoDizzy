@@ -105,6 +105,7 @@ struct BatchAudioTagEditorSheet: View {
                     }
                 }
             }
+            .safeAreaPadding(.top, 5)
             .navigationTitle("批量编辑 FLAC")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
