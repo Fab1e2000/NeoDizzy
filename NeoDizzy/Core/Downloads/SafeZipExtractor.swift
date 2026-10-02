@@ -66,6 +66,12 @@ nonisolated enum SafeZipExtractor {
         guard prefix == Data([0x50, 0x4b, 0x03, 0x04]) else { throw DownloadFailure.invalidResponse }
     }
 
+    /// Removing a large extracted tree is filesystem work too; keep it off the UI actor.
+    @concurrent
+    static func removeTemporaryFiles(_ urls: [URL]) async {
+        for url in urls { try? FileManager.default.removeItem(at: url) }
+    }
+
     /// Extracts into a new private staging directory. The caller imports it transactionally and removes it.
     @concurrent
     static func extract(_ zip: URL, into destination: URL, limits: Limits = Limits(), expectedTracks: [Track] = []) async throws {

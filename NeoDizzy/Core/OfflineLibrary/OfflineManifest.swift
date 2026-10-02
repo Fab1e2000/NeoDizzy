@@ -21,12 +21,12 @@ nonisolated struct OfflineManifest: Codable, Sendable {
     let labelDescription: String
     let artworkURL: URL?
     let coverPath: String?
-    let entries: [Entry]
+    private(set) var entries: [Entry]
 
     init(detail: DiscDetail, files: [String: String], coverPath: String?) throws {
         guard !detail.id.isEmpty, !detail.tracks.isEmpty,
               Set(detail.tracks.map(\.number)).count == detail.tracks.count,
-              detail.tracks.allSatisfy({ $0.discID == detail.id && !$0.number.isEmpty }) else {
+              detail.tracks.allSatisfy({ $0.discID == detail.id && !$0.number.isEmpty && $0.localSource == nil }) else {
             throw OfflineLibraryError.invalidManifest
         }
         version = Self.currentVersion
@@ -48,19 +48,52 @@ nonisolated struct OfflineManifest: Codable, Sendable {
     }
 
     func validate(in directory: URL) throws {
+        try validateStructure(in: directory)
+        for entry in entries {
+            guard try fileExists(entry, in: directory) else {
+                throw OfflineLibraryError.missingTrack(entry.track.title)
+            }
+        }
+    }
+
+    /// Repair only the in-memory index. Never rewrite the user's manifest or audio files.
+    func resolvingRenamedFiles(relativePaths: [String], in directory: URL) throws -> OfflineManifest {
+        try validateStructure(in: directory)
+        let matches = try AudioFileMatcher.match(tracks: entries.map(\.track), relativePaths: relativePaths)
+        for entry in entries where try fileExists(entry, in: directory) {
+            // Existing, explicit associations win. Do not silently reshuffle them by filename.
+            guard matches[entry.track.number] == entry.relativePath else {
+                throw OfflineLibraryError.ambiguousTrack(entry.track.title)
+            }
+        }
+        var resolved = self
+        resolved.entries = try entries.map { entry in
+            guard let path = matches[entry.track.number] else { throw OfflineLibraryError.missingTrack(entry.track.title) }
+            return Entry(track: entry.track, relativePath: path)
+        }
+        try resolved.validate(in: directory)
+        return resolved
+    }
+
+    private func fileExists(_ entry: Entry, in directory: URL) throws -> Bool {
+        let url = try OfflinePaths.file(entry.relativePath, inside: directory)
+        guard AudioFileMatcher.extensions.contains(url.pathExtension.lowercased()) else { return false }
+        do { return try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true }
+        catch let error as CocoaError where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile {
+            return false
+        }
+    }
+
+    private func validateStructure(in directory: URL) throws {
         guard version == Self.currentVersion, !discID.isEmpty, !entries.isEmpty,
               Set(entries.map { $0.track.number }).count == entries.count,
               Set(entries.map(\.relativePath)).count == entries.count,
-              entries.allSatisfy({ $0.track.discID == discID && !$0.track.number.isEmpty }),
+              entries.allSatisfy({ $0.track.discID == discID && !$0.track.number.isEmpty && $0.track.localSource == nil }),
               artworkURL == nil || ["https", "http"].contains(artworkURL?.scheme?.lowercased() ?? "") else {
             throw OfflineLibraryError.invalidManifest
         }
         for entry in entries {
-            let url = try OfflinePaths.file(entry.relativePath, inside: directory)
-            guard AudioFileMatcher.extensions.contains(url.pathExtension.lowercased()),
-                  try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
-                throw OfflineLibraryError.missingTrack(entry.track.title)
-            }
+            _ = try OfflinePaths.file(entry.relativePath, inside: directory)
         }
         // 封面丢失不影响音频，但路径本身仍须合法。
         if let coverPath { _ = try OfflinePaths.file(coverPath, inside: directory) }
@@ -177,8 +210,11 @@ nonisolated enum OfflinePaths {
         if filePath.hasPrefix(prefix) {
             path = String(filePath.dropFirst(prefix.count))
         } else {
-            let originalRoot = root.standardizedFileURL.path
-            let originalFile = file.standardizedFileURL.path
+            // Keep the original spelling here. On iOS, standardizing an existing
+            // /private/var directory can return /var while a missing descendant
+            // retains /private/var. Standardizing both breaks this fallback.
+            let originalRoot = root.path
+            let originalFile = file.path
             let originalPrefix = originalRoot.hasSuffix("/") ? originalRoot : originalRoot + "/"
             guard originalFile.hasPrefix(originalPrefix) else {
                 throw OfflineLibraryError.unsafePath(file.lastPathComponent)

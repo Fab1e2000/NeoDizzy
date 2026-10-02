@@ -3,6 +3,7 @@ import SwiftUI
 /// 下载面板先取得文件夹授权，再读取当前会话可用的格式。
 struct DownloadAlbumView: View {
     let detail: DiscDetail
+    var isGift = false
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(DownloadStore.self) private var downloads
     @Environment(\.dismiss) private var dismiss
@@ -12,7 +13,7 @@ struct DownloadAlbumView: View {
     @State private var failure: String?
 
     private var activeJob: DownloadJob? {
-        downloads.jobs.first { $0.discID == detail.id && $0.isActive }
+        downloads.jobs.first { $0.discID == detail.id && $0.isGift == isGift && $0.isActive }
     }
 
     var body: some View {
@@ -25,9 +26,6 @@ struct DownloadAlbumView: View {
                     OfflineFolderSection()
                     if let activeJob {
                         DownloadJobRow(job: activeJob)
-                    } else if offline.album(id: detail.id) != nil {
-                        Label("这张专辑已下载，可在音乐库离线播放。", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(DizzyPalette.success)
                     } else if offline.folderName != nil {
                         formatSelection
                     }
@@ -35,7 +33,7 @@ struct DownloadAlbumView: View {
                 .padding(20)
             }
             .dizzyPageBackground()
-            .navigationTitle("下载专辑")
+            .navigationTitle(isGift ? "下载特典" : "下载专辑")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -61,12 +59,12 @@ struct DownloadAlbumView: View {
                 await loadOptions()
             }
         } else if options.isEmpty {
-            Text("暂时没有可下载的格式，请在专辑网页中确认下载权限。")
+            Text(isGift ? "暂无可下载的特典，请在专辑网页中确认特典和下载权限。" : "暂时没有可下载的格式，请在专辑网页中确认下载权限。")
                 .font(.subheadline)
                 .foregroundStyle(DizzyPalette.mutedText)
             Link("在网页中打开", destination: DizzyURL.disc(detail.id))
         } else {
-            SectionHeading(title: "选择格式")
+            SectionHeading(title: isGift ? "特典" : "选择格式")
             ForEach(options) { option in
                 Button {
                     isEnqueuing = true
@@ -81,7 +79,7 @@ struct DownloadAlbumView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(option.title)
                                 .font(.headline)
-                            Text(option.format.uppercased())
+                            Text(isGift ? "下载后自动解压" : option.format.uppercased())
                                 .font(.caption)
                                 .foregroundStyle(DizzyPalette.mutedText)
                         }
@@ -98,20 +96,19 @@ struct DownloadAlbumView: View {
                 .disabled(isEnqueuing || activeJob != nil || offline.isScanning)
                 .accessibilityLabel("下载 \(option.title)")
             }
-            Text("下载完成后会自动解压并加入「已下载」。可在音乐库查看进度、取消或重试。")
+            Text(isGift ? "下载完成后会自动解压到专辑目录的「特典」文件夹。可在专辑详情中查看进度、取消或重试。" : "下载完成后会自动解压并加入「本地库」。可在专辑详情中查看进度、取消或重试。")
                 .font(.caption)
                 .foregroundStyle(DizzyPalette.mutedText)
         }
     }
 
     private func loadOptions() async {
-        guard !isLoading, options.isEmpty, activeJob == nil,
-              offline.album(id: detail.id) == nil else { return }
+        guard !isLoading, options.isEmpty, activeJob == nil else { return }
         isLoading = true
         failure = nil
         defer { isLoading = false }
         do {
-            let result = try await DizzyPages.shared.downloadOptions(discID: detail.id)
+            let result = try await DizzyPages.shared.downloadOptions(discID: detail.id, gift: isGift)
             try Task.checkCancellation()
             options = result
         } catch is CancellationError {

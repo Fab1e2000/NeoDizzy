@@ -52,39 +52,53 @@ final class DiscoverModel {
 struct DiscoverView: View {
     let playDiscovery: (ShuffleTrack) -> Void
     @State private var model = DiscoverModel()
+    @State private var search = SearchModel()
 
     var body: some View {
-        MainTabPage(tab: .discover, onRefresh: { await model.refresh() }) {
+        MainTabPage(tab: .discover, onRefresh: {
+            if let discs = search.discs { await discs.reload() }
+            else { await model.refresh() }
+        }) {
+            DiscoverSearchBar(text: $search.query) { search.submit() }
             ShufflePlayButton(play: playDiscovery)
-            DiscoverSectionPicker(selection: $model.section)
-            if let category = model.section.category, let list = model.lists[category] {
-                PagedContent(list: list, webURL: DizzyURL.site) { discs in
-                    DiscGrid(discs: discs)
-                }
+            if search.keyword != nil {
+                DiscoverSearchResults(model: search)
+                    .id(search.keyword)
             } else {
-                LoadableContent(state: model.showcase, webURL: DizzyURL.site) { showcase in
-                    if model.section == .packs {
-                        LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                            ForEach(showcase.packs) { PackCard(pack: $0) }
-                        }
-                    } else if showcase.deals.isEmpty {
-                        Text("现在没有限时优惠。")
-                            .font(.subheadline)
-                            .foregroundStyle(DizzyPalette.mutedText)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 60)
-                    } else {
-                        LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                            ForEach(showcase.deals) { deal in
-                                NavigationLink(value: AppRoute.disc(id: deal.disc.id)) {
-                                    DiscCard(disc: deal.disc, caption: deal.deadline)
+                DiscoverSectionPicker(selection: $model.section)
+                if let category = model.section.category, let list = model.lists[category] {
+                    PagedContent(list: list, webURL: DizzyURL.site) { discs in
+                        DiscGrid(discs: discs)
+                    }
+                } else {
+                    LoadableContent(state: model.showcase, webURL: DizzyURL.site) { showcase in
+                        if model.section == .packs {
+                            LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
+                                ForEach(showcase.packs) { PackCard(pack: $0) }
+                            }
+                        } else if showcase.deals.isEmpty {
+                            Text("现在没有限时优惠。")
+                                .font(.subheadline)
+                                .foregroundStyle(DizzyPalette.mutedText)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 60)
+                        } else {
+                            LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
+                                ForEach(showcase.deals) { deal in
+                                    NavigationLink(value: AppRoute.disc(id: deal.disc.id)) {
+                                        DiscCard(disc: deal.disc, caption: deal.deadline)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
             }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .onChange(of: search.query) { _, query in
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { search.clear() }
         }
     }
 }

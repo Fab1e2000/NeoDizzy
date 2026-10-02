@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 通过系统文件选择器保留文件夹授权，音乐库与下载面板共用。
+/// 通过系统文件选择器保留文件夹授权，用于下载目标目录。
 struct OfflineFolderSection: View {
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(DownloadStore.self) private var downloads
@@ -14,12 +14,12 @@ struct OfflineFolderSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(offline.folderName ?? "选择音乐文件夹", systemImage: "folder")
+            Label(offline.folderName ?? "选择下载目录", systemImage: "folder")
                 .font(.headline)
                 .foregroundStyle(DizzyPalette.text)
             Text(offline.folderName == nil
-                 ? "选择「文件」中的文件夹，用来保存下载和读取本地音乐。"
-                 : "下载的音乐保存在此文件夹，下拉或轻点扫描可更新本地专辑。")
+                 ? "选择「文件」中的文件夹，用来保存下载的专辑。"
+                 : "下载的音乐保存在此文件夹，并自动加入本地库。")
                 .font(.caption)
                 .foregroundStyle(DizzyPalette.mutedText)
             HStack(spacing: 12) {
@@ -36,7 +36,7 @@ struct OfflineFolderSection: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(isBusy)
-                    .accessibilityLabel("重新扫描音乐文件夹")
+                    .accessibilityLabel("重新扫描本地库")
                 }
                 if isBusy {
                     ProgressView()

@@ -89,8 +89,11 @@ struct DiscDetailView: View {
             }
         }
         .dizzyPageBackground()
-        .navigationTitle(offline.album(id: model.id)?.title ?? model.detail.value?.summary.title ?? "")
+        .navigationTitle("")
+        .gestureOnlyNavigation()
+        .albumLeftEdgeDeadZone()
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .onAppear { history.visit(id: model.id, summary: historySummary) }
         .onChange(of: historySummary) { _, summary in
             if let summary { history.update(summary) }
@@ -111,25 +114,21 @@ private struct DiscDetailContent: View {
     var artworkURL: URL?
     @Environment(PlayerStore.self) private var player
     @Environment(OfflineLibraryStore.self) private var offline
-    @Environment(DownloadStore.self) private var downloads
-    @State private var downloadSheet: DownloadSheet?
     @State private var purchaseSheet: PurchaseSheet?
+    @State private var checkedLocalTrackIDs: Set<String>?
 
     private var summary: DiscSummary { detail.summary }
     private var localAlbum: OfflineAlbum? { offline.album(id: detail.id) }
-    private var activeJob: DownloadJob? {
-        downloads.jobs.first { $0.discID == detail.id && $0.isActive }
-    }
-    private var failedJob: DownloadJob? {
-        downloads.jobs.first { $0.discID == detail.id && $0.canRetry }
+    private var localTrackIDs: Set<String> {
+        checkedLocalTrackIDs ?? Set(localAlbum?.manifest.entries.map { $0.track.id } ?? [])
     }
     private var hasMissingLocalFiles: Bool {
-        localAlbum != nil && tracks.contains { offline.localFile(for: $0) == nil }
+        localAlbum != nil && checkedLocalTrackIDs != nil && tracks.contains { !localTrackIDs.contains($0.id) }
     }
 
     /// 没有任何完整版地址，说明只能试听。
     private var isPreviewOnly: Bool {
-        !tracks.contains(where: { offline.localFile(for: $0) != nil })
+        !tracks.contains(where: { localTrackIDs.contains($0.id) })
             && !detail.streams.isEmpty
             && detail.streams.values.allSatisfy(DizzyURL.isPreviewStream)
     }
@@ -138,24 +137,34 @@ private struct DiscDetailContent: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
                 header
-                actions
-                if !summary.tags.isEmpty {
-                    tags
-                }
                 trackList
-                DiscCommunityView(discID: detail.id)
+                actions
+                if !summary.tags.isEmpty { tags }
                 if !detail.description.isEmpty {
                     ExpandableText(title: "介绍", text: detail.description)
                 }
                 if !detail.credits.isEmpty {
                     ExpandableText(title: "曲目与制作人员", text: detail.credits)
                 }
+                DiscCommunityView(discID: detail.id)
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 16)
+            .padding(.bottom, 32)
         }
-        .sheet(item: $downloadSheet) { sheet in
-            DownloadAlbumView(detail: sheet.detail)
+        .scrollIndicators(.hidden)
+        .background { AlbumArtworkBackground(url: artworkURL ?? summary.coverURL) }
+        .task(id: LocalAvailabilityRequest(discID: detail.id, revision: offline.contentRevision)) {
+            checkedLocalTrackIDs = nil
+            do {
+                let ids = try await offline.availableTrackIDs(discID: detail.id)
+                try Task.checkCancellation()
+                checkedLocalTrackIDs = ids
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                checkedLocalTrackIDs = []
+            }
         }
         .sheet(item: $purchaseSheet) { sheet in
             PurchaseView(summary: sheet.summary)
@@ -163,103 +172,35 @@ private struct DiscDetailContent: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
-            ArtworkImage(url: artworkURL ?? summary.coverURL, cornerRadius: 14)
-                .frame(maxWidth: 280)
-                .shadow(color: .black.opacity(0.4), radius: 16, y: 8)
-                .padding(.bottom, 8)
-            Text(summary.title)
-                .font(.title2.bold())
-                .foregroundStyle(DizzyPalette.text)
-                .multilineTextAlignment(.center)
-                .textSelection(.enabled)
+        AlbumHero(artworkURL: artworkURL ?? summary.coverURL, title: summary.title,
+                  metadata: ([detail.releaseDate, "\(tracks.count) 首", summary.isHiRes ? "Hi-Res" : nil]
+                    .compactMap { $0 }).joined(separator: " · ")) {
             if let label = summary.labelName {
-                NavigationLink(value: AppRoute.label(name: label)) {
-                    Text(label)
-                        .font(.headline)
-                        .foregroundStyle(DizzyPalette.accent)
-                }
-                .buttonStyle(.plain)
+                NavigationLink(value: AppRoute.label(name: label)) { Text(label) }
+                    .buttonStyle(.plain)
             }
-            HStack(spacing: 12) {
-                if summary.isOwned {
-                    Label("已购", systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(DizzyPalette.success)
-                        .fontWeight(.semibold)
-                } else if let price = summary.price {
-                    PriceText(price: price)
-                }
-                if let date = detail.releaseDate {
-                    Text(date)
-                }
-                if summary.isHiRes {
-                    Text("Hi-Res")
-                }
+        } actions: {
+            AlbumPlaybackActions(isEmpty: tracks.isEmpty, isPreview: isPreviewOnly,
+                                 webURL: DizzyURL.disc(summary.id)) { shuffled in
+                guard !tracks.isEmpty else { return }
+                play(from: shuffled ? Int.random(in: tracks.indices) : 0)
+                if player.isShuffled != shuffled { player.toggleShuffle() }
             }
-            .font(.caption)
-            .foregroundStyle(DizzyPalette.mutedText)
         }
-        .frame(maxWidth: .infinity)
     }
 
     private var actions: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                Button {
-                    play(from: 0)
-                } label: {
-                    Label(isPreviewOnly ? "试听" : "播放", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(tracks.isEmpty)
-                Link(destination: DizzyURL.disc(summary.id)) {
-                    Label("在网页中打开", systemImage: "safari")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
-            .controlSize(.large)
-            Button {
-                purchaseSheet = PurchaseSheet(summary: summary)
-            } label: {
-                Label(summary.isOwned ? "BOOST · 追加支持" : "购买 / 支持创作者", systemImage: "heart.circle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            if localAlbum != nil {
-                if hasMissingLocalFiles {
-                    Label("部分本地文件不可用，请重新扫描文件夹。", systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(DizzyPalette.accent)
-                    Button("重新扫描") {
-                        Task { await offline.scan() }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(offline.isScanning)
-                } else {
-                    Label("已下载 · 可离线播放", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
+        VStack(spacing: 12) {
+            HStack {
+                if summary.isOwned {
+                    Label("已购买", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(DizzyPalette.success)
-                        .padding(.top, 4)
-                }
-            } else if let activeJob {
-                DownloadJobRow(job: activeJob)
-            } else if summary.isOwned {
-                if let failedJob {
-                    DownloadJobRow(job: failedJob)
-                }
-                Button {
-                    downloadSheet = DownloadSheet(detail: detail)
-                } label: {
-                    Label(failedJob == nil ? "下载专辑" : "重新选择格式", systemImage: "arrow.down.circle")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(DizzyPalette.download)
-                .controlSize(.large)
-                .accessibilityHint("选择保存文件夹和下载格式")
+                } else if let price = summary.price { PriceText(price: price) }
+                Spacer()
+            }
+            .font(.subheadline)
+            DiscDownloadSection(detail: detail, hasMissingLocalFiles: hasMissingLocalFiles) {
+                purchaseSheet = PurchaseSheet(summary: summary)
             }
             if isPreviewOnly {
                 Text("当前为试听片段。购买后可收听完整版并下载到所选文件夹。")
@@ -287,23 +228,16 @@ private struct DiscDetailContent: View {
     }
 
     private var trackList: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            SectionHeading(title: "曲目")
-                .padding(.bottom, 6)
+        LazyVStack(spacing: 0) {
             ForEach(tracks.enumerated(), id: \.element.id) { index, track in
-                Button {
+                AlbumTrackRow(track: track,
+                              isPreview: !localTrackIDs.contains(track.id)
+                                && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false)) {
                     play(from: index)
-                } label: {
-                    TrackRow(
-                        track: track,
-                        isPreview: offline.localFile(for: track) == nil
-                            && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false),
-                        isCurrent: player.currentTrack?.id == track.id
-                    )
                 }
-                .buttonStyle(.plain)
             }
         }
+        .padding(.horizontal, -20)
     }
 
     private func play(from index: Int) {
@@ -311,9 +245,92 @@ private struct DiscDetailContent: View {
     }
 }
 
+private struct LocalAvailabilityRequest: Hashable {
+    let discID: String
+    let revision: Int
+}
+
+/// Queue changes are scoped to the download controls, not the cover and track list.
+private struct DiscDownloadSection: View {
+    let detail: DiscDetail
+    let hasMissingLocalFiles: Bool
+    let purchase: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(OfflineLibraryStore.self) private var offline
+    @Environment(DownloadStore.self) private var downloads
+    @State private var downloadSheet: DownloadSheet?
+
+    private var summary: DiscSummary { detail.summary }
+    private var localAlbum: OfflineAlbum? { offline.album(id: detail.id) }
+    private var activeJob: DownloadJob? {
+        downloads.jobs.first { $0.discID == detail.id && !$0.isGift && $0.isActive }
+    }
+    private var failedJob: DownloadJob? {
+        downloads.jobs.first { $0.discID == detail.id && !$0.isGift && $0.canRetry }
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if localAlbum != nil && hasMissingLocalFiles {
+                Label("部分本地文件不可用，可重新扫描或下载覆盖。", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(DizzyPalette.accent)
+                Button("重新扫描") { Task { await offline.scan() } }
+                    .buttonStyle(.bordered)
+                    .disabled(offline.isScanning)
+            }
+            if let activeJob {
+                DownloadJobRow(job: activeJob)
+            } else if summary.isOwned {
+                if let failedJob {
+                    DownloadJobRow(job: failedJob)
+                }
+                Button {
+                    downloadSheet = DownloadSheet(detail: detail)
+                } label: {
+                    Label(failedJob == nil ? "下载专辑" : "重新选择格式", systemImage: "arrow.down.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DizzyPalette.download)
+                .controlSize(.large)
+                .accessibilityHint("选择保存文件夹和下载格式")
+            }
+            if let giftJob = downloads.jobs.first(where: { $0.discID == detail.id && $0.isGift && ($0.isActive || $0.canRetry) }) {
+                DownloadJobRow(job: giftJob)
+            }
+            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+            layout {
+                Button(action: purchase) {
+                    Label(summary.isOwned ? "BOOST" : "购买 / 支持", systemImage: "heart")
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                }
+                .tint(DizzyPalette.accent)
+                .accessibilityLabel(summary.isOwned ? "BOOST · 追加支持创作者" : "购买 / 支持创作者")
+                if summary.isOwned || localAlbum != nil {
+                    Button {
+                        downloadSheet = DownloadSheet(detail: detail, isGift: true)
+                    } label: {
+                        Label("下载特典", systemImage: "gift")
+                            .frame(maxWidth: .infinity, minHeight: 24)
+                    }
+                    .tint(DizzyPalette.download)
+                    .accessibilityHint("下载后自动解压到专辑目录的特典文件夹")
+                }
+            }
+            .buttonStyle(.bordered).controlSize(.large)
+
+        }
+        .sheet(item: $downloadSheet) { sheet in
+            DownloadAlbumView(detail: sheet.detail, isGift: sheet.isGift)
+        }
+    }
+}
+
 private struct DownloadSheet: Identifiable {
     let detail: DiscDetail
-    var id: String { detail.id }
+    var isGift = false
+    var id: String { detail.id + (isGift ? "-gift" : "-album") }
 }
 
 struct PurchaseSheet: Identifiable {
@@ -322,58 +339,6 @@ struct PurchaseSheet: Identifiable {
 }
 
 /// 曲目行：序号、标题、艺术家、时长，未购买时标注「试听」。
-struct TrackRow: View {
-    let track: Track
-    let isPreview: Bool
-    var isCurrent = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Group {
-                if isCurrent {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .foregroundStyle(DizzyPalette.accent)
-                } else {
-                    Text(track.number)
-                        .foregroundStyle(DizzyPalette.mutedText)
-                }
-            }
-            .font(.subheadline.monospacedDigit())
-            .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(track.title)
-                    .font(.body)
-                    .foregroundStyle(isCurrent ? DizzyPalette.accent : DizzyPalette.text)
-                    .lineLimit(2)
-                if !track.artists.isEmpty {
-                    Text(track.artists)
-                        .font(.caption)
-                        .foregroundStyle(DizzyPalette.mutedText)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            if isPreview {
-                Text("试听")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(DizzyPalette.mutedText)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .overlay(Capsule().stroke(DizzyPalette.mutedText.opacity(0.6)))
-            }
-            if let duration = track.duration {
-                Text(Duration.seconds(duration).formatted(.time(pattern: .minuteSecond)))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(DizzyPalette.mutedText)
-            }
-        }
-        .padding(.vertical, 8)
-        .contentShape(.rect)
-    }
-}
-
 /// 可折叠的长文本，默认显示前几行。
 struct ExpandableText: View {
     let title: LocalizedStringKey

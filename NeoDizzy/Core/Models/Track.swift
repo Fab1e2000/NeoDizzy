@@ -2,6 +2,7 @@ import Foundation
 
 /// 专辑里的一首曲目。会写入播放队列快照，所以不包含会过期的播放地址（见 `StreamResolver`）。
 nonisolated struct Track: Codable, Hashable, Identifiable, Sendable {
+    /// 站点曲目的专辑 ID；纯本地曲目为空，身份使用 localSource。
     let discID: String
     /// 专辑内序号，接口返回的是字符串 `"1"`、`"2"`…，播放地址的文件名也用它。
     let number: String
@@ -14,5 +15,13 @@ nonisolated struct Track: Codable, Hashable, Identifiable, Sendable {
     /// 取不到时为空。
     var duration: TimeInterval?
 
-    var id: String { "\(discID)/\(number)" }
+    /// nil is a site track, including snapshots written before local-library support.
+    var localSource: LocalTrackSource? = nil
+
+    var id: String { localSource.map { "local/\($0.trackID)" } ?? "\(discID)/\(number)" }
+}
+
+nonisolated struct LocalTrackSource: Codable, Hashable, Sendable {
+    let albumID: String
+    let trackID: String
 }

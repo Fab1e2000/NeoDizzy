@@ -214,10 +214,10 @@ struct PurchaseView: View {
             Text("\(pending.title) · ¥\(pending.attempt.amount.text)")
                 .font(.subheadline)
             if purchases.state == .confirmed {
-                Text(pending.attempt.kind == .boost ? "感谢你对创作者的追加支持。" : "专辑已加入已购音乐库，可以收听完整版和下载。")
+                Text(pending.attempt.kind == .boost ? "感谢你对创作者的追加支持。" : "专辑已加入「已购买」，可以收听完整版和下载。")
                     .foregroundStyle(DizzyPalette.mutedText)
             } else {
-                Text("如果已完成支付，到账可能稍有延迟。尚未确认前，请勿重复付款；稍后也可从音乐库继续核验。")
+                Text("如果已完成支付，到账可能稍有延迟。尚未确认前，请勿重复付款；稍后也可从「已购买」继续核验。")
                     .font(.subheadline).foregroundStyle(DizzyPalette.mutedText)
                 if let failure = purchases.failure {
                     Text(failure).font(.footnote).foregroundStyle(DizzyPalette.accent)

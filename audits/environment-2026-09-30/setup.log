@@ -1,0 +1,36 @@
+Xcode 27.0
+Build version 27A266a
+⚙️  Generating plists...
+⚙️  Generating project...
+⚙️  Writing project...
+Created project at /Users/elsterlee/Dev/NeoDizzy/NeoDizzy.xcodeproj
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -resolvePackageDependencies -project NeoDizzy.xcodeproj -scheme NeoDizzy -derivedDataPath /Users/elsterlee/Dev/NeoDizzy/DerivedData -onlyUsePackageVersionsFromResolvedFile
+
+Resolve Package Graph
+
+Fetching from https://github.com/weichsel/ZIPFoundation
+
+Fetching from https://github.com/kean/Nuke
+
+Fetching from https://github.com/scinfu/SwiftSoup
+
+Creating working copy of package ‘Nuke’
+
+Creating working copy of package ‘SwiftSoup’
+
+Creating working copy of package ‘ZIPFoundation’
+
+Checking out 0.9.20 of package ‘ZIPFoundation’
+
+Checking out 2.13.9 of package ‘SwiftSoup’
+
+Checking out 13.2.0 of package ‘Nuke’
+
+
+Resolved source packages:
+  ZIPFoundation: https://github.com/weichsel/ZIPFoundation @ 0.9.20
+  SwiftSoup: https://github.com/scinfu/SwiftSoup @ 2.13.9
+  Nuke: https://github.com/kean/Nuke @ 13.2.0
+
+resolved source packages: ZIPFoundation, SwiftSoup, Nuke

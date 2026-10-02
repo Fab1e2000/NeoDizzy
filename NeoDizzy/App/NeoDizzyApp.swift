@@ -53,6 +53,8 @@ final class AppServices {
         downloads = DownloadStore(library: library)
         player = PlayerStore(resolver: StreamResolver(localFile: { [weak library] track in
             library?.localFile(for: track)
+        }, localAccess: { [weak library] track in
+            library?.access(for: track)
         }))
         account.restore()
     }

@@ -6,6 +6,7 @@ import Foundation
 /// 用户用数字 ID（`/u/<id>`）。
 enum AppRoute: Hashable {
     case disc(id: String)
+    case localAlbum(id: String)
     case label(name: String)
     case user(id: Int)
     case tag(String)
@@ -14,6 +15,7 @@ enum AppRoute: Hashable {
 
     var title: String {
         switch self {
+        case .localAlbum: String(localized: "本地专辑")
         case .disc: String(localized: "专辑")
         case .label(let name): name
         case .user: String(localized: "用户主页")

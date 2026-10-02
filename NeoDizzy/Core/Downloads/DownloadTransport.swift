@@ -7,6 +7,34 @@ nonisolated enum DownloadEvent: Sendable {
     case finishedBackgroundEvents
 }
 
+/// Used only on the serial URLSession delegate queue. Terminal events bypass it.
+nonisolated struct DownloadProgressThrottle {
+    private struct Sample {
+        let time: ContinuousClock.Instant
+        let written: Int64
+        let expected: Int64
+    }
+    private var samples: [UUID: Sample] = [:]
+    private let interval: Duration = .milliseconds(250)
+
+    mutating func shouldEmit(id: UUID, written: Int64, expected: Int64,
+                             now: ContinuousClock.Instant = .now) -> Bool {
+        if let previous = samples[id] {
+            if written == previous.written && expected == previous.expected { return false }
+            let finished = expected > 0 && written >= expected
+            let becameDeterminate = expected > 0 && previous.expected <= 0
+            if !finished && !becameDeterminate {
+                if expected <= 0 && previous.expected <= 0 { return false }
+                if previous.time.duration(to: now) < interval { return false }
+            }
+        }
+        samples[id] = Sample(time: now, written: written, expected: expected)
+        return true
+    }
+
+    mutating func finish(_ id: UUID) { samples.removeValue(forKey: id) }
+}
+
 /// Never attaches credentials to background requests: iOS handles their redirects outside this process.
 /// A short foreground request resolves the authenticated website redirect before enqueueing its signed target.
 nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
@@ -14,6 +42,7 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
     private let continuation: AsyncStream<DownloadEvent>.Continuation
     private let directory: URL
     private var session: URLSession!
+    private var progressThrottle = DownloadProgressThrottle()
 
     init(directory: URL, identifier: String) {
         self.directory = directory
@@ -56,11 +85,14 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
             continuation.yield(.failed(id, DownloadFailure.archiveTooLarge.localizedDescription))
             return
         }
-        continuation.yield(.progress(id, totalBytesWritten, totalBytesExpectedToWrite))
+        if progressThrottle.shouldEmit(id: id, written: totalBytesWritten, expected: totalBytesExpectedToWrite) {
+            continuation.yield(.progress(id, totalBytesWritten, totalBytesExpectedToWrite))
+        }
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let id = downloadTask.taskDescription.flatMap(UUID.init(uuidString:)) else { return }
+        progressThrottle.finish(id)
         do {
             guard let response = downloadTask.response as? HTTPURLResponse,
                   (200..<300).contains(response.statusCode), !Self.isErrorContentType(response.mimeType) else {
@@ -79,7 +111,9 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        guard let error, let id = task.taskDescription.flatMap(UUID.init(uuidString:)) else { return }
+        guard let id = task.taskDescription.flatMap(UUID.init(uuidString:)) else { return }
+        progressThrottle.finish(id)
+        guard let error else { return }
         continuation.yield(.failed(id, Self.message(for: error)))
     }
 

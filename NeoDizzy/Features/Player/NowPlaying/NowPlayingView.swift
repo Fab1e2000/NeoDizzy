@@ -1,22 +1,26 @@
 // 布局移植自 MeloX（GPLv3）Features/Player/NowPlaying/NowPlayingView.swift 的竖屏部分：
-// 去掉歌词页、横屏和 Text PV，只保留大封面页和队列页。
+// 保留封面和队列布局，歌词由本地文件读取。
 
 import SwiftUI
 
 /// 播放页：全屏展开（从迷你播放器的封面放大出来），下拉或点顶部的横条收起。
 struct NowPlayingView: View {
-    /// 迷你播放器封面和播放页之间缩放转场的标识。
-    static let transitionID = "nowPlaying"
-    /// 大封面和队列页小封面之间过渡的标识。
-    static let artworkID = "nowPlayingArtwork"
     private static let horizontalPadding: CGFloat = 32
 
+    static let transitionID = "nowPlaying"
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(PlayerStore.self) private var player
 
+    @State private var allowsGestureDismissal = false
+    @State private var isLyricsInterfaceHidden = false
     @State private var page: NowPlayingPage = .artwork
-    @Namespace private var artworkNamespace
+    @State private var controlsHeight: CGFloat = NowPlayingBottomControls.coreHeight
+    @State private var artworkFrame: CGRect = .zero
+    @State private var queueFrame: CGRect = .zero
+    @State private var lyricsFrame: CGRect = .zero
+    @State private var playerFrame: CGRect = .zero
+    @State private var contentOrigin: CGPoint = .zero
 
     var body: some View {
         ZStack {
@@ -27,24 +31,57 @@ struct NowPlayingView: View {
                     dismissalHandle
 
                     ZStack(alignment: .top) {
-                        switch page {
-                        case .artwork:
-                            NowPlayingArtworkPage(track: track, artworkNamespace: artworkNamespace)
-                                .transition(.opacity)
-                        case .queue:
-                            NowPlayingQueuePage(track: track, artworkNamespace: artworkNamespace)
-                                .transition(queueTransition)
-                        }
+                        NowPlayingLyricsPage(track: track, playerFrame: playerFrame, controlsHeight: controlsHeight, isActive: page == .lyrics, isInterfaceHidden: $isLyricsInterfaceHidden) { lyricsFrame = $0 }
+                            .opacity(page == .lyrics ? 1 : 0)
+                            .allowsHitTesting(page == .lyrics)
+                            .accessibilityHidden(page != .lyrics)
+                        NowPlayingArtworkPage(track: track, controlsHeight: controlsHeight) { artworkFrame = $0 }
+                            .opacity(page == .artwork ? 1 : 0)
+                            .allowsHitTesting(page == .artwork)
+                            .accessibilityHidden(page != .artwork)
+                        NowPlayingQueuePage(track: track, controlsHeight: controlsHeight) { queueFrame = $0 }
+                            .opacity(page == .queue ? 1 : 0)
+                            .allowsHitTesting(page == .queue)
+                            .accessibilityHidden(page != .queue)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { contentOrigin = $0 }
+                    .overlay(alignment: .topLeading) {
+                        let frame = (page == .artwork ? artworkFrame : page == .queue ? queueFrame : lyricsFrame)
+                            .offsetBy(dx: -contentOrigin.x, dy: -contentOrigin.y)
+                        if frame.width > 0 {
+                            PlayerTransitionArtwork(track: track, expanded: page == .artwork)
+                                .frame(width: frame.width, height: frame.height)
+                                .position(x: frame.midX, y: frame.midY)
+                                .opacity(page == .queue && frame.minY < 0 ? 0 : 1)
+                                .animation(accessibilityReduceMotion ? nil : .smooth(duration: 0.4), value: page)
+                                .allowsHitTesting(false).accessibilityHidden(true)
+                        }
+                    }
+                    .clipped()
                     .overlay(alignment: .bottom) {
                         NowPlayingBottomControls(page: $page)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsHeight = $0 }
+                            .opacity(isLyricsInterfaceHidden ? 0 : 1)
+                            .offset(y: isLyricsInterfaceHidden ? controlsHeight : 0)
+                            .allowsHitTesting(!isLyricsInterfaceHidden)
+                            .accessibilityHidden(isLyricsInterfaceHidden)
+                            .animation(accessibilityReduceMotion ? nil : .smooth(duration: 0.35), value: isLyricsInterfaceHidden)
                     }
                 }
                 .padding(.horizontal, Self.horizontalPadding)
                 .safeAreaPadding(.bottom, 3)
             }
         }
+        .interactiveDismissDisabled(!allowsGestureDismissal)
+        .task {
+            allowsGestureDismissal = false
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            allowsGestureDismissal = true
+        }
+        .onDisappear { allowsGestureDismissal = false }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { playerFrame = $0 }
+        .onChange(of: page) { _, _ in isLyricsInterfaceHidden = false }
         .foregroundStyle(.white)
         .preferredColorScheme(.dark)
         .onChange(of: player.currentTrack == nil) { _, isEmpty in
@@ -52,17 +89,7 @@ struct NowPlayingView: View {
         }
     }
 
-    /// 队列从上方稍微放大着淡入，与 MeloX 的队列出场一致。
-    private var queueTransition: AnyTransition {
-        accessibilityReduceMotion
-            ? .opacity
-            : .asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.9, anchor: .top)),
-                removal: .opacity
-            )
-    }
-
-    /// 顶部的小横条：点一下收起播放页。下拉收起由缩放转场本身提供。
+    /// 下拉收起由系统缩放转场提供。
     private var dismissalHandle: some View {
         Capsule()
             .fill(.white.opacity(0.52))

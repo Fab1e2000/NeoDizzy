@@ -52,10 +52,10 @@ nonisolated struct DizzyPages: Sendable {
     }
 
     /// Signed download menus must be fetched immediately before starting or retrying a download.
-    func downloadOptions(discID: String) async throws -> [DownloadOption] {
+    func downloadOptions(discID: String, gift: Bool = false) async throws -> [DownloadOption] {
         guard client.credentials.cookieHeader() != nil else { throw DizzyError.notLoggedIn }
         let html = try await client.html(path: "/d/\(DizzyURL.pathSegment(discID))/", cachePolicy: .reloadIgnoringLocalCacheData)
-        return try await Self.parse { try DownloadPageParser.parse(html, discID: discID) }
+        return try await Self.parse { try DownloadPageParser.parse(html, discID: discID, gift: gift) }
     }
 
     /// Price and sale status can change; never reuse a cached checkout offer.

@@ -7,7 +7,7 @@ import Nuke
 import UIKit
 
 /// 锁屏、控制中心和耳机线控。
-final class NowPlayingSession {
+final class NowPlayingSession: NSObject, MPNowPlayingSessionDelegate {
     var onPlay: (() -> Void)?
     var onPause: (() -> Void)?
     var onNext: (() -> Void)?
@@ -19,6 +19,8 @@ final class NowPlayingSession {
     private var nowPlayingInfo: [String: Any] = [:]
     private var artworkTask: Task<Void, Never>?
     private var representedTrackID: String?
+    private var wantsActiveSession = false
+    private var activationPending = false
 
     private var nowPlayingCenter: MPNowPlayingInfoCenter {
         playbackSession.nowPlayingInfoCenter
@@ -31,6 +33,8 @@ final class NowPlayingSession {
     init(player: AVPlayer) {
         playbackSession = MPNowPlayingSession(players: [player])
         playbackSession.automaticallyPublishesNowPlayingInfo = false
+        super.init()
+        playbackSession.delegate = self
         installRemoteCommands()
     }
 
@@ -42,7 +46,6 @@ final class NowPlayingSession {
     }
 
     func setTrack(_ track: Track, duration: TimeInterval, queueIndex: Int, queueCount: Int) {
-        playbackSession.becomeActiveIfPossible(completion: nil)
         representedTrackID = track.id
         artworkTask?.cancel()
         nowPlayingInfo = [
@@ -52,8 +55,8 @@ final class NowPlayingSession {
             MPMediaItemPropertyPlaybackDuration: max(duration, 0),
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
             MPNowPlayingInfoPropertyIsLiveStream: false,
-            MPNowPlayingInfoPropertyExternalContentIdentifier: "dizzylab:track:\(track.id)",
-            MPNowPlayingInfoCollectionIdentifier: "dizzylab:disc:\(track.discID)",
+            MPNowPlayingInfoPropertyExternalContentIdentifier: track.localSource.map { "neodizzy:local-track:\($0.trackID)" } ?? "dizzylab:track:\(track.id)",
+            MPNowPlayingInfoCollectionIdentifier: track.localSource.map { "neodizzy:local-album:\($0.albumID)" } ?? "dizzylab:disc:\(track.discID)",
             MPNowPlayingInfoPropertyPlaybackQueueIndex: max(queueIndex, 0),
             MPNowPlayingInfoPropertyPlaybackQueueCount: max(queueCount, 1),
         ]
@@ -73,7 +76,31 @@ final class NowPlayingSession {
         commandCenter.pauseCommand.isEnabled = isPlaying
     }
 
+    /// Called only after AVAudioSession is active and the player owns its item.
+    func activate() {
+        wantsActiveSession = true
+        requestActivation()
+    }
+
+    private func requestActivation() {
+        guard wantsActiveSession, representedTrackID != nil,
+              !playbackSession.isActive, playbackSession.canBecomeActive, !activationPending else { return }
+        activationPending = true
+        playbackSession.becomeActiveIfPossible { [weak self] active in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.activationPending = false
+                if active { self.nowPlayingCenter.nowPlayingInfo = self.nowPlayingInfo }
+            }
+        }
+    }
+
+    nonisolated func nowPlayingSessionDidChangeCanBecomeActive(_ nowPlayingSession: MPNowPlayingSession) {
+        Task { @MainActor [weak self] in self?.requestActivation() }
+    }
+
     func clear() {
+        wantsActiveSession = false
         representedTrackID = nil
         artworkTask?.cancel()
         artworkTask = nil

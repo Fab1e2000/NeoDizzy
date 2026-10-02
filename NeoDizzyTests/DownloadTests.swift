@@ -3,6 +3,34 @@ import Testing
 @testable import NeoDizzy
 
 struct DownloadTests {
+    @Test func parsesGiftSeparatelyFromAlbumFormats() throws {
+        let html = """
+        <a href="/albums/download_gift/TEST-001/?k=fixture&amp;v=2"><i class="fa fa-gift"></i></a>
+        <a href="/albums/download/?d=TEST-001&amp;tp=FLAC&amp;k=fixture">FLAC</a>
+        <a href="/albums/download_gift/OTHER/?k=fixture">Other</a>
+        <a href="https://evil.example/albums/download_gift/TEST-001/?k=fixture">Foreign</a>
+        <a href="/albums/download_gift/TEST-001/?k=duplicate">Duplicate</a>
+        """
+        let gifts = try DownloadPageParser.parse(html, discID: "TEST-001", gift: true)
+        #expect(gifts.count == 1)
+        #expect(gifts.first?.isGift == true)
+        #expect(gifts.first?.title == "下载特典")
+        #expect(try DownloadPageParser.parse(html, discID: "TEST-001").map(\.format) == ["FLAC"])
+    }
+
+    @Test(arguments: [
+        "http://www.dizzylab.net/albums/download_gift/TEST-001/?k=x",
+        "https://www.dizzylab.net:444/albums/download_gift/TEST-001/?k=x",
+        "https://evil@www.dizzylab.net/albums/download_gift/TEST-001/?k=x",
+        "https://www.dizzylab.net/albums/download_gift/OTHER/?k=x",
+        "https://www.dizzylab.net/albums/download_gift/TEST-001/?k=",
+        "https://www.dizzylab.net/albums/download_gift/TEST-001/?k=x&k=y",
+        "https://www.dizzylab.net/albums/download_gift/TEST-001/?k=x#fragment",
+    ])
+    func rejectsInvalidGiftLinks(_ string: String) throws {
+        #expect(DownloadPageParser.validatedGiftFormat(try #require(URL(string: string)), discID: "TEST-001") == nil)
+    }
+
     @Test func parsesDocumentedDownloadMenuAndRejectsForeignChoices() throws {
         let options = try DownloadPageParser.parse(Fixture.text("download-options.html"), discID: "TEST-001")
         #expect(options.map(\.format) == ["128", "MP3", "FLAC"])
@@ -218,4 +246,45 @@ nonisolated private final class DownloadFreshMenuProtocol: URLProtocol, @uncheck
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() { }
+}
+
+struct DownloadProgressThrottleTests {
+    @Test func fastTransferHasBoundedUpdatesAndImmediateCompletion() {
+        var throttle = DownloadProgressThrottle()
+        let id = UUID()
+        let start = ContinuousClock.now
+        var emissions = 0
+        for tick in 0..<10_000 {
+            if throttle.shouldEmit(id: id, written: Int64(tick), expected: 10_000,
+                                   now: start.advanced(by: .milliseconds(tick))) {
+                emissions += 1
+            }
+        }
+        #expect(emissions == 40)
+        let emitted1 = throttle.shouldEmit(id: id, written: 10_000, expected: 10_000,
+                                   now: start.advanced(by: .milliseconds(9_999)))
+        #expect(emitted1)
+        let emitted2 = !throttle.shouldEmit(id: id, written: 10_000, expected: 10_000,
+                                    now: start.advanced(by: .seconds(11)))
+        #expect(emitted2)
+    }
+
+    @Test func concurrentTransfersAndUnknownSizesDoNotFloodUI() {
+        var throttle = DownloadProgressThrottle()
+        let first = UUID(), second = UUID()
+        let start = ContinuousClock.now
+        let emitted3 = throttle.shouldEmit(id: first, written: 1, expected: -1, now: start)
+        #expect(emitted3)
+        let emitted4 = !throttle.shouldEmit(id: first, written: 2, expected: -1, now: start.advanced(by: .seconds(1)))
+        #expect(emitted4)
+        let emitted5 = throttle.shouldEmit(id: second, written: 1, expected: 100, now: start)
+        #expect(emitted5)
+        let emitted6 = !throttle.shouldEmit(id: second, written: 2, expected: 100, now: start.advanced(by: .milliseconds(20)))
+        #expect(emitted6)
+        let emitted7 = throttle.shouldEmit(id: first, written: 3, expected: 100, now: start.advanced(by: .milliseconds(20)))
+        #expect(emitted7)
+        throttle.finish(second)
+        let emitted8 = throttle.shouldEmit(id: second, written: 1, expected: 100, now: start.advanced(by: .milliseconds(30)))
+        #expect(emitted8)
+    }
 }

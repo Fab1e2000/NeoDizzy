@@ -15,6 +15,51 @@ final class PlayerStore {
     private(set) var issue: String?
     private(set) var repeatMode: RepeatMode = .off
     private var queue = PlaybackQueue()
+    private var loadedFileURL: URL?
+    private var tagWritePaths = Set<String>()
+
+    func holdsFile(_ url: URL) -> Bool {
+        let path = LocalLibraryScanner.canonical(url)
+        if let loadedFileURL, LocalLibraryScanner.canonical(loadedFileURL) == path { return true }
+        return isResolving && currentTrack.flatMap { resolver.localURL(for: $0) }.map { LocalLibraryScanner.canonical($0) == path } == true
+    }
+
+    func stopForTagEditing(_ url: URL) {
+        guard holdsFile(url) else { return }
+        pause()
+        loadGeneration += 1
+        loadTask?.cancel()
+        loadTask = nil
+        itemStatusObservation = nil
+        player.replaceCurrentItem(with: nil)
+        loadedFileURL = nil
+        resolver.releaseLocalAccess()
+        isResolving = false
+        isBuffering = false
+        pendingSeek = progress
+        saveState()
+    }
+
+    func beginTagWrite(_ url: URL) throws {
+        guard !holdsFile(url), !tagWritePaths.contains(LocalLibraryScanner.canonical(url)) else {
+            throw AudioTagError.message("请先停止此曲目的播放，再保存标签。")
+        }
+        tagWritePaths.insert(LocalLibraryScanner.canonical(url))
+    }
+    func endTagWrite(_ url: URL) { tagWritePaths.remove(LocalLibraryScanner.canonical(url)) }
+
+    func refreshMetadata(_ tracks: [Track]) {
+        let replacements = Dictionary(tracks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        queue.updateMetadata(replacements)
+        if let id = currentTrack?.id, let updated = replacements[id] {
+            currentTrack = updated
+            nowPlaying.setTrack(updated, duration: duration > 0 ? duration : updated.duration ?? 0,
+                                queueIndex: queue.position, queueCount: queue.tracks.count)
+            updateNowPlaying()
+        }
+        saveState()
+    }
+
     private(set) var isDiscovery = false
     private var isFetchingDiscovery = false
     @ObservationIgnored private var discoveryTask: Task<Void, Never>?
@@ -254,6 +299,22 @@ final class PlayerStore {
     private func load(autoplay: Bool, startAt position: TimeInterval = 0, preferLocal: Bool = true) {
         loadTask?.cancel()
         guard let track = queue.currentTrack else { return }
+        if let url = resolver.localURL(for: track), tagWritePaths.contains(LocalLibraryScanner.canonical(url)) {
+            loadGeneration += 1
+            player.pause()
+            itemStatusObservation = nil
+            player.replaceCurrentItem(with: nil)
+            loadedFileURL = nil
+            resolver.releaseLocalAccess()
+            currentTrack = track
+            isPlaying = false
+            isResolving = false
+            isBuffering = false
+            progress = position
+            issue = "此曲目正在保存标签，请稍后播放。"
+            updateNowPlaying()
+            return
+        }
         if retriedTrackID != track.id {
             retriedTrackID = nil
         }
@@ -272,6 +333,7 @@ final class PlayerStore {
         isResolving = true
         itemStatusObservation = nil
         player.replaceCurrentItem(with: nil)
+        loadedFileURL = nil
         nowPlaying.setTrack(
             track,
             duration: track.duration ?? 0,
@@ -294,6 +356,11 @@ final class PlayerStore {
 
     private func start(url: URL, generation: Int) {
         guard generation == loadGeneration else { return }
+        if url.isFileURL, tagWritePaths.contains(LocalLibraryScanner.canonical(url)) {
+            fail(with: "此曲目正在保存标签，请稍后播放。", generation: generation)
+            return
+        }
+        loadedFileURL = url.isFileURL ? url : nil
         isResolving = false
         loadedLocalFile = url.isFileURL
         isPreview = DizzyURL.isPreviewStream(url)
@@ -321,6 +388,7 @@ final class PlayerStore {
     private func activateAndPlay() {
         do {
             try AudioSessionConfigurator.activate()
+            nowPlaying.activate()
         } catch {
             debugLog("激活音频会话失败：\(error)")
         }
