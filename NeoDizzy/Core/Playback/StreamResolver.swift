@@ -9,17 +9,24 @@ final class StreamResolver {
     private var cache: [String: [String: URL]] = [:]
     private let fetch: (String) async throws -> [String: URL]
     private let now: () -> Date
+    private var retainedAccess: OfflineFolderAccess?
+    private let localAccess: (Track) -> OfflineFolderAccess?
     private let localFile: (Track) -> URL?
 
     init(
         fetch: @escaping (String) async throws -> [String: URL] = { try await DizzyAPI.shared.discDetail(id: $0, fresh: true).streams },
         now: @escaping () -> Date = Date.init,
-        localFile: @escaping (Track) -> URL? = { _ in nil }
+        localFile: @escaping (Track) -> URL? = { _ in nil },
+        localAccess: @escaping (Track) -> OfflineFolderAccess? = { _ in nil }
     ) {
         self.fetch = fetch
         self.now = now
         self.localFile = localFile
+        self.localAccess = localAccess
     }
+
+    func localURL(for track: Track) -> URL? { localFile(track) }
+    func releaseLocalAccess() { retainedAccess = nil }
 
     /// 专辑页已经拿到的地址，直接放进缓存，播放时不用再请求一次。
     func store(_ streams: [String: URL], for discID: String) {
@@ -30,10 +37,13 @@ final class StreamResolver {
     func stream(for track: Track, preferLocal: Bool = true) async throws -> URL {
         // 每次换曲目都重新查询：刚下载的曲目立即可播，移走的文件可回退到串流。
         // 本地地址不放入签名地址缓存，也不受登录/退出登录的缓存清理影响。
-        if preferLocal, let url = localFile(track), url.isFileURL,
+        if (preferLocal || track.localSource != nil), let url = localFile(track), url.isFileURL,
            FileManager.default.isReadableFile(atPath: url.path) {
+            retainedAccess = localAccess(track)
             return url
         }
+        if track.localSource != nil { throw PlaybackError.localUnavailable }
+        retainedAccess = nil
         if let url = cache[track.discID]?[track.number], isFresh(url) {
             return url
         }
@@ -65,10 +75,12 @@ final class StreamResolver {
 nonisolated enum PlaybackError: LocalizedError, Equatable {
     case unavailable
     case failed
+    case localUnavailable
 
     var errorDescription: String? {
         switch self {
         case .unavailable: String(localized: "这首曲目暂时无法播放")
+        case .localUnavailable: String(localized: "本地音频无法访问，请检查文件是否存在并重新授权扫描目录")
         case .failed: String(localized: "播放失败，请稍后重试")
         }
     }

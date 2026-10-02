@@ -15,6 +15,8 @@ configFiles:
   Release: Config/Signing.xcconfig
 
 packages:
+  AudioTags:
+    path: Packages/AudioTags
   # HTML 解析：社团页、标签页、搜索、pack 等没有 JSON 接口的页面。
   SwiftSoup:
     url: https://github.com/scinfu/SwiftSoup
@@ -47,6 +49,8 @@ targets:
       - path: NeoDizzy
         type: syncedFolder
     dependencies:
+      - package: AudioTags
+        product: AudioTagBridge
       - package: SwiftSoup
       - package: Nuke
         products: [Nuke, NukeUI]

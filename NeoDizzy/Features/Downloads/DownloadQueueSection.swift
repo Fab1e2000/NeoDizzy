@@ -21,8 +21,7 @@ struct DownloadJobRow: View {
 
     private var retryUnavailableReason: String? {
         if offline.folderName == nil { return "请先选择音乐文件夹" }
-        if offline.album(id: job.discID) != nil { return "专辑已下载" }
-        if downloads.jobs.contains(where: { $0.discID == job.discID && $0.isActive }) {
+        if downloads.jobs.contains(where: { $0.discID == job.discID && $0.isGift == job.isGift && $0.isActive }) {
             return "这张专辑已有下载任务"
         }
         if offline.isScanning { return "请等待文件夹扫描完成" }
@@ -63,19 +62,29 @@ struct DownloadJobRow: View {
                 }
             }
             if job.isActive {
-                if let progress = job.progress {
-                    ProgressView(value: progress)
-                        .tint(DizzyPalette.download)
-                        .accessibilityLabel("\(job.title) 下载进度")
-                        .accessibilityValue(progress.formatted(.percent.precision(.fractionLength(0))))
-                } else {
-                    ProgressView()
-                        .accessibilityLabel(job.statusText)
-                }
+                DownloadJobProgressView(job: job)
             }
         }
         .padding(14)
         .background(DizzyPalette.surface, in: .rect(cornerRadius: 12))
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// A separate observation boundary keeps high-frequency progress out of row/page layout.
+private struct DownloadJobProgressView: View {
+    let job: DownloadJob
+    @Environment(DownloadStore.self) private var downloads
+
+    var body: some View {
+        if let fraction = downloads.progress(for: job).fraction {
+            ProgressView(value: fraction)
+                .tint(DizzyPalette.download)
+                .accessibilityLabel("\(job.title) 下载进度")
+                .accessibilityValue(fraction.formatted(.percent.precision(.fractionLength(0))))
+        } else {
+            ProgressView()
+                .accessibilityLabel(job.statusText)
+        }
     }
 }

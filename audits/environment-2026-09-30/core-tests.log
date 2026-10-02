@@ -1,0 +1,536 @@
+测试核心解析、下载、离线目录与队列逻辑；iOS 后台唤醒、文件授权和播放仍需设备验收。
+Fetching https://github.com/weichsel/ZIPFoundation from cache
+Fetching https://github.com/scinfu/SwiftSoup from cache
+Fetched https://github.com/scinfu/SwiftSoup from cache (2.93s)
+Fetched https://github.com/weichsel/ZIPFoundation from cache (2.96s)
+Computing version for https://github.com/weichsel/ZIPFoundation
+warning: 'zipfoundation': /Package@swift-5.9.swift:23:61: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+21 |     name: "ZIPFoundation",
+22 |     platforms: [
+23 |         .macOS(.v10_13), .iOS(.v12), .tvOS(.v12), .watchOS(.v4), .visionOS(.v1)
+   |                                                             `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+24 |     ],
+25 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Computed https://github.com/weichsel/ZIPFoundation at 0.9.20 (4.80s)
+Computing version for https://github.com/scinfu/SwiftSoup
+Computed https://github.com/scinfu/SwiftSoup at 2.13.9 (0.76s)
+Creating working copy for https://github.com/weichsel/ZIPFoundation
+Working copy of https://github.com/weichsel/ZIPFoundation resolved at 0.9.20
+Creating working copy for https://github.com/scinfu/SwiftSoup
+Working copy of https://github.com/scinfu/SwiftSoup resolved at 2.13.9
+warning: 'zipfoundation': /private/var/folders/hh/7ptm1jpx2yjd35t2bgczks9m0000gn/T/neodizzy-core-tests-m8lw69p_/.build/checkouts/ZIPFoundation/Package@swift-5.9.swift:23:61: warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+21 |     name: "ZIPFoundation",
+22 |     platforms: [
+23 |         .macOS(.v10_13), .iOS(.v12), .tvOS(.v12), .watchOS(.v4), .visionOS(.v1)
+   |                                                             `- warning: 'v4' is deprecated: watchOS 9.0 is the oldest supported version [#DeprecatedDeclaration]
+24 |     ],
+25 |     products: [
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+Building for debugging...
+[Computing dependencies]
+[Constructing description]
+[Pre-planning 1 / 185]
+[Planning deferred tasks]
+[58 / 107] ZIPFoundation_ZIPFoundation
+[61 / 107] NeoDizzyCoreChecks_NeoDizzyTests
+[62 / 107] NeoDizzyCoreChecks_NeoDizzyTests
+[65 / 107] ZIPFoundation_ZIPFoundation
+[66 / 107]
+[68 / 109] ZIPFoundation
+[82 / 201]
+[88 / 201]
+[92 / 201]
+[102 / 201]
+[105 / 201]
+[107 / 201]
+[115 / 201]
+[118 / 201]
+[122 / 201]
+[126 / 201]
+[132 / 201]
+[136 / 201]
+[138 / 201]
+[149 / 201] ZIPFoundation
+[150 / 201] ZIPFoundation
+[161 / 201] ZIPFoundation-product
+[162 / 201] ZIPFoundation
+[163 / 201] ZIPFoundation
+[166 / 201] SwiftSoup
+[166 / 201] ZIPFoundation
+[175 / 202] SwiftSoup
+[175 / 202] NeoDizzy
+[178 / 216]
+[183 / 216] NeoDizzy
+[183 / 216] SwiftSoup
+[185 / 216] NeoDizzy
+[186 / 216] NeoDizzy
+[188 / 216] NeoDizzy
+[195 / 216] NeoDizzy
+[197 / 216] NeoDizzy
+[200 / 216] SwiftSoup
+[206 / 217] NeoDizzyTests-product
+[207 / 230]
+[219 / 230] NeoDizzyTests-product
+[224 / 230] NeoDizzyTests-product
+[226 / 230] NeoDizzyTests-product
+Build complete! (23.91秒)
+Test Suite 'All tests' started at 2026-09-30 14:58:52.212.
+Test Suite 'All tests' passed at 2026-09-30 14:58:52.212.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+◇ Test run started.
+↳ Testing Library Version: 2084
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite PurchaseTests started.
+◇ Suite CredentialsTests started.
+◇ Suite CheckoutNavigationTests started.
+◇ Suite StreamResolverTests started.
+◇ Suite PurchaseConfirmationTests started.
+◇ Suite OfflineLibraryStoreTests started.
+◇ Suite DownloadBackgroundBridgeTests started.
+◇ Suite PageParserTests started.
+◇ Suite CommunityTests started.
+◇ Suite PurchaseStoreTests started.
+◇ Suite OfflineManifestTests started.
+◇ Suite AccountParserTests started.
+◇ Suite AlipayReturnRouterTests started.
+◇ Suite JSONDecodingTests started.
+◇ Suite PlaybackQueueTests started.
+◇ Suite AccountNetworkTests started.
+◇ Suite DizzyURLTests started.
+◇ Suite CommunityNetworkTests started.
+◇ Suite FeedPaginationTests started.
+◇ Suite BrowsingHistoryTests started.
+◇ Suite DownloadTests started.
+◇ Test fetchesOfferWithoutCacheAndRejectsExpiredSession() started.
+◇ Test rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test ownedAlbumUsesAdditionalSupportForm() started.
+◇ Test validatesMinimumAndWebsiteUTF16CommentLimit() started.
+◇ Test exactAmountsIncrementsAndBounds() started.
+◇ Test checkoutURLPreservesSpecialCharactersWithoutQueryInjection() started.
+◇ Test parsesCurrentPurchaseSaleAndFreeOffers() started.
+◇ Test blankFramesArePermittedWithoutReplacingCheckout() started.
+◇ Test returningToSiteIsOnlyARecheckSignal() started.
+◇ Test snapshotRoundTrips() started.
+◇ Test siteAndAlipayHTTPSStayInWebView(_:) started.
+◇ Test tokenIsRedactedInLogs() started.
+◇ Test cookieSnapshotIncludesOnlyLiveSiteCookiesAndNeverAPIToken() started.
+◇ Test hiddenFormsDoNotEnableRedeemOnlyOrPhysicalPurchases() started.
+◇ Test storesCookiesAndBuildsHeader() started.
+◇ Test accountChangeRejectsAllEvidenceIncludingNewOwnership() started.
+◇ Test rejectsLoginMalformedPriceWrongAlbumAndChangedCheckout() started.
+◇ Test selectedFolderBookmarkRestoresLibraryInNewStore() started.
+◇ Test otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test siteErrorPageIsAParsingFailure() started.
+◇ Suite AudioFileMatcherTests started.
+◇ Test expiredCookieRemovesTheOldOne() started.
+◇ Test separatesBoostTabAndRecognizesEmptyOrderList() started.
+◇ Test priorOwnershipNeverConfirmsBoost() started.
+◇ Test discPageGivesTrackDurations() started.
+◇ Test completesExactlyOnceInEitherCallbackOrder() started.
+◇ Test observedBoostOrderFormatConfirmsMatchingPendingSupport() started.
+◇ Test homeHasDealsAndPacks() started.
+◇ Test localFileWinsOverPreviewAndDoesNotNeedNetworkOrLogin() started.
+◇ Test parsesObservedPaidOrderCardWithSyntheticValues() started.
+◇ Test missingTrackIsUnavailable() started.
+◇ Test searchHasLabelsAndDiscsButSkipsUsers() started.
+◇ Test tagPageHasOnePageOfDiscs() started.
+◇ Test labelPageHasProfilePacksAndAllDiscs() started.
+◇ Test usesAddressFromDiscPageWhileFresh() started.
+◇ Test brokenLocalFileCanBeBypassedForSingleRetry() started.
+◇ Test refetchesShortlyBeforeExpiry() started.
+◇ Test existingOrderAndWrongTabCannotConfirmBoost() started.
+◇ Test removedLocalFileFallsBackToNetwork() started.
+◇ Test packPageListsIncludedDiscsAndPrice() started.
+◇ Test onlyAlipaySchemesOpenAnotherApp(_:) started.
+◇ Test onlyOwnershipTransitionConfirmsInitialPurchase() started.
+◇ Test paginatedBaselineNeedsRecentOrderTimestamp() started.
+◇ Test historicalCartAndUnrecognizedOrderIDsRemainInBaselineWithoutConfirmationEvidence() started.
+◇ Test differentAccountsKeepSeparatePendingPaymentsAcrossRestartAndForget() started.
+◇ Test loginPageHasCSRFToken() started.
+◇ Test anonymousHomeHasNoUser() started.
+◇ Test accountMismatchCannotBeginPayment() started.
+◇ Test beginningAnotherPaymentKeepsOriginalPendingAttempt() started.
+◇ Test paidOrderRequiresKnownBaselineAndExactProductTypeAmount() started.
+◇ Test loggedInHomeGivesUserIDAndAvatar() started.
+◇ Test newlyOwnedAlbumConfirmsAndStopsFurtherPolling() started.
+◇ Test duplicateDiscIDsAreNotChosenByEnumerationOrder() started.
+◇ Test malformedOrForeignPaidOrderPageCannotYieldSuccessEvidence() started.
+◇ Test feedGroupsDecode() started.
+◇ Test loginErrorMessageDropsCloseButton() started.
+◇ Test capturedOrderIDMustMatchExactly() started.
+◇ Test csrfAndCommentOwnershipRequireVisibleControls() started.
+◇ Test commentsKeepAuthorAndTextAligned() started.
+◇ Test pausingOrForgettingInvalidatesLateOwnershipResponse(forget:) started.
+◇ Test apparentlyCompleteBaselineCannotReviveAnOlderOmittedOrder() started.
+◇ Test pendingAttemptPersistsOnlyConfirmationMetadata() started.
+◇ Test pageWithoutTokenScriptHasNoToken() started.
+◇ Test orderNumberKindMustMatchPageKind() started.
+◇ Test purchasesPageHasProfileTokenAndDiscs() started.
+◇ Test independentlyCancelledRequestLeavesNoEndlessCheckingState() started.
+◇ Test alreadyOwnedAlbumNeverConfirmsBoostWithoutANewPaidOrder() started.
+◇ Test followUsesObservedSamePageQueryOnly() started.
+◇ Test failedMatchingDoesNotLeavePartialAlbum() started.
+◇ Test rejectsTraversalAndAbsolutePaths() started.
+◇ Test shuffleRejectsUntrustedStreamsAndKeepsTrackNumber() started.
+◇ Test safeNamesCannotCreateExtraDirectoriesAndFitFilesystemLimit() started.
+◇ Test changesOnlyOuterCallbackSchemeAndPreservesOrderExactly(_:) started.
+◇ Test parsesRankReviewAndEmptyProfileFromPageStructure() started.
+◇ Test switchingAccountsIgnoresInflightResultButRetainsOriginalMetadata() started.
+◇ Test duplicateRoutingMetadataIsNotGuessed() started.
+◇ Test refusesOverwriteAndKeepsExistingAlbumIntact() started.
+◇ Test unsupportedShapesAreNotModified(_:) started.
+◇ Test restoredMetadataWaitsForExplicitCheckAndConcurrentChecksShareOnePoll() started.
+◇ Test reviewsRejectPartialParallelArrays() started.
+◇ Test staleResponseOrFutureBaselineCannotConfirm() started.
+◇ Test confirmingOneAccountPreservesOthersAndOnlyKeepsSuccessInMemory() started.
+◇ Test replacesExistingRoutingMetadataWithoutReserializingOtherParameters() started.
+◇ Test networkFailureOrCancelledEvidenceDoesNotConfirmAnything() started.
+◇ Test rejectsSymlinkEscapeBeforeMissingDescendants() started.
+◇ Test relativePathsAcceptSystemAliasesAndDirectoryTrailingSlash() started.
+◇ Test cancellationAfterCommitKeepsReturnedAlbumPlayable() started.
+◇ Test cancelledImportDoesNotCommit() started.
+◇ Test priceFollowsSiteRules(price:onSell:preselling:expected:) started.
+◇ Test rejectsDanglingSymlinkAndItsMissingDescendants() started.
+◇ Test legacyPendingPaymentMigratesWithoutOverwritingAnotherAccount() started.
+◇ Test pricesDropTrailingZeros() started.
+◇ Test rewritingAnAlreadyPreparedEnvelopeIsIdempotent() started.
+◇ Test labelListCompletesRelativeCoverPaths() started.
+◇ Test rejectsFutureManifestVersionAndDuplicateTrackFiles() started.
+◇ Test rootAliasAllowsMissingDescendantsAndPreservesSelectedURL() started.
+◇ Test unknownPriceCannotBeMistakenForZeroAndPaginationIsDetected() started.
+◇ Test missingOrDifferentEnvelopeFieldsAreNotModified() started.
+◇ Test importWritesManifestAndRestoresCompleteOfflineDetail() started.
+◇ Test callbackIsOnlyARecheckSignalRegardlessOfClaimedResult(_:) started.
+◇ Test discDetailSplitsTracksAndSignedStreams() started.
+◇ Test rejectsSymlinkEscapeDuringManifestValidationAndImport() started.
+◇ Test unrelatedCallbacksAreIgnored(_:) started.
+◇ Test restoreKeepsValidShuffleOrderAndRepairsBrokenOne() started.
+◇ Test upcomingFollowsPlayOrderAndWrapsWhenRepeatingAll() started.
+◇ Test discListMapsFieldsAndPrices() started.
+◇ Test importsAndPlaysAlbumThroughSelectedRootAlias() started.
+◇ Test missingAudioSkipsAlbumWithIssue() started.
+◇ Test selectingFromQueueKeepsShuffleOrder() started.
+◇ Test wrapsAroundWhenRepeatingAll() started.
+◇ Test rejectsUnexpectedOriginComponentsEvenForValidEnvelope() started.
+◇ Test pathSegmentsAndQueryValuesAreFullyEscaped() started.
+◇ Test traversalInsideManifestIsNotPlayable() started.
+◇ Test movesThroughQueueAndStopsAtEndsWithoutWrapping() started.
+◇ Test suppliesCallbackForBrowserEnvelopeWithoutSourceScheme() started.
+◇ Test emptyAndPlaceholderImagesAreIgnored() started.
+◇ Test snapshotRoundTripsWithoutStreamURLs() started.
+◇ Test streamURLTellsPreviewAndExpiry() started.
+◇ Test likeIsConfirmedByFreshReadAndNotRetried() started.
+◇ Test absoluteCoverWithChineseFileNameIsEscaped() started.
+◇ Test shuffleStartsFromCurrentTrackAndVisitsEveryTrackOnce() started.
+◇ Test parsesDocumentedDownloadMenuAndRejectsForeignChoices() started.
+◇ Test relativeCoverPathsGoToCDNWithThumbnailStyle() started.
+◇ Test duplicateOnlyPageDoesNotEndPagination() started.
+◇ Test extractsSupportedFilenameEncodings(_:_:) started.
+◇ Test visitsPersistDeduplicateAndEnrichmentDoesNotReorder() started.
+◇ Test case passing 1 argument text → "" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test case passing 1 argument text → "-1" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test case passing 1 argument text → "NaN" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test refetchesAfterPlaybackFailure() started.
+◇ Test case passing 1 argument text → "+1" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test case passing 1 argument text → "Infinity" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test loginStoresSessionAndToken() started.
+◇ Test rejectsDangerousOrDamagedArchivesAndRemovesPartialOutput(_:) started.
+◇ Test case passing 1 argument text → "1e2" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test case passing 1 argument text → "1,000" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test case passing 1 argument text → "0.001" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test capsHistoryAndSurvivesCorruptStorage() started.
+◇ Test linkHelpersReadIDsFromSiteHrefs() started.
+◇ Test resolvesAmbiguousJapaneseEncodingWithPublishedTrackTitle() started.
+◇ Test case passing 1 argument text → "1." to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test case passing 1 argument text → ".5" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test sameLabelAppearsOnceWithinAndAcrossPages() started.
+◇ Test case passing 1 argument text → "１" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test rejectsUnsafePaths(_:) started.
+◇ Test case passing 1 argument text → "1000000" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test case passing 1 argument string → "https://mclient.alipay.com/h5pay/landing" to siteAndAlipayHTTPSStayInWebView(_:) started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net/d/sample/" to siteAndAlipayHTTPSStayInWebView(_:) started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net/albums/checkout_alipay/?id=sample&type=dig" to siteAndAlipayHTTPSStayInWebView(_:) started.
+◇ Test case passing 1 argument string → "https://excashier.alipay.com/standard/auth.htm" to siteAndAlipayHTTPSStayInWebView(_:) started.
+◇ Test case passing 1 argument text → "9999999999999999999999999999999999" to rejectsInvalidOrOverpreciseAmounts(_:) started.
+◇ Test resolvesHeadersWithoutDownloadingTheBody() started.
+◇ Test case passing 1 argument string → "https://alipay.com/" to siteAndAlipayHTTPSStayInWebView(_:) started.
+◇ Test permitsUnicodeAndNormalDirectories() started.
+◇ Test rejectsHTMLResponseAndSizeLimitBeforeImport() started.
+◇ Test fetchesFreshDownloadMenuWithSessionAndNoCacheReuse() started.
+◇ Test resolverRejectsHTMLAndStripsCredentialsFromCDNRequests() started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net.example.com/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "https://cdn.dizzylab.net/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "https://fakealipay.com/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net@evil.example/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test validatesWholeDownloadURL(_:) started.
+◇ Test case passing 1 argument string → "http://www.dizzylab.net/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "https://user@www.dizzylab.net/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "http://mclient.alipay.com/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "javascript:alert(1)" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "https://alipay.com.example.com/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "https://example.com/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "about:blank" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test cancellationDoesNotLeaveAnExtractedLibrary() started.
+◇ Test case passing 1 argument string → "tel:123" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test persistedJobsContainMetadataAndNoSignedStreams() started.
+◇ Test case passing 1 argument string → "weixin://pay" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "alipays://platformapi/startapp?appId=20000067" to onlyAlipaySchemesOpenAnotherApp(_:) started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net:8080/" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "file:///tmp/payment.html" to otherOriginsAndSchemesAreBlocked(_:) started.
+◇ Test case passing 1 argument string → "alipay://platformapi/startapp" to onlyAlipaySchemesOpenAnotherApp(_:) started.
+◇ Test case passing 1 argument forget → true to pausingOrForgettingInvalidatesLateOwnershipResponse(forget:) started.
+◇ Test case passing 1 argument forget → false to pausingOrForgettingInvalidatesLateOwnershipResponse(forget:) started.
+◇ Test case passing 1 argument scheme → "alipay" to changesOnlyOuterCallbackSchemeAndPreservesOrderExactly(_:) started.
+◇ Test case passing 1 argument scheme → "alipays" to changesOnlyOuterCallbackSchemeAndPreservesOrderExactly(_:) started.
+◇ Test case passing 1 argument string → "alipays://platformapi/startapp?appId=20000067&url=https%3A%2F%2Fexample.com" to unsupportedShapesAreNotModified(_:) started.
+◇ Test case passing 1 argument string → "alipay://alipayclient/?%5B%5D" to unsupportedShapesAreNotModified(_:) started.
+◇ Test case passing 1 argument string → "alipay://alipayclient/?not-json" to unsupportedShapesAreNotModified(_:) started.
+◇ Test case passing 1 argument string → "alipay://alipayclient/?dataString=order&fromAppUrlScheme=alipays" to unsupportedShapesAreNotModified(_:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://safepay/" to unsupportedShapesAreNotModified(_:) started.
+◇ Test case passing 1 argument string → "alipay://alipayclient.evil.example/" to unsupportedShapesAreNotModified(_:) started.
+◇ Test case passing 1 argument string → "https://mclient.alipay.com/h5pay/landing?return_url=https%3A%2F%2Fwww.dizzylab.net" to unsupportedShapesAreNotModified(_:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://safepay" to callbackIsOnlyARecheckSignalRegardlessOfClaimedResult(_:) started.
+◇ Test case passing 4 arguments price → 30.0, onSell → false, preselling → false, expected → .redeem to priceFollowsSiteRules(price:onSell:preselling:expected:) started.
+◇ Test case passing 4 arguments price → 0.0, onSell → true, preselling → false, expected → .free to priceFollowsSiteRules(price:onSell:preselling:expected:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://other" to unrelatedCallbacksAreIgnored(_:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://safepay/?resultStatus=6001" to callbackIsOnlyARecheckSignalRegardlessOfClaimedResult(_:) started.
+◇ Test case passing 4 arguments price → 0.0, onSell → false, preselling → false, expected → .free to priceFollowsSiteRules(price:onSell:preselling:expected:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://safepay/extra" to unrelatedCallbacksAreIgnored(_:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://safepay.evil/" to unrelatedCallbacksAreIgnored(_:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://user@safepay/" to unrelatedCallbacksAreIgnored(_:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://safepay/?resultStatus=9000" to callbackIsOnlyARecheckSignalRegardlessOfClaimedResult(_:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://safepay/#other" to unrelatedCallbacksAreIgnored(_:) started.
+◇ Test case passing 1 argument string → "https://safepay/" to unrelatedCallbacksAreIgnored(_:) started.
+◇ Test case passing 1 argument string → "neodizzy-pay://safepay:12/" to unrelatedCallbacksAreIgnored(_:) started.
+◇ Test case passing 1 argument string → "alipay://safepay/" to unrelatedCallbacksAreIgnored(_:) started.
+◇ Test case passing 2 arguments fixture → "download-gbk.zip", filename → "01. 星光.mp3" to extractsSupportedFilenameEncodings(_:_:) started.
+◇ Test case passing 4 arguments price → 30.0, onSell → false, preselling → true, expected → .price(30.0) to priceFollowsSiteRules(price:onSell:preselling:expected:) started.
+◇ Test case passing 2 arguments fixture → "download-shiftjis.zip", filename → "01. ｦ.mp3" to extractsSupportedFilenameEncodings(_:_:) started.
+◇ Test case passing 4 arguments price → 30.0, onSell → true, preselling → false, expected → .price(30.0) to priceFollowsSiteRules(price:onSell:preselling:expected:) started.
+◇ Test case passing 1 argument fixture → "download-traversal.zip" to rejectsDangerousOrDamagedArchivesAndRemovesPartialOutput(_:) started.
+◇ Test case passing 1 argument fixture → "download-symlink.zip" to rejectsDangerousOrDamagedArchivesAndRemovesPartialOutput(_:) started.
+◇ Test case passing 2 arguments fixture → "download-utf8.zip", filename → "专辑/01. 星光.mp3" to extractsSupportedFilenameEncodings(_:_:) started.
+◇ Test case passing 1 argument path → "nested/../../escape" to rejectsUnsafePaths(_:) started.
+◇ Test case passing 1 argument path → "a\..\b" to rejectsUnsafePaths(_:) started.
+◇ Test case passing 1 argument fixture → "download-bad-crc.zip" to rejectsDangerousOrDamagedArchivesAndRemovesPartialOutput(_:) started.
+◇ Test case passing 1 argument path → "/absolute" to rejectsUnsafePaths(_:) started.
+◇ Test case passing 1 argument path → "C:/Windows/file" to rejectsUnsafePaths(_:) started.
+◇ Test case passing 1 argument path → "a◇ Test rejectsConflictingTrackNumberAndKnownTitle() started.
+◇ Test case passing 1 argument path → "a/./b" to rejectsUnsafePaths(_:) started.
+◇ Test rejectsMultipleFormatsAndDuplicateNumbers() started.
+◇ Test case passing 1 argument path → "a//b" to rejectsUnsafePaths(_:) started.
+◇ Test case passing 1 argument path → "../escape" to rejectsUnsafePaths(_:) started.
+◇ Test acceptsExplicitBareTrackNumbers() started.
+◇ Test rejectsMissingTrack() started.
+◇ Test case passing 1 argument string → "http://www.dizzylab.net/albums/download/?d=TEST-001&tp=MP3&k=x" to validatesWholeDownloadURL(_:) started.
+◇ Test oneFileCannotServeTwoIdenticallyNamedTracks() started.
+◇ Test case passing 1 argument string → "https://evil@www.dizzylab.net/albums/download/?d=TEST-001&tp=MP3&k=x" to validatesWholeDownloadURL(_:) started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net/other/?d=TEST-001&tp=MP3&k=x" to validatesWholeDownloadURL(_:) started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net/albums/download/?d=TEST-001&tp=MP3&tp=128&k=x" to validatesWholeDownloadURL(_:) started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net:444/albums/download/?d=TEST-001&tp=MP3&k=x" to validatesWholeDownloadURL(_:) started.
+◇ Test matchesChineseTitlesAndNestedNumberedFilesWithoutDependingOnOrder() started.
+◇ Test neverAssignsAlphabeticalFilesByPosition() started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net/albums/download/?d=TEST-001&tp=MP3&k=" to validatesWholeDownloadURL(_:) started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net/albums/download/?d=TEST-001&tp=MP3&k=x#fragment" to validatesWholeDownloadURL(_:) started.
+◇ Test supportsFullWidthAndTrackPrefixes() started.
+◇ Test matchesTitlesWithoutNumbersAndUnicodeEquivalentNames() started.
+◇ Test numericSongTitlesRemainTitles() started.
+◇ Test case passing 1 argument string → "https://www.dizzylab.net/albums/download/?d=TEST-001&d=other&tp=MP3&k=x" to validatesWholeDownloadURL(_:) started.
+✔ Test localFileWinsOverPreviewAndDoesNotNeedNetworkOrLogin() passed after 0.010 seconds.
+✔ Test usesAddressFromDiscPageWhileFresh() passed after 0.012 seconds.
+✔ Test refetchesShortlyBeforeExpiry() passed after 0.012 seconds.
+✔ Test brokenLocalFileCanBeBypassedForSingleRetry() passed after 0.012 seconds.
+✔ Test removedLocalFileFallsBackToNetwork() passed after 0.012 seconds.
+✔ Test refetchesAfterPlaybackFailure() passed after 0.019 seconds.
+✔ Test missingTrackIsUnavailable() passed after 0.024 seconds.
+✔ Suite StreamResolverTests passed after 0.025 seconds.
+✔ Test newlyOwnedAlbumConfirmsAndStopsFurtherPolling() passed after 0.215 seconds.
+✔ Test alreadyOwnedAlbumNeverConfirmsBoostWithoutANewPaidOrder() passed after 0.287 seconds.
+✔ Test independentlyCancelledRequestLeavesNoEndlessCheckingState() passed after 0.322 seconds.
+✔ Test resolvesHeadersWithoutDownloadingTheBody() passed after 0.333 seconds.
+✔ Test confirmingOneAccountPreservesOthersAndOnlyKeepsSuccessInMemory() passed after 0.336 seconds.
+✔ Test extractsSupportedFilenameEncodings(_:_:) with 3 test cases passed after 0.409 seconds.
+✔ Test rejectsDangerousOrDamagedArchivesAndRemovesPartialOutput(_:) with 3 test cases passed after 0.412 seconds.
+✔ Test ownedAlbumUsesAdditionalSupportForm() passed after 0.417 seconds.
+✔ Test rejectsInvalidOrOverpreciseAmounts(_:) with 13 test cases passed after 0.417 seconds.
+✔ Test exactAmountsIncrementsAndBounds() passed after 0.417 seconds.
+✔ Test snapshotRoundTrips() passed after 0.417 seconds.
+✔ Test siteAndAlipayHTTPSStayInWebView(_:) with 5 test cases passed after 0.417 seconds.
+✔ Test blankFramesArePermittedWithoutReplacingCheckout() passed after 0.417 seconds.
+✔ Test parsesCurrentPurchaseSaleAndFreeOffers() passed after 0.417 seconds.
+✔ Test tokenIsRedactedInLogs() passed after 0.417 seconds.
+✔ Test validatesMinimumAndWebsiteUTF16CommentLimit() passed after 0.417 seconds.
+✔ Test siteErrorPageIsAParsingFailure() passed after 0.417 seconds.
+✔ Test hiddenFormsDoNotEnableRedeemOnlyOrPhysicalPurchases() passed after 0.417 seconds.
+✔ Test storesCookiesAndBuildsHeader() passed after 0.417 seconds.
+✔ Test rejectsLoginMalformedPriceWrongAlbumAndChangedCheckout() passed after 0.417 seconds.
+✔ Test observedBoostOrderFormatConfirmsMatchingPendingSupport() passed after 0.417 seconds.
+✔ Test discPageGivesTrackDurations() passed after 0.417 seconds.
+✔ Test expiredCookieRemovesTheOldOne() passed after 0.417 seconds.
+✔ Test priorOwnershipNeverConfirmsBoost() passed after 0.417 seconds.
+✔ Test homeHasDealsAndPacks() passed after 0.417 seconds.
+✔ Test separatesBoostTabAndRecognizesEmptyOrderList() passed after 0.417 seconds.
+✔ Test completesExactlyOnceInEitherCallbackOrder() passed after 0.417 seconds.
+✔ Test searchHasLabelsAndDiscsButSkipsUsers() passed after 0.417 seconds.
+✔ Test cookieSnapshotIncludesOnlyLiveSiteCookiesAndNeverAPIToken() passed after 0.417 seconds.
+✔ Test accountChangeRejectsAllEvidenceIncludingNewOwnership() passed after 0.417 seconds.
+✔ Test checkoutURLPreservesSpecialCharactersWithoutQueryInjection() passed after 0.417 seconds.
+✔ Test returningToSiteIsOnlyARecheckSignal() passed after 0.417 seconds.
+✔ Test tagPageHasOnePageOfDiscs() passed after 0.417 seconds.
+✔ Test parsesObservedPaidOrderCardWithSyntheticValues() passed after 0.417 seconds.
+✔ Suite DownloadBackgroundBridgeTests passed after 0.418 seconds.
+✔ Suite CredentialsTests passed after 0.418 seconds.
+✔ Test labelPageHasProfilePacksAndAllDiscs() passed after 0.417 seconds.
+✔ Test rejectsHTMLResponseAndSizeLimitBeforeImport() passed after 0.416 seconds.
+✔ Test packPageListsIncludedDiscsAndPrice() passed after 0.417 seconds.
+✔ Test loginPageHasCSRFToken() passed after 0.417 seconds.
+✔ Test onlyOwnershipTransitionConfirmsInitialPurchase() passed after 0.417 seconds.
+✔ Test beginningAnotherPaymentKeepsOriginalPendingAttempt() passed after 0.417 seconds.
+✔ Test otherOriginsAndSchemesAreBlocked(_:) with 15 test cases passed after 0.417 seconds.
+✔ Test paginatedBaselineNeedsRecentOrderTimestamp() passed after 0.417 seconds.
+✔ Test existingOrderAndWrongTabCannotConfirmBoost() passed after 0.417 seconds.
+✔ Suite PageParserTests passed after 0.418 seconds.
+✔ Test historicalCartAndUnrecognizedOrderIDsRemainInBaselineWithoutConfirmationEvidence() passed after 0.417 seconds.
+✔ Test malformedOrForeignPaidOrderPageCannotYieldSuccessEvidence() passed after 0.417 seconds.
+✔ Test paidOrderRequiresKnownBaselineAndExactProductTypeAmount() passed after 0.417 seconds.
+✔ Test feedGroupsDecode() passed after 0.417 seconds.
+✔ Test anonymousHomeHasNoUser() passed after 0.417 seconds.
+✔ Test onlyAlipaySchemesOpenAnotherApp(_:) with 2 test cases passed after 0.417 seconds.
+✔ Test apparentlyCompleteBaselineCannotReviveAnOlderOmittedOrder() passed after 0.417 seconds.
+✔ Test orderNumberKindMustMatchPageKind() passed after 0.417 seconds.
+✔ Test pendingAttemptPersistsOnlyConfirmationMetadata() passed after 0.417 seconds.
+✔ Test duplicateDiscIDsAreNotChosenByEnumerationOrder() passed after 0.417 seconds.
+✔ Test loggedInHomeGivesUserIDAndAvatar() passed after 0.417 seconds.
+✔ Test shuffleRejectsUntrustedStreamsAndKeepsTrackNumber() passed after 0.417 seconds.
+✔ Test changesOnlyOuterCallbackSchemeAndPreservesOrderExactly(_:) with 2 test cases passed after 0.417 seconds.
+✔ Test csrfAndCommentOwnershipRequireVisibleControls() passed after 0.417 seconds.
+✔ Test refusesOverwriteAndKeepsExistingAlbumIntact() passed after 0.417 seconds.
+✔ Test parsesRankReviewAndEmptyProfileFromPageStructure() passed after 0.417 seconds.
+✔ Test loginErrorMessageDropsCloseButton() passed after 0.417 seconds.
+✔ Test failedMatchingDoesNotLeavePartialAlbum() passed after 0.417 seconds.
+✔ Test followUsesObservedSamePageQueryOnly() passed after 0.417 seconds.
+✔ Test reviewsRejectPartialParallelArrays() passed after 0.417 seconds.
+✔ Test commentsKeepAuthorAndTextAligned() passed after 0.417 seconds.
+✔ Test duplicateRoutingMetadataIsNotGuessed() passed after 0.417 seconds.
+✔ Test unsupportedShapesAreNotModified(_:) with 7 test cases passed after 0.417 seconds.
+✔ Test staleResponseOrFutureBaselineCannotConfirm() passed after 0.417 seconds.
+✔ Test relativePathsAcceptSystemAliasesAndDirectoryTrailingSlash() passed after 0.417 seconds.
+✔ Test rejectsSymlinkEscapeBeforeMissingDescendants() passed after 0.417 seconds.
+✔ Test capturedOrderIDMustMatchExactly() passed after 0.417 seconds.
+✔ Test purchasesPageHasProfileTokenAndDiscs() passed after 0.417 seconds.
+✔ Test safeNamesCannotCreateExtraDirectoriesAndFitFilesystemLimit() passed after 0.417 seconds.
+✔ Test rejectsTraversalAndAbsolutePaths() passed after 0.417 seconds.
+✔ Test resolverRejectsHTMLAndStripsCredentialsFromCDNRequests() passed after 0.416 seconds.
+✔ Suite CheckoutNavigationTests passed after 0.418 seconds.
+✔ Suite CommunityTests passed after 0.418 seconds.
+✔ Test cancelledImportDoesNotCommit() passed after 0.417 seconds.
+✔ Test pageWithoutTokenScriptHasNoToken() passed after 0.418 seconds.
+✔ Test legacyPendingPaymentMigratesWithoutOverwritingAnotherAccount() passed after 0.417 seconds.
+✔ Test pricesDropTrailingZeros() passed after 0.417 seconds.
+✔ Test rootAliasAllowsMissingDescendantsAndPreservesSelectedURL() passed after 0.418 seconds.
+✔ Test rewritingAnAlreadyPreparedEnvelopeIsIdempotent() passed after 0.418 seconds.
+✔ Test missingOrDifferentEnvelopeFieldsAreNotModified() passed after 0.418 seconds.
+✔ Test networkFailureOrCancelledEvidenceDoesNotConfirmAnything() passed after 0.418 seconds.
+✔ Test rejectsFutureManifestVersionAndDuplicateTrackFiles() passed after 0.418 seconds.
+✔ Test importWritesManifestAndRestoresCompleteOfflineDetail() passed after 0.418 seconds.
+✔ Test callbackIsOnlyARecheckSignalRegardlessOfClaimedResult(_:) with 3 test cases passed after 0.418 seconds.
+✔ Test discDetailSplitsTracksAndSignedStreams() passed after 0.418 seconds.
+✔ Test priceFollowsSiteRules(price:onSell:preselling:expected:) with 5 test cases passed after 0.418 seconds.
+✔ Test rejectsSymlinkEscapeDuringManifestValidationAndImport() passed after 0.418 seconds.
+✔ Test restoreKeepsValidShuffleOrderAndRepairsBrokenOne() passed after 0.418 seconds.
+✔ Test upcomingFollowsPlayOrderAndWrapsWhenRepeatingAll() passed after 0.418 seconds.
+✔ Test labelListCompletesRelativeCoverPaths() passed after 0.418 seconds.
+✔ Test replacesExistingRoutingMetadataWithoutReserializingOtherParameters() passed after 0.418 seconds.
+✔ Test importsAndPlaysAlbumThroughSelectedRootAlias() passed after 0.418 seconds.
+✔ Test unrelatedCallbacksAreIgnored(_:) with 8 test cases passed after 0.418 seconds.
+✔ Test missingAudioSkipsAlbumWithIssue() passed after 0.418 seconds.
+✔ Test unknownPriceCannotBeMistakenForZeroAndPaginationIsDetected() passed after 0.418 seconds.
+✔ Test rejectsDanglingSymlinkAndItsMissingDescendants() passed after 0.418 seconds.
+✔ Test pathSegmentsAndQueryValuesAreFullyEscaped() passed after 0.418 seconds.
+✔ Test accountMismatchCannotBeginPayment() passed after 0.418 seconds.
+✔ Test selectingFromQueueKeepsShuffleOrder() passed after 0.418 seconds.
+✔ Test wrapsAroundWhenRepeatingAll() passed after 0.418 seconds.
+✔ Test shuffleStartsFromCurrentTrackAndVisitsEveryTrackOnce() passed after 0.418 seconds.
+✔ Test emptyAndPlaceholderImagesAreIgnored() passed after 0.418 seconds.
+✔ Test traversalInsideManifestIsNotPlayable() passed after 0.418 seconds.
+✔ Test parsesDocumentedDownloadMenuAndRejectsForeignChoices() passed after 0.418 seconds.
+✔ Test rejectsUnexpectedOriginComponentsEvenForValidEnvelope() passed after 0.418 seconds.
+✔ Test discListMapsFieldsAndPrices() passed after 0.418 seconds.
+✔ Test capsHistoryAndSurvivesCorruptStorage() passed after 0.417 seconds.
+✔ Test differentAccountsKeepSeparatePendingPaymentsAcrossRestartAndForget() passed after 0.418 seconds.
+✔ Test relativeCoverPathsGoToCDNWithThumbnailStyle() passed after 0.418 seconds.
+✔ Test movesThroughQueueAndStopsAtEndsWithoutWrapping() passed after 0.418 seconds.
+✔ Test linkHelpersReadIDsFromSiteHrefs() passed after 0.418 seconds.
+✔ Test rejectsUnsafePaths(_:) with 8 test cases passed after 0.417 seconds.
+✔ Test visitsPersistDeduplicateAndEnrichmentDoesNotReorder() passed after 0.418 seconds.
+✔ Suite AccountParserTests passed after 0.419 seconds.
+✔ Test absoluteCoverWithChineseFileNameIsEscaped() passed after 0.418 seconds.
+✔ Test snapshotRoundTripsWithoutStreamURLs() passed after 0.418 seconds.
+✔ Test permitsUnicodeAndNormalDirectories() passed after 0.417 seconds.
+✔ Test rejectsMissingTrack() passed after 0.416 seconds.
+✔ Test persistedJobsContainMetadataAndNoSignedStreams() passed after 0.417 seconds.
+✔ Test matchesChineseTitlesAndNestedNumberedFilesWithoutDependingOnOrder() passed after 0.416 seconds.
+✔ Test oneFileCannotServeTwoIdenticallyNamedTracks() passed after 0.416 seconds.
+✔ Test rejectsMultipleFormatsAndDuplicateNumbers() passed after 0.416 seconds.
+✔ Test streamURLTellsPreviewAndExpiry() passed after 0.418 seconds.
+✔ Test rejectsConflictingTrackNumberAndKnownTitle() passed after 0.416 seconds.
+✔ Test neverAssignsAlphabeticalFilesByPosition() passed after 0.416 seconds.
+✔ Test numericSongTitlesRemainTitles() passed after 0.416 seconds.
+✔ Test supportsFullWidthAndTrackPrefixes() passed after 0.416 seconds.
+✔ Suite PurchaseConfirmationTests passed after 0.419 seconds.
+✔ Test validatesWholeDownloadURL(_:) with 8 test cases passed after 0.417 seconds.
+✔ Suite BrowsingHistoryTests passed after 0.419 seconds.
+✔ Test suppliesCallbackForBrowserEnvelopeWithoutSourceScheme() passed after 0.418 seconds.
+✔ Suite AlipayReturnRouterTests passed after 0.419 seconds.
+✔ Test matchesTitlesWithoutNumbersAndUnicodeEquivalentNames() passed after 0.416 seconds.
+✔ Suite PlaybackQueueTests passed after 0.419 seconds.
+✔ Test acceptsExplicitBareTrackNumbers() passed after 0.416 seconds.
+✔ Suite AudioFileMatcherTests passed after 0.419 seconds.
+✔ Suite DizzyURLTests passed after 0.419 seconds.
+✔ Suite JSONDecodingTests passed after 0.419 seconds.
+✔ Test cancellationAfterCommitKeepsReturnedAlbumPlayable() passed after 0.419 seconds.
+✔ Suite OfflineManifestTests passed after 0.420 seconds.
+✔ Test resolvesAmbiguousJapaneseEncodingWithPublishedTrackTitle() passed after 0.419 seconds.
+✔ Test cancellationDoesNotLeaveAnExtractedLibrary() passed after 0.419 seconds.
+✔ Test switchingAccountsIgnoresInflightResultButRetainsOriginalMetadata() passed after 0.422 seconds.
+✔ Test pausingOrForgettingInvalidatesLateOwnershipResponse(forget:) with 2 test cases passed after 0.422 seconds.
+✔ Test duplicateOnlyPageDoesNotEndPagination() passed after 0.421 seconds.
+✔ Test sameLabelAppearsOnceWithinAndAcrossPages() passed after 0.421 seconds.
+✔ Suite FeedPaginationTests passed after 0.423 seconds.
+✔ Test restoredMetadataWaitsForExplicitCheckAndConcurrentChecksShareOnePoll() passed after 0.422 seconds.
+✔ Suite PurchaseStoreTests passed after 0.423 seconds.
+✔ Test fetchesFreshDownloadMenuWithSessionAndNoCacheReuse() passed after 0.423 seconds.
+✔ Suite DownloadTests passed after 0.425 seconds.
+✔ Test likeIsConfirmedByFreshReadAndNotRetried() passed after 0.423 seconds.
+◇ Test unchangedLikeDoesNotReportSuccessOrRepeatPost() started.
+✔ Test selectedFolderBookmarkRestoresLibraryInNewStore() passed after 0.425 seconds.
+✔ Suite OfflineLibraryStoreTests passed after 0.426 seconds.
+✔ Test fetchesOfferWithoutCacheAndRejectsExpiredSession() passed after 0.426 seconds.
+✔ Suite PurchaseTests passed after 0.426 seconds.
+✔ Test unchangedLikeDoesNotReportSuccessOrRepeatPost() passed after 0.002 seconds.
+◇ Test wrongAccountAndMissingOwnCommentCannotMutate() started.
+✔ Test wrongAccountAndMissingOwnCommentCannotMutate() passed after 0.002 seconds.
+◇ Test postingVerifiesOwnCommentAndDeletionVerifiesAbsence() started.
+✔ Test loginStoresSessionAndToken() passed after 0.433 seconds.
+◇ Test wrongPasswordShowsSiteMessageAndLeavesNoSession() started.
+✔ Test postingVerifiesOwnCommentAndDeletionVerifiesAbsence() passed after 0.005 seconds.
+◇ Test followReadsActualQueryAndVerifiesResult() started.
+[NeoDizzy] 下午2:58:52 登录失败：用户名或密码错误，仍在登录页=true
+✔ Test wrongPasswordShowsSiteMessageAndLeavesNoSession() passed after 0.006 seconds.
+◇ Test rejectedTokenFallsBackToAnonymousDetail() started.
+✔ Test followReadsActualQueryAndVerifiesResult() passed after 0.006 seconds.
+✔ Suite CommunityNetworkTests passed after 0.442 seconds.
+[NeoDizzy] 下午2:58:52 token 被网站拒绝
+✔ Test rejectedTokenFallsBackToAnonymousDetail() passed after 0.001 seconds.
+◇ Test feedNeedsLogin() started.
+✔ Test feedNeedsLogin() passed after 0.001 seconds.
+◇ Test feedLoadsWithTokenAndReportsRejection() started.
+[NeoDizzy] 下午2:58:52 token 被网站拒绝
+✔ Test feedLoadsWithTokenAndReportsRejection() passed after 0.001 seconds.
+◇ Test cookiesAreNotSentToCDN() started.
+✔ Test cookiesAreNotSentToCDN() passed after 0.001 seconds.
+✔ Suite AccountNetworkTests passed after 0.443 seconds.
+✔ Test run with 160 tests in 22 suites passed after 0.443 seconds.

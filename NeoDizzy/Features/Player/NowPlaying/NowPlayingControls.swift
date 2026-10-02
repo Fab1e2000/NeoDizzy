@@ -1,16 +1,16 @@
 // 布局移植自 MeloX（GPLv3）Features/Player/NowPlaying/NowPlayingBottomControls.swift、NowPlayingControls.swift、
-// NowPlayingMenuButton.swift：去掉歌词、AutoMix、音质选择和一起听；进度条改为自己处理拖动（支持点按跳转），
-// 左下角的歌词按钮换成隔空播放。
+// NowPlayingMenuButton.swift：保留现有播放能力，底部为本地歌词、隔空播放和队列。
 
 import AVKit
 import MediaPlayer
 import SwiftUI
 import UIKit
 
-/// 播放页的两个页面：大封面，或者「继续播放」队列。
+/// 播放页：封面、本地歌词与队列。
 enum NowPlayingPage {
     case artwork
     case queue
+    case lyrics
 }
 
 /// 播放页底部的控件：进度、播放控制、音量、页面切换。高度固定，页面内容在它上方留出同样的空间。
@@ -29,7 +29,7 @@ struct NowPlayingBottomControls: View {
             Color.clear.frame(height: 3)
             NowPlayingPageSelector(page: $page)
         }
-        .frame(height: Self.coreHeight)
+        .frame(minHeight: Self.coreHeight)
         // 挡住下面列表的点按，避免点到控件间隙时误触队列里的曲目。
         .background {
             Color.clear
@@ -40,7 +40,7 @@ struct NowPlayingBottomControls: View {
 }
 
 /// 进度条：按住后跟随手指，松手才跳转，避免拖动中反复请求音频；点一下也能直接跳到那里。
-/// 中间显示「试听」「完整版」或播放出错的原因。
+/// 仅标记试听和播放错误；正常音频不附加版本或音质标签。
 struct NowPlayingProgressControl: View {
     @Environment(PlayerStore.self) private var player
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
@@ -102,8 +102,8 @@ struct NowPlayingProgressControl: View {
                 .foregroundStyle(DizzyPalette.danger)
                 .lineLimit(1)
                 .padding(.horizontal, 44)
-        } else if player.duration > 0 {
-            Text(player.isPreview ? "试听" : "完整版")
+        } else if player.duration > 0 && player.isPreview {
+            Text("试听")
                 .fontWeight(.medium)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
@@ -250,13 +250,26 @@ private struct SystemVolumeSlider: UIViewRepresentable {
     }
 }
 
-/// 底部一行：左边隔空播放，右边切换到「继续播放」队列。
+/// 底部一行：歌词、隔空播放和「继续播放」队列。
 struct NowPlayingPageSelector: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Binding var page: NowPlayingPage
 
     var body: some View {
         HStack {
+            Button {
+                withAnimation(accessibilityReduceMotion ? nil : .smooth(duration: 0.3)) {
+                    page = page == .lyrics ? .artwork : .lyrics
+                }
+            } label: {
+                Image(systemName: "quote.bubble")
+                    .font(.title3).frame(width: 44, height: 44)
+                    .foregroundStyle(page == .lyrics ? .black.opacity(0.68) : .white.opacity(0.72))
+                    .background(.white.opacity(page == .lyrics ? 0.68 : 0), in: .circle)
+            }
+            .buttonStyle(.plain).accessibilityLabel("歌词")
+            .accessibilityAddTraits(page == .lyrics ? .isSelected : [])
+            Spacer()
             AirPlayButton()
                 .frame(width: 44, height: 44)
                 .accessibilityLabel("隔空播放")
@@ -300,18 +313,31 @@ private struct AirPlayButton: UIViewRepresentable {
 
 /// 曲目的「…」菜单：前往专辑、在网页中打开。
 struct NowPlayingSongActions: View {
+    @Environment(OfflineLibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
     @Environment(\.openRoute) private var openRoute
     @Environment(\.openURL) private var openURL
 
     let track: Track
+    var onImportLyrics: (() -> Void)? = nil
 
     var body: some View {
-        NowPlayingMenuButton { menuItems() }
+        NowPlayingMenuButton {
+            var items = menuItems()
+            if let onImportLyrics {
+                items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() })
+            }
+            return items
+        }
             .frame(width: 44, height: 44)
     }
 
     private func menuItems() -> [UIMenuElement] {
+        if let source = track.localSource {
+            return [UIAction(title: String(localized: "前往专辑「\(track.albumTitle)」"), image: UIImage(systemName: "music.note.list")) { _ in
+                openRoute(.localAlbum(id: library.localAlbum(for: track)?.id ?? source.albumID))
+            }]
+        }
         let discID = track.discID
         var items: [UIMenuElement] = [
             UIAction(title: String(localized: "前往专辑「\(track.albumTitle)」"), image: UIImage(systemName: "music.note.list")) { _ in

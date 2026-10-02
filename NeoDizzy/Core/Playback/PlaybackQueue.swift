@@ -65,6 +65,10 @@ nonisolated struct PlaybackQueue: Sendable {
         return remaining + Array(order.prefix(position))
     }
 
+    mutating func updateMetadata(_ replacements: [String: Track]) {
+        tracks = tracks.map { replacements[$0.id] ?? $0 }
+    }
+
     /// 跳到队列里的某一首。随机播放时保持随机顺序，只移动当前位置。
     mutating func select(index: Int) -> Bool {
         guard tracks.indices.contains(index) else { return false }

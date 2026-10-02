@@ -50,41 +50,53 @@ final class DiscoverModel {
 }
 
 struct DiscoverView: View {
-    let playDiscovery: (ShuffleTrack) -> Void
     @State private var model = DiscoverModel()
+    @State private var search = SearchModel()
 
     var body: some View {
-        MainTabPage(tab: .discover, onRefresh: { await model.refresh() }) {
-            ShufflePlayButton(play: playDiscovery)
-            DiscoverSectionPicker(selection: $model.section)
-            if let category = model.section.category, let list = model.lists[category] {
-                PagedContent(list: list, webURL: DizzyURL.site) { discs in
-                    DiscGrid(discs: discs)
-                }
+        MainTabPage(tab: .discover, onRefresh: {
+            if let discs = search.discs { await discs.reload() }
+            else { await model.refresh() }
+        }) {
+            DiscoverSearchBar(text: $search.query) { search.submit() }
+            if search.keyword != nil {
+                DiscoverSearchResults(model: search)
+                    .id(search.keyword)
             } else {
-                LoadableContent(state: model.showcase, webURL: DizzyURL.site) { showcase in
-                    if model.section == .packs {
-                        LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                            ForEach(showcase.packs) { PackCard(pack: $0) }
-                        }
-                    } else if showcase.deals.isEmpty {
-                        Text("现在没有限时优惠。")
-                            .font(.subheadline)
-                            .foregroundStyle(DizzyPalette.mutedText)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 60)
-                    } else {
-                        LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                            ForEach(showcase.deals) { deal in
-                                NavigationLink(value: AppRoute.disc(id: deal.disc.id)) {
-                                    DiscCard(disc: deal.disc, caption: deal.deadline)
+                DiscoverSectionPicker(selection: $model.section)
+                if let category = model.section.category, let list = model.lists[category] {
+                    PagedContent(list: list, webURL: DizzyURL.site) { discs in
+                        DiscGrid(discs: discs)
+                    }
+                } else {
+                    LoadableContent(state: model.showcase, webURL: DizzyURL.site) { showcase in
+                        if model.section == .packs {
+                            LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
+                                ForEach(showcase.packs) { PackCard(pack: $0) }
+                            }
+                        } else if showcase.deals.isEmpty {
+                            Text("现在没有限时优惠。")
+                                .font(.subheadline)
+                                .foregroundStyle(DizzyPalette.mutedText)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 60)
+                        } else {
+                            LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
+                                ForEach(showcase.deals) { deal in
+                                    NavigationLink(value: AppRoute.disc(id: deal.disc.id)) {
+                                        DiscCard(disc: deal.disc, caption: deal.deadline)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
             }
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .onChange(of: search.query) { _, query in
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { search.clear() }
         }
     }
 }
@@ -115,46 +127,5 @@ private struct DiscoverSectionPicker: View {
         }
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
-    }
-}
-
-/// 随机发现直接进入播放器，不再推入中间页面。
-private struct ShufflePlayButton: View {
-    let play: (ShuffleTrack) -> Void
-    @State private var isRequesting = false
-    @State private var failure: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                failure = nil
-                isRequesting = true
-            } label: {
-                HStack {
-                    if isRequesting { ProgressView() }
-                    Label(isRequesting ? "正在寻找…" : "随便听听", systemImage: "shuffle")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(isRequesting)
-            if let failure {
-                Text("获取歌曲失败：\(failure)\n点击「随便听听」重试。")
-                    .font(.caption)
-                    .foregroundStyle(DizzyPalette.mutedText)
-            }
-        }
-        .task(id: isRequesting) {
-            guard isRequesting else { return }
-            defer { isRequesting = false }
-            do {
-                let selection = try await DizzyCommunity.shared.shuffle()
-                try Task.checkCancellation()
-                play(selection)
-            } catch {
-                if !Task.isCancelled { failure = error.localizedDescription }
-            }
-        }
     }
 }
