@@ -3,7 +3,6 @@ import SwiftUI
 @main
 struct NeoDizzyMacApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var appDelegate
-    @AppStorage("miniPlayer.floats") private var miniPlayerFloats = true
 
     var body: some Scene {
         // 与 Music 相同只有一个主窗口；关闭后继续播放，从 Dock 或菜单重新打开。
@@ -12,19 +11,10 @@ struct NeoDizzyMacApp: App {
                 .neoDizzyEnvironment(appDelegate.model)
         }
         .defaultSize(width: 1180, height: 780)
+        // 每次启动都打开主窗口，不沿用上次退出时窗口已关闭的状态。
+        .defaultLaunchBehavior(.presented)
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands { AppCommands(model: appDelegate.model) }
-
-        Window("迷你播放器", id: SceneID.miniPlayer) {
-            MiniPlayerWindow()
-                .neoDizzyEnvironment(appDelegate.model)
-        }
-        .windowStyle(.plain)
-        .windowResizability(.contentSize)
-        .defaultPosition(.bottomTrailing)
-        .windowLevel(miniPlayerFloats ? .floating : .normal)
-        .windowBackgroundDragBehavior(.enabled)
-        .restorationBehavior(.disabled)
 
         Settings {
             SettingsView()
@@ -35,7 +25,6 @@ struct NeoDizzyMacApp: App {
 
 enum SceneID {
     static let main = "main"
-    static let miniPlayer = "mini-player"
 }
 
 extension View {
@@ -54,5 +43,7 @@ extension View {
             .environment(services.purchases)
             .environment(\.openRoute, OpenRouteAction { model.open($0) })
             .tint(.dizzyGold)
+            // 与 iOS 版一致固定深色界面。
+            .preferredColorScheme(.dark)
     }
 }

@@ -28,14 +28,6 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         Task { await model.services.purchases.check() }
     }
 
-    /// 全屏播放器让窗口进入了全屏：退出前先恢复，下次启动时窗口不会停在全屏里。
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard model.isFullScreenPlayerPresented else { return .terminateNow }
-        model.isFullScreenPlayerPresented = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { sender.reply(toApplicationShouldTerminate: true) }
-        return .terminateLater
-    }
-
     func applicationWillTerminate(_ notification: Notification) {
         model.player.saveState()
         model.services.purchases.pause()
@@ -113,8 +105,6 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
             Task { try? await model.playAlbum(id: album) }
         }
         if let panel = defaults.string(forKey: "debugPanel") { model.playerPanel = PlayerPanel(rawValue: panel) }
-        if defaults.bool(forKey: "debugFullScreenPlayer") { model.isFullScreenPlayerPresented = true }
-        if defaults.bool(forKey: "debugMiniPlayer") { model.openWindow?(SceneID.miniPlayer) }
         if defaults.bool(forKey: "debugSettings") { model.openSettings?() }
     }
     #endif

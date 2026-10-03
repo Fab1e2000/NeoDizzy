@@ -58,13 +58,13 @@ struct NowPlayingDisplay: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Button { model.isFullScreenPlayerPresented = true } label: {
+            Button { model.togglePanel(.lyrics) } label: {
                 ArtworkImage(url: player.currentTrack?.coverURL, cornerRadius: 5)
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
             .disabled(player.currentTrack == nil)
-            .help("全屏播放器")
+            .help("歌词")
             if let track = player.currentTrack {
                 VStack(spacing: 2) {
                     HStack(spacing: 6) {

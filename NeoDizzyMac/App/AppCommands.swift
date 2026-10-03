@@ -42,11 +42,6 @@ struct AppCommands: Commands {
                 .keyboardShortcut("l", modifiers: [.command, .option])
             Toggle("待播清单", isOn: panelBinding(.queue))
                 .keyboardShortcut("u", modifiers: [.command, .option])
-            Button(model.isFullScreenPlayerPresented ? "退出全屏播放器" : "全屏播放器") {
-                model.isFullScreenPlayerPresented.toggle()
-            }
-            .keyboardShortcut("f", modifiers: [.command, .shift])
-            .disabled(player.currentTrack == nil && !model.isFullScreenPlayerPresented)
             Divider()
         }
 
@@ -105,8 +100,6 @@ struct AppCommands: Commands {
         CommandGroup(before: .windowList) {
             Button("NeoDizzy") { openWindow(id: SceneID.main) }
                 .keyboardShortcut("1")
-            Button("迷你播放器") { openWindow(id: SceneID.miniPlayer) }
-                .keyboardShortcut("m", modifiers: [.command, .shift])
             Divider()
         }
 

@@ -75,7 +75,7 @@ struct PageRefresh {
     let action: () async -> Void
 }
 
-/// Mac 版的全局界面状态。由 AppDelegate 持有一次，主窗口、迷你播放器、设置和菜单共用。
+/// Mac 版的全局界面状态。由 AppDelegate 持有一次，主窗口、设置和菜单共用。
 @Observable
 final class MacAppModel {
     let services: AppServices
@@ -90,12 +90,11 @@ final class MacAppModel {
     let labels = PagedList { page in try await DizzyAPI.shared.labels(page: page) }
 
     var playerPanel: PlayerPanel?
-    var isFullScreenPlayerPresented = false
     var isDisclaimerPresented = false
     var purchaseTarget: DiscSummary?
     var isSearchFocused = false
     private(set) var refresh: PageRefresh?
-    /// 由窗口登记的 openWindow 动作，用来在主窗口被关闭后从 Dock、全屏播放器或迷你播放器重新打开它。
+    /// 由窗口登记的 openWindow 动作，用来在主窗口被关闭后从 Dock 或菜单重新打开它。
     @ObservationIgnored var openWindow: ((String) -> Void)?
     @ObservationIgnored var openSettings: (() -> Void)?
 
@@ -115,9 +114,8 @@ final class MacAppModel {
         if refresh?.id == id { refresh = nil }
     }
 
-    /// 打开某个页面：从迷你播放器、全屏播放器或菜单调用时先回到主窗口。
+    /// 打开某个页面：从菜单调用时先回到主窗口。
     func open(_ route: AppRoute) {
-        isFullScreenPlayerPresented = false
         openMainWindow()
         navigation.open(route)
     }

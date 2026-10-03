@@ -1,7 +1,7 @@
 import AVKit
 import SwiftUI
 
-/// 播放控件的配色：普通窗口里跟随系统外观；全屏和迷你播放器的深色背景上固定为白色。
+/// 播放控件的配色：普通界面用系统前景色；需要时可在深色背景上固定为白色。
 enum PlayerControlTone {
     case standard, onDark
 

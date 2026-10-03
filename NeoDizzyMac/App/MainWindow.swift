@@ -32,14 +32,6 @@ struct MainWindow: View {
         .onChange(of: model.isSearchFocused) { _, focused in
             if focused { isSearchFocused = true; model.isSearchFocused = false }
         }
-        .toolbar(model.isFullScreenPlayerPresented ? .hidden : .automatic, for: .windowToolbar)
-        .overlay {
-            if model.isFullScreenPlayerPresented {
-                FullScreenPlayer()
-                    .transition(.opacity)
-            }
-        }
-        .animation(.smooth(duration: 0.35), value: model.isFullScreenPlayerPresented)
         .sheet(item: $model.purchaseTarget) { PurchaseSheet(summary: $0) }
         .sheet(isPresented: $account.isLoginPresented) { LoginSheet() }
         .sheet(isPresented: $model.isDisclaimerPresented) { DisclaimerSheet() }
@@ -52,7 +44,7 @@ struct MainWindow: View {
     }
 
     private var panelPresented: Binding<Bool> {
-        Binding(get: { model.playerPanel != nil && !model.isFullScreenPlayerPresented },
+        Binding(get: { model.playerPanel != nil },
                 set: { if !$0 { model.playerPanel = nil } })
     }
 }

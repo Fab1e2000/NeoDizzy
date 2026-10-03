@@ -55,10 +55,9 @@ private struct GeneralSettings: View {
     }
 }
 
-/// 歌词高亮位置与迷你播放器。
+/// 歌词高亮位置。
 private struct PlaybackSettings: View {
     @AppStorage("lyrics.focusPosition") private var focusPosition = 0.5
-    @AppStorage("miniPlayer.floats") private var miniPlayerFloats = true
 
     var body: some View {
         Form {
@@ -78,12 +77,9 @@ private struct PlaybackSettings: View {
             } footer: {
                 Text("只读取本地歌词：手动导入的 LRC / TXT、同目录同名 LRC 或音频内嵌歌词，不联网搜索。")
             }
-            Section("迷你播放器") {
-                Toggle("迷你播放器保持在最前面", isOn: $miniPlayerFloats)
-            }
         }
         .formStyle(.grouped)
-        .frame(height: 300)
+        .frame(height: 220)
     }
 }
 
