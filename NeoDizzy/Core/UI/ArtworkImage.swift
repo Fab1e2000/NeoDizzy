@@ -52,13 +52,13 @@ struct ArtworkImage: View {
                 .transition(.opacity)
         } else if hasError || url == nil {
             ZStack {
-                DizzyPalette.surface
+                DizzyPalette.artworkPlaceholder
                 Image(systemName: "music.note")
                     .font(.title2)
-                    .foregroundStyle(DizzyPalette.mutedText)
+                    .foregroundStyle(DizzyPalette.artworkPlaceholderSymbol)
             }
         } else {
-            DizzyPalette.surface
+            DizzyPalette.artworkPlaceholder
         }
     }
 }

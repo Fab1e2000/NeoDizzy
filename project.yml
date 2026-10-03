@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.elsterlee
   deploymentTarget:
     iOS: "27.0"
+    macOS: "27.0"
   # 最低 Xcode 27：工程按 Xcode 27 生成，打开时不再提示升级工程设置。
   xcodeVersion: "27.0"
   createIntermediateGroups: true
@@ -90,6 +91,64 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ENABLE_PREVIEWS: YES
         CODE_SIGN_STYLE: Automatic
+
+  # 原生 macOS 版：共享 NeoDizzy/ 下的 Core、Shared 与资源，界面在 NeoDizzyMac/ 中单独实现。
+  NeoDizzyMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "27.0"
+    sources:
+      - path: NeoDizzyMac
+        type: syncedFolder
+      - path: NeoDizzy
+        type: syncedFolder
+        # iOS 专属的入口、页面与音频会话不参与 Mac 编译。
+        excludes:
+          - "Info.plist"
+          - "App"
+          - "Features"
+          - "Core/UI/PageHeader.swift"
+          - "Core/UI/DiscCard.swift"
+          - "Core/UI/LoadStateViews.swift"
+          - "Core/UI/PlaceholderCard.swift"
+          - "Core/Playback/AudioSessionConfigurator.swift"
+          - "Resources/Assets.xcassets/AppIcon.appiconset"
+    dependencies:
+      - package: AudioTags
+        product: AudioTagBridge
+      - package: SwiftSoup
+      - package: Nuke
+        products: [Nuke, NukeUI]
+      - package: ZIPFoundation
+    entitlements:
+      path: NeoDizzyMac/NeoDizzyMac.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.bookmarks.app-scope: true
+    info:
+      path: NeoDizzyMac/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations: [zh-Hans]
+        CFBundleDisplayName: NeoDizzy
+        CFBundleShortVersionString: "0.2.0"
+        CFBundleVersion: "2"
+        LSApplicationCategoryType: public.app-category.music
+        ITSAppUsesNonExemptEncryption: false
+        NSHumanReadableCopyright: "NeoDizzy 以 GNU GPLv3 发布，与 DizzyLab 无隶属关系。"
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.elsterlee.NeoDizzyMac
+        PRODUCT_NAME: NeoDizzy
+        ASSETCATALOG_COMPILER_APPICON_NAME: NeoDizzyIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_PREVIEWS: YES
+        CODE_SIGN_STYLE: Automatic
+        COMBINE_HIDPI_IMAGES: YES
 
   NeoDizzyTests:
     type: bundle.unit-test

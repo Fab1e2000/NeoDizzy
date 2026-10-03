@@ -35,8 +35,10 @@ def main():
             files.extend((ROOT / "NeoDizzy/Core" / directory).rglob("*.swift"))
         files.extend(ROOT / "NeoDizzy/Core" / name for name in (
             "BrowsingHistory/BrowsingHistoryStore.swift", "DebugLog.swift", "UI/PagedList.swift", "Account/DizzyAuth.swift", "Playback/PlaybackQueue.swift",
-            "Playback/PlaybackPersistence.swift", "Playback/StreamResolver.swift",
+            "Playback/PlaybackPersistence.swift", "Playback/StreamResolver.swift", "Account/AccountStore.swift", "Account/KeychainStore.swift",
         ))
+        # iOS 与 macOS 共用的页面状态，同样在 macOS 上编译检查。
+        files.extend((ROOT / "NeoDizzy/Shared/ViewModels").glob("*.swift"))
         for source in files:
             shutil.copy2(source, sources / source.name)
         for name in (

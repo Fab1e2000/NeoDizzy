@@ -4,37 +4,57 @@
 import AVFoundation
 import MediaPlayer
 import Nuke
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
-/// 锁屏、控制中心和耳机线控。
-final class NowPlayingSession: NSObject, MPNowPlayingSessionDelegate {
+/// 锁屏、控制中心和耳机线控。iOS 使用 MPNowPlayingSession；macOS 没有它，
+/// 改用全局的信息中心与命令中心，媒体键和菜单栏「正在播放」也由它们处理。
+final class NowPlayingSession: NSObject {
     var onPlay: (() -> Void)?
     var onPause: (() -> Void)?
     var onNext: (() -> Void)?
     var onPrevious: (() -> Void)?
     var onSeek: ((TimeInterval) -> Void)?
 
+    #if os(iOS)
     private let playbackSession: MPNowPlayingSession
+    #endif
     private var commandTargets: [(MPRemoteCommand, Any)] = []
     private var nowPlayingInfo: [String: Any] = [:]
     private var artworkTask: Task<Void, Never>?
     private var representedTrackID: String?
     private var wantsActiveSession = false
     private var activationPending = false
+    private var isPlaying = false
 
     private var nowPlayingCenter: MPNowPlayingInfoCenter {
+        #if os(iOS)
         playbackSession.nowPlayingInfoCenter
+        #else
+        MPNowPlayingInfoCenter.default()
+        #endif
     }
 
     private var commandCenter: MPRemoteCommandCenter {
+        #if os(iOS)
         playbackSession.remoteCommandCenter
+        #else
+        MPRemoteCommandCenter.shared()
+        #endif
     }
 
     init(player: AVPlayer) {
+        #if os(iOS)
         playbackSession = MPNowPlayingSession(players: [player])
         playbackSession.automaticallyPublishesNowPlayingInfo = false
         super.init()
         playbackSession.delegate = self
+        #else
+        super.init()
+        #endif
         installRemoteCommands()
     }
 
@@ -72,6 +92,7 @@ final class NowPlayingSession: NSObject, MPNowPlayingSessionDelegate {
         nowPlayingInfo[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
         nowPlayingCenter.nowPlayingInfo = nowPlayingInfo
         nowPlayingCenter.playbackState = isPlaying ? .playing : .paused
+        self.isPlaying = isPlaying
         commandCenter.playCommand.isEnabled = !isPlaying
         commandCenter.pauseCommand.isEnabled = isPlaying
     }
@@ -79,9 +100,12 @@ final class NowPlayingSession: NSObject, MPNowPlayingSessionDelegate {
     /// Called only after AVAudioSession is active and the player owns its item.
     func activate() {
         wantsActiveSession = true
+        #if os(iOS)
         requestActivation()
+        #endif
     }
 
+    #if os(iOS)
     private func requestActivation() {
         guard wantsActiveSession, representedTrackID != nil,
               !playbackSession.isActive, playbackSession.canBecomeActive, !activationPending else { return }
@@ -95,9 +119,7 @@ final class NowPlayingSession: NSObject, MPNowPlayingSessionDelegate {
         }
     }
 
-    nonisolated func nowPlayingSessionDidChangeCanBecomeActive(_ nowPlayingSession: MPNowPlayingSession) {
-        Task { @MainActor [weak self] in self?.requestActivation() }
-    }
+    #endif
 
     func clear() {
         wantsActiveSession = false
@@ -107,6 +129,7 @@ final class NowPlayingSession: NSObject, MPNowPlayingSessionDelegate {
         nowPlayingInfo = [:]
         nowPlayingCenter.nowPlayingInfo = nil
         nowPlayingCenter.playbackState = .stopped
+        isPlaying = false
     }
 
     private func installRemoteCommands() {
@@ -133,6 +156,17 @@ final class NowPlayingSession: NSObject, MPNowPlayingSessionDelegate {
             Task { @MainActor in self?.onPause?() }
             return .success
         }
+        #if os(macOS)
+        // Mac 键盘和耳机的播放键发送的是 togglePlayPause，而不是单独的播放 / 暂停。
+        commandCenter.togglePlayPauseCommand.isEnabled = true
+        addTarget(to: commandCenter.togglePlayPauseCommand) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.isPlaying { self.onPause?() } else { self.onPlay?() }
+            }
+            return .success
+        }
+        #endif
         addTarget(to: commandCenter.nextTrackCommand) { [weak self] _ in
             Task { @MainActor in self?.onNext?() }
             return .success
@@ -173,7 +207,15 @@ final class NowPlayingSession: NSObject, MPNowPlayingSessionDelegate {
     }
 
     /// 系统在后台线程向 MPMediaItemArtwork 要图，闭包不能继承 MainActor 隔离。
-    nonisolated private static func artwork(for image: UIImage) -> MPMediaItemArtwork {
+    nonisolated private static func artwork(for image: PlatformImage) -> MPMediaItemArtwork {
         MPMediaItemArtwork(boundsSize: image.size) { _ in image }
     }
 }
+
+#if os(iOS)
+extension NowPlayingSession: MPNowPlayingSessionDelegate {
+    nonisolated func nowPlayingSessionDidChangeCanBecomeActive(_ nowPlayingSession: MPNowPlayingSession) {
+        Task { @MainActor [weak self] in self?.requestActivation() }
+    }
+}
+#endif
