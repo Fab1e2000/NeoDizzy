@@ -8,7 +8,7 @@ struct CommunityProfileView: View {
             LazyVStack(alignment: .leading, spacing: 20) {
                 if let profile = model.profile {
                     HStack(alignment: .top, spacing: 16) {
-                        ArtworkImage(url: profile.user.avatarURL, cornerRadius: 16).frame(width: 80, height: 80)
+                        AvatarImage(url: profile.user.avatarURL, size: 80)
                         VStack(alignment: .leading, spacing: 8) {
                             Text(profile.user.name).font(.title2.bold())
                             Text(profile.joined).font(.caption).foregroundStyle(DizzyPalette.mutedText)
@@ -23,7 +23,7 @@ struct CommunityProfileView: View {
                     ForEach(model.labels) { label in
                         NavigationLink(value: AppRoute.label(name: label.name)) {
                             HStack(spacing: 14) {
-                                ArtworkImage(url: label.coverURL, cornerRadius: 10).frame(width: 56, height: 56)
+                                AvatarImage(url: label.coverURL, size: 56)
                                 Text(label.name).font(.headline)
                                 Spacer(); Image(systemName: "chevron.right").font(.caption)
                             }

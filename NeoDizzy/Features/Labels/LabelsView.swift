@@ -23,8 +23,7 @@ private struct LabelRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            ArtworkImage(url: label.coverURL, cornerRadius: 12)
-                .frame(width: 64)
+            AvatarImage(url: label.coverURL, size: 64)
             VStack(alignment: .leading, spacing: 6) {
                 Text(label.name)
                     .font(.headline)

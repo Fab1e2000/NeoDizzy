@@ -200,19 +200,6 @@ struct TagBadge: View {
     }
 }
 
-/// 方形头像（社团、用户）；nil 尺寸时随网格宽度布局。
-struct AvatarImage: View {
-    let url: URL?
-    var size: CGFloat? = 36
-
-    var body: some View {
-        ArtworkImage(url: DizzyURL.avatar(url), cornerRadius: 0, contentMode: .fit)
-            .frame(width: size, height: size)
-            // 透明白色字标在浅色界面仍需对比度；中性底也能承托黑色字标。
-            .background(Color(white: 0.45))
-    }
-}
-
 nonisolated enum TimeFormat {
     /// `3:07`，超过一小时为 `1:02:03`。
     static func clock(_ seconds: TimeInterval) -> String {

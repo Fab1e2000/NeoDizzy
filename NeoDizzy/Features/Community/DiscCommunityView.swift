@@ -106,7 +106,7 @@ struct CommunityUserLink: View {
     var body: some View {
         NavigationLink(value: AppRoute.user(id: user.id)) {
             HStack(spacing: 10) {
-                ArtworkImage(url: user.avatarURL, cornerRadius: 20).frame(width: 36, height: 36)
+                AvatarImage(url: user.avatarURL, size: 36)
                 Text(user.name).font(.subheadline.weight(.semibold)).foregroundStyle(DizzyPalette.info)
             }
         }.buttonStyle(.plain)

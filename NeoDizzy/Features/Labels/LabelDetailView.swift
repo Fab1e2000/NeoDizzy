@@ -54,8 +54,7 @@ struct LabelDetailView: View {
 
     private func header(_ label: LabelPage) -> some View {
         HStack(spacing: 16) {
-            ArtworkImage(url: label.coverURL, cornerRadius: 16)
-                .frame(width: 96)
+            AvatarImage(url: label.coverURL, size: 96)
             VStack(alignment: .leading, spacing: 6) {
                 Text(label.name)
                     .font(.title2.bold())

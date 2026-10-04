@@ -22,15 +22,17 @@ struct PageHeader: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 16)
             Button { mine?.isPresented = true } label: {
+                // 头像是方形的（与社团、用户头像一致），外框用圆角方形而不是圆形。
                 avatar
                     .frame(width: 40, height: 40)
+                    .clipShape(.rect(cornerRadius: 8))
                     .padding(2)
                     .frame(width: 44, height: 44)
-                    .contentShape(Circle())
+                    .contentShape(.rect(cornerRadius: 10))
                     .background {
-                        Circle()
+                        RoundedRectangle(cornerRadius: 10)
                             .fill(.clear)
-                            .glassEffect(.clear.interactive(), in: .circle)
+                            .glassEffect(.clear.interactive(), in: .rect(cornerRadius: 10))
                     }
             }
             .buttonStyle(.plain)
@@ -43,7 +45,7 @@ struct PageHeader: View {
     @ViewBuilder
     private var avatar: some View {
         if let user = account?.account {
-            ArtworkImage(url: user.avatarURL, cornerRadius: 20)
+            AvatarImage(url: user.avatarURL, size: 40)
         } else {
             Image(systemName: "person.crop.circle.fill")
                 .resizable()
