@@ -68,6 +68,20 @@ nonisolated enum DizzyURL {
         return URL(string: string + "!cover", relativeTo: media)?.absoluteURL
     }
 
+    /// CDN 的 `!cover` 会把透明 PNG 转成白底 JPEG，白色社团字标因此变成整块白色。
+    /// 仅头像请求取回已知 CDN 上的 PNG 原图；不改专辑封面、第三方 URL 或其他缩略图样式。
+    static func avatar(_ url: URL?) -> URL? {
+        guard let url,
+              url.host?.lowercased() == media.host,
+              url.path.hasPrefix("/media/"),
+              url.path.lowercased().hasSuffix(".png!cover"),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: true) else {
+            return url
+        }
+        components.path = String(components.path.dropLast("!cover".count))
+        return components.url ?? url
+    }
+
     /// 网页懒加载前的占位图，不是真正的封面。
     static func isPlaceholderImage(_ url: URL) -> Bool {
         url.lastPathComponent.hasPrefix("holder_")

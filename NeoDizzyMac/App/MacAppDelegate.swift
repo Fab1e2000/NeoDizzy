@@ -11,7 +11,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         Task { await model.services.restore() }
         #if DEBUG
         // 等主窗口建立导航栈后再打开调试页面。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.applyDebugLaunchArguments() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { self.applyDebugLaunchArguments() }
         #endif
         keyMonitor = PlaybackKeyMonitor(player: model.player)
         let services = model.services
@@ -70,18 +70,17 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
 
     #if DEBUG
     /// 仅 Debug：用启动参数打开指定页面，便于脚本截图检查界面，例如
-    /// `open NeoDizzy.app --args -debugSidebar discover -debugRoute disc:KSEP-001 -debugPanel lyrics -debugAppearance dark`。
+    /// `open NeoDizzy.app --args -debugTab discover -debugRoute disc:KSEP-001 -debugPanel lyrics -debugAppearance dark`。
     private func applyDebugLaunchArguments() {
         let defaults = UserDefaults.standard
         if let appearance = defaults.string(forKey: "debugAppearance") {
             NSApp.appearance = NSAppearance(named: appearance == "dark" ? .darkAqua : .aqua)
         }
-        if let sidebar = defaults.string(forKey: "debugSidebar") {
-            switch sidebar {
+        if let tab = defaults.string(forKey: "debugTab") {
+            switch tab {
             case "search": model.navigation.selection = .search
             case "history": model.navigation.selection = .history
-            case "downloads": model.navigation.selection = .downloads
-            default: if let tab = MainTab(rawValue: sidebar) { model.navigation.selection = .tab(tab) }
+            default: if let tab = MainTab(rawValue: tab) { model.navigation.selection = .tab(tab) }
             }
         }
         if let query = defaults.string(forKey: "debugSearch") {
@@ -104,7 +103,23 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         if let album = defaults.string(forKey: "debugPlayAlbum") {
             Task { try? await model.playAlbum(id: album) }
         }
+        let width = defaults.double(forKey: "debugWindowWidth")
+        if width > 0, let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) {
+            var frame = window.frame
+            frame.size.width = width
+            window.setFrame(frame, display: true)
+        }
         if let panel = defaults.string(forKey: "debugPanel") { model.playerPanel = PlayerPanel(rawValue: panel) }
+        // 在本地库与发现之间来回切换，用于 Instruments 测量切换开销。
+        let cycles = defaults.integer(forKey: "debugCycleTabs")
+        if cycles > 0 {
+            Task {
+                for index in 0..<cycles * 2 {
+                    try? await Task.sleep(for: .milliseconds(1500))
+                    model.navigation.selection = .tab(index.isMultiple(of: 2) ? .localLibrary : .discover)
+                }
+            }
+        }
         if defaults.bool(forKey: "debugSettings") { model.openSettings?() }
     }
     #endif

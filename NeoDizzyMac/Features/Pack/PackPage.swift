@@ -22,7 +22,7 @@ struct PackPage: View {
                     Link(destination: DizzyURL.pack(id)) {
                         Label(pack.price.map { "在网页中购买 \(PriceTag.yuan($0))" } ?? String(localized: "在网页中购买"), systemImage: "safari")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(AccentPillButtonStyle())
                 } footer: {
                     if let offer = pack.offer { Text(offer).foregroundStyle(.secondary) }
                 }

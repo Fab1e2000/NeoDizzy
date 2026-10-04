@@ -1,30 +1,5 @@
 import SwiftUI
 
-/// 下载：保存目录与下载队列。
-struct DownloadsPage: View {
-    @Environment(DownloadStore.self) private var downloads
-
-    var body: some View {
-        PageScroll(title: String(localized: "下载")) {
-            DownloadFolderSection()
-                .frame(maxWidth: 640)
-            if downloads.jobs.isEmpty {
-                ContentUnavailableView("没有下载任务", systemImage: "arrow.down.circle",
-                                       description: Text("在已购专辑的页面点击「下载」，选择格式后会在这里显示进度。"))
-                    .padding(.vertical, 40)
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    SectionTitle(String(localized: "下载队列"))
-                    ForEach(downloads.jobs) { job in
-                        DownloadJobRow(job: job)
-                    }
-                }
-                .frame(maxWidth: 640)
-            }
-        }
-    }
-}
-
 /// 一个下载任务：名称、状态、进度，以及取消或重试。
 struct DownloadJobRow: View {
     let job: DownloadJob
@@ -227,7 +202,7 @@ struct DownloadSheet: View {
                     .controlSize(.large)
                     .disabled(isEnqueuing || activeJob != nil || offline.isScanning)
                 }
-                Text(isGift ? "下载完成后会自动解压到专辑目录的「特典」文件夹。" : "下载完成后会自动解压并加入「本地库」。可在侧边栏的「下载」中查看进度。")
+                Text(isGift ? "下载完成后会自动解压到专辑目录的「特典」文件夹。" : "下载完成后会自动解压并加入「本地库」。可在专辑页查看进度。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

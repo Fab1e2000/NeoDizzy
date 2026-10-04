@@ -1,12 +1,19 @@
 import SwiftUI
 
-/// 发现：工具栏中间的分段控件切换数字专辑、单曲 EP、下载商品、pack 和限时优惠，与网站首页一致。
+/// 发现：标题右侧的分段控件切换数字专辑、单曲 EP、下载商品、pack 和限时优惠，与网站首页一致。
 struct DiscoverPage: View {
     @Environment(MacAppModel.self) private var model
 
     var body: some View {
         @Bindable var discover = model.discover
         PageScroll(title: String(localized: "发现")) {
+            Picker("分类", selection: $discover.section) {
+                ForEach(DiscoverSection.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        } content: {
             if let category = discover.section.category, let list = discover.lists[category] {
                 PagedSection(list: list, webURL: DizzyURL.site) { discs in
                     DiscGrid(discs: discs)
@@ -31,15 +38,6 @@ struct DiscoverPage: View {
             }
         }
         .id(discover.section)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("分类", selection: $discover.section) {
-                    ForEach(DiscoverSection.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
-        }
         .pageRefresh { await discover.refresh() }
     }
 }

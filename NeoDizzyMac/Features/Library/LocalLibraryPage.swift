@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// 本地专辑：在工具栏切换「专辑」网格与「歌曲」表格。下拉刷新换成 ⌘R 与「重新扫描」。
+/// 本地专辑：在标题右侧切换「专辑」网格与「歌曲」表格。下拉刷新换成 ⌘R 与「重新扫描」。
 struct LocalLibraryPage: View {
     @Environment(OfflineLibraryStore.self) private var library
     @AppStorage("localLibrary.showsSongs") private var showsSongs = false
@@ -29,9 +29,16 @@ struct LocalLibraryPage: View {
                     issue
                 }
             } else if showsSongs {
-                LocalSongsTable(albums: albums)
+                VStack(alignment: .leading, spacing: 12) {
+                    PageTitleRow(title: MainTab.localLibrary.title) { modePicker }
+                        .pageContentFrame()
+                        .padding(.top, 12)
+                    LocalSongsTable(albums: albums)
+                }
             } else {
                 PageScroll(title: MainTab.localLibrary.title) {
+                    modePicker
+                } content: {
                     issue
                     LazyVGrid(columns: PageMetrics.gridColumns, alignment: .leading, spacing: PageMetrics.gridSpacing) {
                         ForEach(albums) { album in
@@ -43,24 +50,36 @@ struct LocalLibraryPage: View {
         }
         .navigationTitle(MainTab.localLibrary.title)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("显示", selection: $showsSongs) {
-                    Text("专辑").tag(false)
-                    Text("歌曲").tag(true)
+            ToolbarItem(placement: .primaryAction) {
+                Button { Task { await library.scan() } } label: {
+                    // 保留同一工具栏项和固定尺寸，扫描时不插入额外控件挤动刷新按钮。
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 20, height: 20)
+                        .opacity(library.isScanning ? 0 : 1)
+                        .overlay {
+                            if library.isScanning {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .frame(width: 20, height: 20)
+                            }
+                        }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
-            ToolbarItemGroup(placement: .primaryAction) {
-                if library.isScanning {
-                    ProgressView().controlSize(.small)
-                }
-                Button { Task { await library.scan() } } label: { Label("重新扫描", systemImage: "arrow.clockwise") }
-                    .disabled(library.isScanning)
-                    .help("重新扫描本地库")
+                .disabled(library.isScanning)
+                .accessibilityLabel(library.isScanning ? "正在扫描本地库" : "重新扫描本地库")
+                .help(library.isScanning ? "正在扫描本地库" : "重新扫描本地库")
             }
         }
         .pageRefresh { await library.scan() }
+    }
+
+    private var modePicker: some View {
+        Picker("显示", selection: $showsSongs) {
+            Text("专辑").tag(false)
+            Text("歌曲").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
     }
 
     @ViewBuilder private var issue: some View {
@@ -185,19 +204,18 @@ struct LocalAlbumPage: View {
                     LazyVStack(alignment: .leading, spacing: 26) {
                         AlbumHeader(artworkURL: album.coverURL, title: album.title,
                                     metadata: String(localized: "本地专辑 · \(album.tracks.count) 首")) {
-                            Text(album.artist)
+                            Text(AlbumHeaderMetrics.condensedArtists(album.artist))
+                                .help(album.artist)
                         } actions: {
                             AlbumPlayButtons(isEmpty: album.tracks.isEmpty) { shuffled in model.play(album.tracks, shuffled: shuffled) }
-                            Button { batchAlbum = album } label: { Label("批量编辑", systemImage: "square.and.pencil") }
-                                .buttonStyle(.bordered)
-                                .fixedSize()
+                            Button { batchAlbum = album } label: { HeaderSecondaryLabel(title: "批量编辑", systemImage: "square.and.pencil") }
+                                .buttonStyle(HeaderSecondaryButtonStyle())
                                 .help("统一修改 FLAC 曲目的歌手、专辑名、年份、流派或封面")
                             if let folder = album.entries.first?.fileURL.deletingLastPathComponent() {
                                 Button { NSWorkspace.shared.activateFileViewerSelecting([folder]) } label: {
-                                    Label("在访达中显示", systemImage: "folder")
+                                    HeaderSecondaryLabel(title: "在访达中显示", systemImage: "folder")
                                 }
-                                .buttonStyle(.bordered)
-                                .fixedSize()
+                                .buttonStyle(HeaderSecondaryButtonStyle())
                             }
                         }
                         let discs = Array(Set(album.entries.map(\.discNumber))).sorted()
@@ -227,8 +245,8 @@ struct LocalAlbumPage: View {
                         }
                         TrackListFooter(tracks: album.tracks)
                     }
-                    .padding(.horizontal, PageMetrics.margin)
-                    .padding(.top, 14)
+                    .pageContentFrame()
+                    .padding(.top, 16)
                     .padding(.bottom, 28)
                 }
                 .navigationTitle(album.title)

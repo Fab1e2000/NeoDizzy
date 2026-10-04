@@ -7,7 +7,7 @@ struct LabelsPage: View {
     var body: some View {
         PageScroll(title: String(localized: "社团")) {
             PagedSection(list: model.labels, webURL: DizzyURL.page("/label/")) { labels in
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 340), spacing: 14)], alignment: .leading, spacing: 12) {
+                LazyVGrid(columns: PageMetrics.rowColumns, alignment: .leading, spacing: 12) {
                     ForEach(labels) { label in
                         LabelRow(name: label.name, coverURL: label.coverURL, description: label.description,
                                  recentDiscs: label.recentDiscs)
@@ -63,8 +63,7 @@ struct LabelDetailPage: View {
 
     private func header(_ label: LabelPage) -> some View {
         HStack(alignment: .center, spacing: 22) {
-            ArtworkImage(url: label.coverURL, cornerRadius: 70)
-                .frame(width: 140, height: 140)
+            AvatarImage(url: label.coverURL, size: 140)
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
             VStack(alignment: .leading, spacing: 8) {
                 Text(label.name).font(.pageTitle).lineLimit(2).textSelection(.enabled)

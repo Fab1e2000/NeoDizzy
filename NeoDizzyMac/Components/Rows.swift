@@ -11,8 +11,7 @@ struct LabelRow: View {
     var body: some View {
         NavigationLink(value: AppRoute.label(name: name)) {
             HStack(alignment: .top, spacing: 14) {
-                ArtworkImage(url: coverURL, cornerRadius: 10)
-                    .frame(width: 72, height: 72)
+                AvatarImage(url: coverURL, size: 72)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(name).font(.headline).lineLimit(1)
                     if !description.isEmpty {

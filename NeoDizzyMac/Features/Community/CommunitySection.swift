@@ -1,11 +1,12 @@
 import NukeUI
 import SwiftUI
 
-/// 专辑页底部的社区：+dB、短评与 repo 长评。与 iOS 相同，点开后才请求，本地专辑不会因此发起社区请求。
+/// 在线专辑页底部的社区：+dB、短评与 repo 长评，默认展开。
+/// 独立的 LocalAlbumPage 不使用此视图，不会因此发起社区请求。
 struct CommunitySection: View {
     let discID: String
     @Environment(AccountStore.self) private var account
-    @State private var isExpanded = false
+    @State private var isExpanded = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -199,7 +200,7 @@ struct UserPage: View {
             .fixedSize()
             switch model.section {
             case .following:
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14)], alignment: .leading, spacing: 12) {
+                LazyVGrid(columns: PageMetrics.rowColumns, alignment: .leading, spacing: 12) {
                     ForEach(model.labels) { LabelRow(name: $0.name, coverURL: $0.coverURL, description: $0.description) }
                 }
             case .review:

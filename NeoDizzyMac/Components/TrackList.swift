@@ -12,6 +12,8 @@ struct TrackList<RowMenu: View>: View {
     @ViewBuilder var rowMenu: (Track) -> RowMenu
 
     @State private var selection: Track.ID?
+    /// 艺术家列占列表宽度的 30%，最多 240。
+    @State private var artistWidth: CGFloat = 200
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -20,13 +22,14 @@ struct TrackList<RowMenu: View>: View {
                 TrackRow(track: track, number: track.number, isPreview: isPreview(track),
                          showsArtist: albumArtist.map { !track.artists.isEmpty && track.artists != $0 } ?? true,
                          isSelected: selection == track.id && isFocused,
-                         isStriped: index.isMultiple(of: 2),
+                         artistWidth: artistWidth,
                          select: { selection = track.id; isFocused = true },
                          play: { play(index) }) {
                     rowMenu(track)
                 }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { min(($0.size.width * 0.3).rounded(), 240) } action: { artistWidth = $0 }
         .focusable()
         .focused($isFocused)
         .focusEffectDisabled()
@@ -61,7 +64,7 @@ private struct TrackRow<RowMenu: View>: View {
     let isPreview: Bool
     let showsArtist: Bool
     let isSelected: Bool
-    let isStriped: Bool
+    let artistWidth: CGFloat
     let select: () -> Void
     let play: () -> Void
     @ViewBuilder var rowMenu: RowMenu
@@ -73,7 +76,7 @@ private struct TrackRow<RowMenu: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             leading
-                .frame(width: 26, alignment: .center)
+                .frame(width: 28, alignment: .center)
             HStack(spacing: 6) {
                 Text(track.title)
                     .lineLimit(1)
@@ -85,12 +88,12 @@ private struct TrackRow<RowMenu: View>: View {
                 Text(track.artists)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .frame(maxWidth: 260, alignment: .leading)
+                    .frame(width: artistWidth, alignment: .leading)
             }
             Text(track.duration.map(TimeFormat.clock) ?? "")
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-                .frame(width: 48, alignment: .trailing)
+                .frame(width: 52, alignment: .trailing)
             Menu {
                 menuItems
             } label: {
@@ -108,6 +111,12 @@ private struct TrackRow<RowMenu: View>: View {
         .padding(.horizontal, 10)
         .frame(height: 40)
         .background(background, in: .rect(cornerRadius: 6))
+        // 与 Music 相同的细分隔线，从标题列开始；悬停或选中时隐藏。
+        .overlay(alignment: .bottom) {
+            if !isHovering && !isSelected {
+                Rectangle().fill(.separator).frame(height: 0.5).padding(.leading, 50).padding(.trailing, 10)
+            }
+        }
         .contentShape(.rect)
         .onHover { isHovering = $0 }
         .onTapGesture(count: 2, perform: play)
@@ -121,8 +130,7 @@ private struct TrackRow<RowMenu: View>: View {
 
     private var background: Color {
         if isSelected { return Color.accentColor.opacity(0.22) }
-        if isHovering { return Color.primary.opacity(0.07) }
-        return isStriped ? Color.primary.opacity(0.025) : .clear
+        return isHovering ? Color.primary.opacity(0.07) : .clear
     }
 
     @ViewBuilder private var leading: some View {
@@ -169,12 +177,14 @@ private struct TrackRow<RowMenu: View>: View {
 struct TrackListFooter: View {
     let tracks: [Track]
     var releaseDate: String?
+    var copyright: String?
 
     var body: some View {
         let total = tracks.compactMap(\.duration).reduce(0, +)
         VStack(alignment: .leading, spacing: 2) {
             if let releaseDate { Text(releaseDate) }
             Text(total > 0 ? "\(tracks.count) 首歌曲，\(TimeFormat.total(total))" : "\(tracks.count) 首歌曲")
+            if let copyright, !copyright.isEmpty { Text("℗ \(copyright)") }
         }
         .font(.callout)
         .foregroundStyle(.secondary)

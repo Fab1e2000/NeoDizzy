@@ -20,6 +20,31 @@ struct DizzyURLTests {
         #expect(DizzyURL.isPlaceholderImage(holder))
     }
 
+    @Test func pngAvatarsBypassLossyCDNStyle() throws {
+        let styled = try #require(DizzyURL.image("https://cdn.dizzylab.net/media/label_cover/1_uBbFeP3.png!cover"))
+        #expect(DizzyURL.avatar(styled)?.absoluteString == "https://cdn.dizzylab.net/media/label_cover/1_uBbFeP3.png")
+        // 普通图片解析仍保留样式，只有头像视图选择原图。
+        #expect(styled.absoluteString.hasSuffix("!cover"))
+        let escaped = try #require(URL(string: "https://cdn.dizzylab.net/media/avatars/%E6%98%9F.PNG%21cover?token=a%2Bb#icon"))
+        #expect(DizzyURL.avatar(escaped)?.path == "/media/avatars/星.PNG")
+        #expect(DizzyURL.avatar(escaped)?.query == "token=a%2Bb")
+        #expect(DizzyURL.avatar(escaped)?.fragment == "icon")
+    }
+
+    @Test func avatarURLLeavesUnrelatedResourcesUntouched() {
+        #expect(DizzyURL.avatar(nil) == nil)
+        for address in [
+            "https://cdn.dizzylab.net/media/avatars/photo.jpg!cover",
+            "https://cdn.dizzylab.net/media/avatars/logo.png!other",
+            "https://cdn.dizzylab.net/media/avatars/logo.png",
+            "https://example.com/media/avatars/logo.png!cover",
+            "https://cdn.dizzylab.net/static/logo.png!cover"
+        ] {
+            let url = URL(string: address)
+            #expect(DizzyURL.avatar(url) == url)
+        }
+    }
+
     @Test func pathSegmentsAndQueryValuesAreFullyEscaped() {
         #expect(DizzyURL.label("obscuRE TRAX").absoluteString == "https://www.dizzylab.net/l/obscuRE%20TRAX/")
         #expect(DizzyURL.label("A/B").absoluteString == "https://www.dizzylab.net/l/A%2FB/")

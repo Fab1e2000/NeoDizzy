@@ -1,19 +1,17 @@
 import SwiftUI
 
-/// 侧边栏的一项。主页面沿用 iOS 的 `MainTab`（顺序、隐藏和启动页面共用 `TabSettings`），
-/// 另外加上 Mac 侧边栏才有的搜索、浏览记录与下载。
-enum SidebarItem: Hashable {
+/// 顶部导航栏的一项。主页面沿用 iOS 的 `MainTab`（顺序、隐藏和启动页面共用 `TabSettings`），
+/// 另外加上 Mac 才有的搜索与浏览记录。
+enum NavigationItem: Hashable {
     case search
     case tab(MainTab)
     case history
-    case downloads
 
     var title: String {
         switch self {
         case .search: String(localized: "搜索")
         case .tab(let tab): tab.title
         case .history: String(localized: "最近浏览")
-        case .downloads: String(localized: "下载")
         }
     }
 
@@ -30,12 +28,8 @@ enum SidebarItem: Hashable {
             case .localLibrary: "square.stack"
             }
         case .history: "clock"
-        case .downloads: "arrow.down.circle"
         }
     }
-
-    /// 侧边栏分组：DizzyLab 在线内容与本机资料库。
-    static let onlineTabs: Set<MainTab> = [.discover, .shuffle, .labels, .feed]
 }
 
 /// 右侧检查器显示的内容，与 Music 的歌词 / 待播清单面板相同。
@@ -43,21 +37,21 @@ enum PlayerPanel: String, Hashable {
     case lyrics, queue
 }
 
-/// 主窗口的导航状态：侧边栏选中项，以及每一项各自的导航路径。
+/// 主窗口的导航状态：导航栏选中项，以及每一项各自的导航路径。
 @Observable
 final class NavigationModel {
-    var selection: SidebarItem?
-    private(set) var paths: [SidebarItem: [AppRoute]] = [:]
+    var selection: NavigationItem?
+    private(set) var paths: [NavigationItem: [AppRoute]] = [:]
 
-    init(selection: SidebarItem) {
+    init(selection: NavigationItem) {
         self.selection = selection
     }
 
-    func path(for item: SidebarItem) -> [AppRoute] { paths[item] ?? [] }
+    func path(for item: NavigationItem) -> [AppRoute] { paths[item] ?? [] }
 
-    func setPath(_ path: [AppRoute], for item: SidebarItem) { paths[item] = path }
+    func setPath(_ path: [AppRoute], for item: NavigationItem) { paths[item] = path }
 
-    /// 推入当前侧边栏项的导航栈。
+    /// 推入当前导航项的导航栈。
     func open(_ route: AppRoute) {
         let item = selection ?? .tab(.discover)
         if selection == nil { selection = item }
@@ -65,8 +59,8 @@ final class NavigationModel {
         paths[item, default: []].append(route)
     }
 
-    /// 回到某一项的根页面（再次点击侧边栏同一项时）。
-    func popToRoot(_ item: SidebarItem) { paths[item] = [] }
+    /// 回到某一项的根页面（再次点击导航栏同一项时）。
+    func popToRoot(_ item: NavigationItem) { paths[item] = [] }
 }
 
 /// 当前页面的刷新动作（⌘R）。页面出现时登记，消失时撤销，推入的页面会覆盖其下的根页面。
@@ -83,7 +77,7 @@ final class MacAppModel {
     let navigation: NavigationModel
     let search = SearchModel()
 
-    // 根页面的数据跨侧边栏切换保留，与 iOS 标签页常驻的效果一致。
+    // 根页面的数据跨导航项切换保留，与 iOS 标签页常驻的效果一致。
     let discover = DiscoverModel()
     let feed = FeedModel()
     let library = LibraryModel()
@@ -94,6 +88,8 @@ final class MacAppModel {
     var purchaseTarget: DiscSummary?
     var isSearchFocused = false
     private(set) var refresh: PageRefresh?
+    /// 各根页面的滚动位置，切换导航项后回来时恢复。
+    @ObservationIgnored var scrollOffsets: [NavigationItem: CGFloat] = [:]
     /// 由窗口登记的 openWindow 动作，用来在主窗口被关闭后从 Dock 或菜单重新打开它。
     @ObservationIgnored var openWindow: ((String) -> Void)?
     @ObservationIgnored var openSettings: (() -> Void)?
@@ -137,9 +133,23 @@ final class MacAppModel {
         isSearchFocused = true
     }
 
+    /// 最近搜索的关键词，最新的在前。
+    private(set) var recentSearches: [String] = UserDefaults.standard.stringArray(forKey: "search.recent") ?? []
+
     func submitSearch() {
+        let keyword = search.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return }
         search.submit()
-        if search.keyword != nil { navigation.selection = .search }
+        recentSearches = Array(([keyword] + recentSearches.filter { $0 != keyword }).prefix(10))
+        UserDefaults.standard.set(recentSearches, forKey: "search.recent")
+        // 即使上次从搜索结果进入了详情，再次回车也必须回到结果页。
+        navigation.popToRoot(.search)
+        navigation.selection = .search
+    }
+
+    func clearRecentSearches() {
+        recentSearches = []
+        UserDefaults.standard.removeObject(forKey: "search.recent")
     }
 
     /// 按专辑 ID 拉取详情后从第一首开始播放（网格卡片上的悬停播放按钮）。

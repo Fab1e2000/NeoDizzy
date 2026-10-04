@@ -34,7 +34,6 @@ struct LyricsPanel: View {
     @State private var lyrics: LocalLyrics?
     @State private var issue: String?
     @State private var revision = 0
-    @State private var isInterfaceHidden = false
 
     private struct Request: Hashable {
         let trackID: String
@@ -70,15 +69,7 @@ struct LyricsPanel: View {
             } else {
                 VStack(spacing: 0) {
                     if lyrics.isTimed {
-                        GeometryReader { proxy in
-                            AppleMusicLocalLyricsView(lyrics: lyrics, playerFrame: proxy.frame(in: .global),
-                                                      activeID: lyrics.activeLine(at: player.progress),
-                                                      bottomOverlayHeight: 0, isActive: true,
-                                                      isInterfaceHidden: $isInterfaceHidden,
-                                                      onSeek: { player.seek(to: $0) },
-                                                      fixedFontSize: fontSize, foreground: tone.primary)
-                        }
-                        .padding(.horizontal, 18)
+                        PanelLyricsView(lyrics: lyrics, fontSize: fontSize, tone: tone)
                     } else {
                         ScrollView {
                             Text(lyrics.plainText)
@@ -240,5 +231,88 @@ private struct PanelPlaceholder<Actions: View>: View {
 extension PanelPlaceholder where Actions == EmptyView {
     init(title: LocalizedStringKey, systemImage: String, message: String? = nil, tone: PlayerControlTone = .standard) {
         self.init(title: title, systemImage: systemImage, message: message, tone: tone, actions: { EmptyView() })
+    }
+}
+
+/// 面板里的逐行歌词，与 Music 的歌词面板相同：当前行高亮，其余行变暗，点击跳转。
+/// 不使用 iOS 播放页的逐行模糊与弹簧动画，打开面板和播放时都不会拖慢主界面。
+private struct PanelLyricsView: View {
+    let lyrics: LocalLyrics
+    let fontSize: CGFloat
+    let tone: PlayerControlTone
+    @Environment(PlayerStore.self) private var player
+    @State private var isBrowsing = false
+    @State private var resumeGeneration = 0
+
+    var body: some View {
+        let activeID = lyrics.activeLine(at: player.progress)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: fontSize * 0.7) {
+                    ForEach(lyrics.lines) { line in
+                        PanelLyricLine(text: line.text, isActive: line.id == activeID, fontSize: fontSize, tone: tone) {
+                            player.seek(to: line.time)
+                            isBrowsing = false
+                        }
+                        .id(line.id)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 40)
+            }
+            .scrollIndicators(.never)
+            // 上下边缘渐隐，歌词不会生硬地切在面板顶部的切换按钮下面。
+            .mask {
+                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08),
+                                       .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+                               startPoint: .top, endPoint: .bottom)
+            }
+            .onScrollPhaseChange { _, phase in
+                // 手动滚动后暂停跟随，3 秒后回到当前行。
+                if phase == .interacting { isBrowsing = true; resumeGeneration += 1 }
+            }
+            .task(id: resumeGeneration) {
+                guard isBrowsing else { return }
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                isBrowsing = false
+            }
+            .onChange(of: activeID) { _, id in
+                guard !isBrowsing, let id else { return }
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: UnitPoint(x: 0, y: 0.4)) }
+            }
+            .onChange(of: isBrowsing) { _, browsing in
+                guard !browsing, let id = activeID else { return }
+                withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(id, anchor: UnitPoint(x: 0, y: 0.4)) }
+            }
+            .onAppear {
+                if let id = activeID { proxy.scrollTo(id, anchor: UnitPoint(x: 0, y: 0.4)) }
+            }
+        }
+    }
+}
+
+private struct PanelLyricLine: View, Equatable {
+    let text: String
+    let isActive: Bool
+    let fontSize: CGFloat
+    let tone: PlayerControlTone
+    let seek: () -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.text == rhs.text && lhs.isActive == rhs.isActive && lhs.fontSize == rhs.fontSize && lhs.tone == rhs.tone
+    }
+
+    var body: some View {
+        Button(action: seek) {
+            Text(text.isEmpty ? "♪" : text)
+                .font(.system(size: fontSize, weight: .bold))
+                .foregroundStyle(isActive ? tone.primary : tone.secondary.opacity(0.55))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(.leading)
+                .contentShape(.rect)
+                .animation(.easeOut(duration: 0.25), value: isActive)
+        }
+        .buttonStyle(.plain)
     }
 }

@@ -12,9 +12,18 @@ final class DiscDetailModel {
     private var hasRequestedDurations = false
     private var hasRequestedPreviewDurations = false
 
-    init(id: String, fresh: Bool = false) {
+    /// `prefetched` 是已经提前开始的请求（Mac 版悬停封面时预取），只用于第一次加载：
+    /// 重试和刷新必须重新请求，否则会一直拿到同一个失败结果或过期的播放地址。
+    init(id: String, fresh: Bool = false, prefetched: (() async throws -> DiscDetail)? = nil) {
         self.id = id
-        detail = Loadable { try await DizzyAPI.shared.discDetail(id: id, fresh: fresh) }
+        var prefetched = prefetched
+        detail = Loadable {
+            if let load = prefetched {
+                prefetched = nil
+                return try await load()
+            }
+            return try await DizzyAPI.shared.discDetail(id: id, fresh: fresh)
+        }
     }
 
     /// 成功取到一次就不再请求，即使页面里本来就没有时长；失败或被取消时下次进入再取。

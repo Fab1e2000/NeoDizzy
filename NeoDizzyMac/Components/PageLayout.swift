@@ -1,48 +1,117 @@
 import SwiftUI
 
+/// Mac 版统一的排版参数，各页面只引用这里的常量。
 enum PageMetrics {
-    /// 内容区左右留白，与 Music 的页面边距接近。
-    static let margin: CGFloat = 28
-    static let gridColumns = [GridItem(.adaptive(minimum: 158, maximum: 230), spacing: 22, alignment: .top)]
-    static let gridSpacing: CGFloat = 26
+    /// 内容区左右留白。
+    static let margin: CGFloat = 32
+    /// 超宽窗口里内容不再继续拉伸，居中显示。
+    static let maxContentWidth: CGFloat = 1400
+    /// 页面内各分区之间的间距。
+    static let sectionSpacing: CGFloat = 32
+    static let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 220), spacing: 20, alignment: .top)]
+    static let gridSpacing: CGFloat = 28
+    /// 社团、搜索结果等横向信息行组成的网格。
+    static let rowColumns = [GridItem(.adaptive(minimum: 320), spacing: 16, alignment: .top)]
+    /// 网格卡片的封面固定按这个尺寸解码，窗口缩放时不重新解码。
+    static let cardArtworkSize = CGSize(width: 400, height: 400)
+    /// 底部播放条的高度，页面内容在它上方留出同样的空间。
+    static let playerBarInset: CGFloat = 72
 }
 
 extension Font {
     /// 页面大标题（Music 的「主页」「专辑」等）。
-    static let pageTitle = Font.system(size: 28, weight: .bold)
+    static let pageTitle = Font.system(size: 26, weight: .bold)
     /// 分区标题。
-    static let sectionTitle = Font.system(size: 19, weight: .bold)
+    static let sectionTitle = Font.system(size: 18, weight: .bold)
+    /// 卡片与列表的标题、副标题。
+    static let cardTitle = Font.system(size: 13, weight: .medium)
+    static let cardSubtitle = Font.system(size: 13)
+    /// 说明文字。
+    static let note = Font.system(size: 12)
+}
+
+extension EnvironmentValues {
+    /// 根页面所属的导航项，用来在切换导航项后恢复滚动位置。推入的页面为 nil。
+    @Entry var pageScrollKey: NavigationItem?
 }
 
 /// 标准页面：可滚动内容，顶部大标题。大标题写在内容里，窗口标题栏不显示标题，与 Music 一致。
-struct PageScroll<Content: View>: View {
+/// 页面自己的切换控件（分类、专辑 / 歌曲）放在标题右侧：工具栏正中留给顶部导航栏。
+struct PageScroll<Content: View, Accessory: View>: View {
     var title: String?
     var subtitle: String?
-    @ViewBuilder var content: Content
+    var accessory: Accessory
+    var content: Content
+    @Environment(\.pageScrollKey) private var scrollKey
+    @Environment(MacAppModel.self) private var model
+    @State private var position = ScrollPosition(edge: .top)
+
+    init(title: String? = nil, subtitle: String? = nil,
+         @ViewBuilder accessory: () -> Accessory, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.accessory = accessory()
+        self.content = content()
+    }
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 26) {
+            LazyVStack(alignment: .leading, spacing: PageMetrics.sectionSpacing) {
                 if let title {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                            .font(.pageTitle)
-                            .lineLimit(2)
-                            .accessibilityAddTraits(.isHeader)
-                        if let subtitle {
-                            Text(subtitle).font(.title3).foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.top, 4)
+                    PageTitleRow(title: title, subtitle: subtitle) { accessory }
                 }
                 content
             }
-            .padding(.horizontal, PageMetrics.margin)
-            .padding(.top, 10)
+            .pageContentFrame()
+            .padding(.top, 12)
             .padding(.bottom, 28)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollPosition($position)
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, offset in
+            if let scrollKey { model.scrollOffsets[scrollKey] = offset }
+        }
+        .onAppear {
+            if let scrollKey, let offset = model.scrollOffsets[scrollKey], offset > 0 { position.scrollTo(y: offset) }
         }
         .navigationTitle(title ?? "")
+    }
+}
+
+extension PageScroll where Accessory == EmptyView {
+    init(title: String? = nil, subtitle: String? = nil, @ViewBuilder content: () -> Content) {
+        self.init(title: title, subtitle: subtitle, accessory: { EmptyView() }, content: content)
+    }
+}
+
+/// 页面大标题，右侧可放页面自己的分段控件。
+struct PageTitleRow<Accessory: View>: View {
+    let title: String
+    var subtitle: String?
+    @ViewBuilder var accessory: Accessory
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.pageTitle)
+                    .lineLimit(2)
+                    .accessibilityAddTraits(.isHeader)
+                if let subtitle {
+                    Text(subtitle).font(.title3).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+            accessory
+        }
+    }
+}
+
+extension View {
+    /// 统一的页边距与最大内容宽度。
+    func pageContentFrame() -> some View {
+        frame(maxWidth: PageMetrics.maxContentWidth, alignment: .leading)
+            .padding(.horizontal, PageMetrics.margin)
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
@@ -131,14 +200,16 @@ struct TagBadge: View {
     }
 }
 
-/// 圆形头像（社团、用户）。
+/// 方形头像（社团、用户）；nil 尺寸时随网格宽度布局。
 struct AvatarImage: View {
     let url: URL?
-    var size: CGFloat = 36
+    var size: CGFloat? = 36
 
     var body: some View {
-        ArtworkImage(url: url, cornerRadius: size / 2)
+        ArtworkImage(url: DizzyURL.avatar(url), cornerRadius: 0, contentMode: .fit)
             .frame(width: size, height: size)
+            // 透明白色字标在浅色界面仍需对比度；中性底也能承托黑色字标。
+            .background(Color(white: 0.45))
     }
 }
 

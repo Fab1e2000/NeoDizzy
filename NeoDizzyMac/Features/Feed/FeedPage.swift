@@ -11,8 +11,7 @@ struct FeedPage: View {
             if account.isLoggedIn, !account.isSessionExpired, let groups = model.feed.groups {
                 PagedSection(list: groups, webURL: DizzyURL.page("/feed/"), emptyTitle: "关注的社团还没有发布新作",
                              emptySystemImage: "newspaper") { groups in
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 22, alignment: .top)],
-                              alignment: .leading, spacing: 26) {
+                    LazyVGrid(columns: PageMetrics.gridColumns, alignment: .leading, spacing: PageMetrics.gridSpacing) {
                         ForEach(groups) { FeedLabelCard(group: $0) }
                     }
                 }
@@ -33,7 +32,7 @@ struct FeedPage: View {
     }
 }
 
-/// 关注页里的一个社团：圆形头像、名称与最近更新日期，与 Music 的艺人网格相同。
+/// 关注页里的一个社团：方形头像、名称与最近更新日期。
 private struct FeedLabelCard: View {
     let group: FeedGroup
     @State private var isHovering = false
@@ -41,7 +40,7 @@ private struct FeedLabelCard: View {
     var body: some View {
         NavigationLink(value: AppRoute.label(name: group.labelName)) {
             VStack(spacing: 8) {
-                ArtworkImage(url: group.labelCoverURL, cornerRadius: 999)
+                AvatarImage(url: group.labelCoverURL, size: nil)
                     .shadow(color: .black.opacity(isHovering ? 0.25 : 0.12), radius: isHovering ? 10 : 5, y: 3)
                     .scaleEffect(isHovering ? 1.02 : 1)
                 Text(group.labelName).font(.body.weight(.medium)).lineLimit(1)

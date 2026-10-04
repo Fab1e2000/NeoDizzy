@@ -16,7 +16,7 @@ struct SettingsView: View {
     }
 }
 
-/// 启动页面与侧边栏项目（显示、隐藏与顺序），对应 iOS 的「标签栏」设置。
+/// 启动页面与导航栏项目（显示、隐藏与顺序），对应 iOS 的「标签栏」设置。
 private struct GeneralSettings: View {
     @Environment(TabSettings.self) private var tabs
 
@@ -32,7 +32,7 @@ private struct GeneralSettings: View {
                 List {
                     ForEach(tabs.order) { tab in
                         Toggle(isOn: Binding(get: { tabs.isVisible(tab) }, set: { tabs.setVisible($0, for: tab) })) {
-                            Label(tab.title, systemImage: SidebarItem.tab(tab).systemImage)
+                            Label(tab.title, systemImage: NavigationItem.tab(tab).systemImage)
                         }
                         .disabled(!tabs.canHide(tab))
                     }
@@ -45,9 +45,9 @@ private struct GeneralSettings: View {
                 .frame(height: 190)
                 Button("恢复默认") { tabs.reset() }
             } header: {
-                Text("侧边栏")
+                Text("导航栏")
             } footer: {
-                Text("拖动调整顺序，至少保留一个页面。搜索、最近浏览和下载始终显示。")
+                Text("拖动调整顺序，至少保留一个页面。「搜索」和「最近浏览」始终显示。")
             }
         }
         .formStyle(.grouped)

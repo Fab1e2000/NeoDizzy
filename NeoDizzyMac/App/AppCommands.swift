@@ -10,8 +10,6 @@ struct AppCommands: Commands {
     private var library: OfflineLibraryStore { model.services.offlineLibrary }
 
     var body: some Commands {
-        SidebarCommands()
-
         CommandGroup(replacing: .newItem) {
             Button("添加音乐文件夹…") {
                 Task {
@@ -115,7 +113,9 @@ struct AppCommands: Commands {
     }
 
     private func panelBinding(_ panel: PlayerPanel) -> Binding<Bool> {
-        Binding(get: { model.playerPanel == panel }, set: { model.playerPanel = $0 ? panel : nil })
+        Binding(get: { model.playerPanel == panel }, set: { show in
+            model.playerPanel = show ? panel : nil
+        })
     }
 
     private func presentLogin() {

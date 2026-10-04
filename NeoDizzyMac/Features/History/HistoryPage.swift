@@ -16,7 +16,7 @@ struct HistoryPage: View {
                     Text("最近浏览")
                         .font(.pageTitle)
                         .padding(.horizontal, PageMetrics.margin)
-                        .padding(.top, 14)
+                        .padding(.top, 12)
                         .padding(.bottom, 6)
                         .accessibilityAddTraits(.isHeader)
                     historyList

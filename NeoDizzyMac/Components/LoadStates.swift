@@ -90,6 +90,7 @@ struct PagedSection<Item: Identifiable & Sendable, Content: View>: View {
             }
         } else {
             content(list.items)
+                .transition(.opacity.animation(.easeOut(duration: 0.2)))
             if list.hasMore || list.failure != nil {
                 PaginationLoader(list: list)
             }
@@ -107,6 +108,7 @@ struct LoadablePage<Value, Content: View>: View {
         Group {
             if let value = state.value {
                 content(value)
+                    .transition(.opacity)
             } else if let failure = state.failure {
                 FailureView(message: failure, webURL: webURL) { await state.load() }
             } else {
@@ -114,6 +116,8 @@ struct LoadablePage<Value, Content: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // 内容加载完成时淡入，而不是突然替换掉转圈。
+        .animation(.easeOut(duration: 0.2), value: state.value == nil)
         .task { await state.loadIfNeeded() }
     }
 }
