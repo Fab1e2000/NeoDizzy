@@ -118,13 +118,31 @@ private struct PageHeaderPlacement<Header: View>: ViewModifier {
     let header: Header
     @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
     @State private var pull = PageHeaderPull()
+    /// 窗口自身的顶部安全区（状态栏、灵动岛），不含导航栏。
+    @State private var windowTopInset: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
-            .toolbar(.hidden, for: .navigationBar)
             .safeAreaBar(edge: .top, spacing: 0) {
                 if pinsTitleBar { header.padding(.horizontal, 20).padding(.bottom, 5) }
             }
+            // 页头画在内容里，不需要导航栏让出的空间：忽略整个顶部安全区，只把状态栏的高度加回来，
+            // 页头位置与隐藏导航栏时相同。（负的 safeAreaPadding 不会生效。）
+            .safeAreaPadding(.top, windowTopInset)
+            .ignoresSafeArea(.container, edges: .top)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { _ in
+                windowTopInset = UIApplication.shared.connectedScenes
+                    .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.top }
+                    .first ?? 0
+            }
+            // 导航栏保持显示（透明、无内容），与推入的详情页一致：滑动返回走系统标准过渡，返回按钮原地淡出。
+            // 根页隐藏导航栏时，导航栏会作为详情页的一部分随页面滑出，iOS 27.2 在这个过程中丢掉返回按钮的左边距。
+            .toolbar(.visible, for: .navigationBar)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .scrollEdgeEffectStyle(.soft, for: .top)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(0, -(geometry.contentOffset.y + geometry.contentInsets.top))
