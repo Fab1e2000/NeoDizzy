@@ -2,7 +2,7 @@
 # 用法：scripts/mac.sh [run|build|package]
 #   run      构建 Debug 并启动 macOS 版
 #   build    只构建 Debug
-#   package  构建 Release，ad-hoc 签名后打包为 zip，并更新 dist/SHA256SUMS.txt
+#   package  构建 Release，ad-hoc 签名后打包为 dmg（含「应用程序」快捷方式），并更新 dist/SHA256SUMS.txt
 # 脚本统一使用 ad-hoc 签名，不需要开发者账号；需要固定签名（例如钥匙串不再重复询问）时，在 Xcode 中选择开发团队运行。
 set -euo pipefail
 ROOT=${0:A:h:h}
@@ -23,11 +23,17 @@ if [[ $ACTION == package ]]; then
   app=build/mac/Build/Products/Release/NeoDizzy.app
   codesign --verify --strict "$app"
   mkdir -p dist
-  output="$PWD/dist/NeoDizzy-macOS-v$version.zip"
+  output="$PWD/dist/NeoDizzy-macOS-v$version.dmg"
   rm -f "$output"
-  ditto -c -k --norsrc --keepParent "$app" "$output"
+  # 磁盘映像里放 App 和「应用程序」快捷方式，打开后拖进去即可安装。
+  stage=$(mktemp -d)
+  trap 'rm -rf "$stage"' EXIT
+  ditto "$app" "$stage/NeoDizzy.app"
+  ln -s /Applications "$stage/Applications"
+  hdiutil create -volname "NeoDizzy $version" -srcfolder "$stage" -fs HFS+ -format UDZO -ov "$output" -quiet
+  hdiutil verify "$output" -quiet
   # 与 iOS 的 IPA 共用一份校验文件。
-  (cd dist && shasum -a 256 *.ipa(N) *.zip(N) > SHA256SUMS.txt)
+  (cd dist && shasum -a 256 *.ipa(N) *.dmg(N) > SHA256SUMS.txt)
   echo "$output"
   exit 0
 fi
