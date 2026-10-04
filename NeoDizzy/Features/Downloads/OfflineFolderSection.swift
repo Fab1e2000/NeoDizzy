@@ -2,7 +2,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// 通过系统文件选择器保留文件夹授权，用于下载目标目录。
+///
+/// 同一页面里只能有一个 `fileImporter`：嵌在已有文件选择器的页面里（扫描目录页）时，
+/// 传入 `chooseFolder` 交给外层的选择器，本区块不再挂自己的选择器；否则选择器能打开，
+/// 但点「打开」后结果回不来。单独使用时（下载面板）不传，由本区块自己弹出。
 struct OfflineFolderSection: View {
+    var chooseFolder: (() -> Void)?
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(DownloadStore.self) private var downloads
     @State private var isChoosingFolder = false
@@ -24,7 +29,7 @@ struct OfflineFolderSection: View {
                 .foregroundStyle(DizzyPalette.mutedText)
             HStack(spacing: 12) {
                 Button(offline.folderName == nil ? "选择文件夹" : "更换文件夹", systemImage: "folder.badge.plus") {
-                    isChoosingFolder = true
+                    if let chooseFolder { chooseFolder() } else { isChoosingFolder = true }
                 }
                 .buttonStyle(.bordered)
                 .disabled(isBusy || hasActiveDownloads)
@@ -60,17 +65,23 @@ struct OfflineFolderSection: View {
                 selectionError = nil
                 Task {
                     defer { isSelectingFolder = false }
-                    do {
-                        try await offline.selectFolder(url)
-                    } catch is CancellationError {
-                        return
-                    } catch {
-                        selectionError = error.localizedDescription
-                    }
+                    selectionError = await Self.selectDownloadFolder(url, in: offline)
                 }
             case .failure(let error):
                 selectionError = error.localizedDescription
             }
+        }
+    }
+
+    /// 保存下载目录的授权；失败时返回要显示的错误信息。
+    static func selectDownloadFolder(_ url: URL, in offline: OfflineLibraryStore) async -> String? {
+        do {
+            try await offline.selectFolder(url)
+            return nil
+        } catch is CancellationError {
+            return nil
+        } catch {
+            return error.localizedDescription
         }
     }
 }
