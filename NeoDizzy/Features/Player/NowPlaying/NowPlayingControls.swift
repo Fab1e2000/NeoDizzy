@@ -266,6 +266,8 @@ struct NowPlayingPageSelector: View {
                     .font(.title3).frame(width: 44, height: 44)
                     .foregroundStyle(page == .lyrics ? .black.opacity(0.68) : .white.opacity(0.72))
                     .background(.white.opacity(page == .lyrics ? 0.68 : 0), in: .circle)
+                    // 背景透明时不参与点按，必须显式给出整圆的点按区域，否则只有图标本身能点中。
+                    .contentShape(.circle)
             }
             .buttonStyle(.plain).accessibilityLabel("歌词")
             .accessibilityAddTraits(page == .lyrics ? .isSelected : [])
