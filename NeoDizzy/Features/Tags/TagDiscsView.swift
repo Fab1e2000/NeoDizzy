@@ -22,6 +22,7 @@ struct TagDiscsView: View {
         }
         .refreshable { await discs.reload() }
         .dizzyPageBackground()
+        .safeAreaPadding(.top, 5)
         .navigationTitle("#\(tag)")
         .navigationBarTitleDisplayMode(.inline)
     }

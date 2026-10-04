@@ -1,8 +1,5 @@
 import SwiftUI
 
-extension Notification.Name {
-    static let dizzyFollowingDidChange = Notification.Name("dizzyFollowingDidChange")
-}
 struct FollowLabelButton: View {
     let name: String
     var onChanged: (() async -> Void)?

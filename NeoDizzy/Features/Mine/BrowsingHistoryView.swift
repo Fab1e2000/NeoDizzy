@@ -40,6 +40,7 @@ struct BrowsingHistoryView: View {
         }
         .scrollContentBackground(.hidden)
         .dizzyPageBackground()
+        .safeAreaPadding(.top, 5)
         .navigationTitle("浏览记录")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

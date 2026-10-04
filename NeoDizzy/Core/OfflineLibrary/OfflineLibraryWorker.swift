@@ -27,19 +27,30 @@ nonisolated struct PreparedOfflineFolder: Sendable {
 
 /// 文件提供商的协调、目录枚举和大文件复制都在这个 actor 上执行。
 actor OfflineLibraryWorker {
+    #if os(macOS)
+    /// 沙盒中的 Mac App 需要带安全范围的 bookmark，重启后才能重新获得用户所选文件夹的访问权限；
+    /// 未沙盒的进程（例如在 macOS 上运行的核心测试）使用普通 bookmark。
+    private static let usesSecurityScope = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+    private static var bookmarkCreation: URL.BookmarkCreationOptions { usesSecurityScope ? .withSecurityScope : .minimalBookmark }
+    private static var bookmarkResolution: URL.BookmarkResolutionOptions { usesSecurityScope ? [.withSecurityScope, .withoutUI] : [.withoutUI] }
+    #else
+    private static let bookmarkCreation: URL.BookmarkCreationOptions = .minimalBookmark
+    private static let bookmarkResolution: URL.BookmarkResolutionOptions = [.withoutUI]
+    #endif
+
     func prepare(_ url: URL) throws -> PreparedOfflineFolder {
         let access = OfflineFolderAccess(url: url)
         guard try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true,
               try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else {
             throw OfflineLibraryError.invalidFolder
         }
-        let bookmark = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+        let bookmark = try url.bookmarkData(options: Self.bookmarkCreation, includingResourceValuesForKeys: nil, relativeTo: nil)
         return PreparedOfflineFolder(access: access, bookmark: bookmark)
     }
 
     func restore(_ data: Data) throws -> PreparedOfflineFolder {
         var stale = false
-        let url = try URL(resolvingBookmarkData: data, options: [.withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale)
+        let url = try URL(resolvingBookmarkData: data, options: Self.bookmarkResolution, relativeTo: nil, bookmarkDataIsStale: &stale)
         // 总是刷新 bookmark，同时覆盖文件提供商迁移后已过期的 bookmark。
         return try prepare(url)
     }

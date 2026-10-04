@@ -10,6 +10,7 @@ struct ArtworkImage: View {
     var cornerRadius: CGFloat = 10
     var aspectRatio: CGFloat = 1
     var decodeSize: CGSize? = nil
+    var contentMode: ContentMode = .fill
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
@@ -33,10 +34,16 @@ struct ArtworkImage: View {
         guard let url else { return nil }
         var request = ImageRequest(url: url)
         request.thumbnail = ImageRequest.ThumbnailOptions(
-            size: decodeSize ?? CGSize(width: max(size.width, 1), height: max(size.height, 1)),
-            contentMode: .aspectFill
+            size: decodeSize ?? Self.bucketed(size),
+            contentMode: contentMode == .fit ? .aspectFit : .aspectFill
         )
         return request
+    }
+
+    /// 解码尺寸按 128 点向上取整：拖动窗口时同一档位内复用同一个请求，不会每一帧都重新解码。
+    private static func bucketed(_ size: CGSize) -> CGSize {
+        func round(_ value: CGFloat) -> CGFloat { (max(value, 1) / 128).rounded(.up) * 128 }
+        return CGSize(width: round(size.width), height: round(size.height))
     }
 
     private var imageLoadAnimation: Animation? {
@@ -48,17 +55,17 @@ struct ArtworkImage: View {
         if let image {
             image
                 .resizable()
-                .scaledToFill()
+                .aspectRatio(contentMode: contentMode)
                 .transition(.opacity)
         } else if hasError || url == nil {
             ZStack {
-                DizzyPalette.surface
+                DizzyPalette.artworkPlaceholder
                 Image(systemName: "music.note")
                     .font(.title2)
-                    .foregroundStyle(DizzyPalette.mutedText)
+                    .foregroundStyle(DizzyPalette.artworkPlaceholderSymbol)
             }
         } else {
-            DizzyPalette.surface
+            DizzyPalette.artworkPlaceholder
         }
     }
 }

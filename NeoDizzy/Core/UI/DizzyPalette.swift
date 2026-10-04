@@ -19,6 +19,14 @@ enum DizzyPalette {
     static let danger = Color(hex: 0xD9534F)
     /// 官网「已有数字版，下载」按钮。
     static let download = Color(hex: 0x64B5FF)
+    #if os(macOS)
+    /// Mac 版跟随系统外观，封面占位使用系统的浅灰填充。
+    static let artworkPlaceholder = Color(nsColor: .quaternaryLabelColor)
+    static let artworkPlaceholderSymbol = Color(nsColor: .tertiaryLabelColor)
+    #else
+    static let artworkPlaceholder = surface
+    static let artworkPlaceholderSymbol = mutedText
+    #endif
 }
 
 extension Color {

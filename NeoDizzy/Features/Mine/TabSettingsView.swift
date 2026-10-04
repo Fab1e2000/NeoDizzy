@@ -17,6 +17,7 @@ struct TabSettingsView: View {
             Section { Button("恢复默认") { settings.reset() } }
         }
         .environment(\.editMode, .constant(.active))
+        .safeAreaPadding(.top, 5)
         .navigationTitle("标签栏")
         .navigationBarTitleDisplayMode(.inline)
     }

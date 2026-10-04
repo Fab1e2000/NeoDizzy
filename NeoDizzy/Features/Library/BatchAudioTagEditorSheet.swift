@@ -105,6 +105,7 @@ struct BatchAudioTagEditorSheet: View {
                     }
                 }
             }
+            .safeAreaPadding(.top, 5)
             .navigationTitle("批量编辑 FLAC")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -248,10 +249,7 @@ struct BatchAudioTagEditorSheet: View {
         catch { refreshFailure = error.localizedDescription }
     }
     private func setCover(_ data: Data) throws {
-        guard data.count <= 20 * 1024 * 1024,
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 2048] as CFDictionary),
-              let png = UIImage(cgImage: image).pngData() else { throw AudioTagError.message("无法读取封面图片，或图片超过 20 MB。") }
+        guard let png = CoverImageEncoder.png(from: data) else { throw AudioTagError.message("无法读取封面图片，或图片超过 20 MB。") }
         patch.values.cover = png.base64EncodedString()
         coverFailure = nil
     }

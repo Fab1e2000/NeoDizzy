@@ -18,8 +18,10 @@ nonisolated enum KeychainStore {
         let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
         if status == errSecItemNotFound {
             query[kSecValueData as String] = data
+            #if os(iOS)
             // 锁屏后台播放时也可能要用到 token 获取播放地址。
             query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            #endif
             SecItemAdd(query as CFDictionary, nil)
         }
     }

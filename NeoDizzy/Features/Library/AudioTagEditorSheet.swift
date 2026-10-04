@@ -75,6 +75,7 @@ struct AudioTagEditorSheet: View {
                 } else if busy { ProgressView("读取文件标签") }
                 else { Button("重新读取") { Task { await load() } } }
             }
+            .safeAreaPadding(.top, 5)
             .navigationTitle("编辑音乐标签")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -146,14 +147,7 @@ struct AudioTagEditorSheet: View {
         }
     }
     private func setCover(_ data: Data) throws {
-        guard data.count <= 20 * 1024 * 1024,
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: 2048
-              ] as CFDictionary),
-              let png = UIImage(cgImage: thumbnail).pngData(), png.count <= 20 * 1024 * 1024 else {
+        guard let png = CoverImageEncoder.png(from: data), png.count <= CoverImageEncoder.maximumBytes else {
             throw AudioTagError.message("封面必须是可读取的图片，且不能超过 20 MB。")
         }
         draft.cover = png.base64EncodedString()

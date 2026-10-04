@@ -34,6 +34,7 @@ struct PurchaseView: View {
                 .padding(20)
             }
             .dizzyPageBackground()
+            .safeAreaPadding(.top, 5)
             .navigationTitle(model.offer?.kind == .boost ? "BOOST 支持" : "购买专辑")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -269,6 +270,7 @@ private struct CheckoutView: View {
                 .id(session.id)
             }
             .dizzyPageBackground()
+            .safeAreaPadding(.top, 5)
             .navigationTitle("支付宝收银台")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

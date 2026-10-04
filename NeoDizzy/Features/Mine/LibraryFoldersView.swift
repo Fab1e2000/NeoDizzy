@@ -47,6 +47,7 @@ struct LibraryFoldersView: View {
                 }
             }
         }
+        .safeAreaPadding(.top, 5)
         .navigationTitle("扫描目录")
         .navigationBarTitleDisplayMode(.inline)
         .fileImporter(isPresented: $choosing, allowedContentTypes: [.folder]) { result in

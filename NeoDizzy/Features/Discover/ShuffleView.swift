@@ -6,41 +6,90 @@ struct ShuffleView: View {
     @State private var isRequesting = false
     @State private var failure: String?
 
+    private var recordArtwork: some View {
+        ZStack {
+            Circle()
+                .fill(RadialGradient(colors: [DizzyPalette.accent.opacity(0.24), .clear],
+                                     center: .center, startRadius: 20, endRadius: 130))
+            Circle()
+                .fill(LinearGradient(colors: [Color(white: 0.23), Color(white: 0.07)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .padding(20)
+                .shadow(color: .black.opacity(0.3), radius: 16, y: 12)
+            ForEach(0..<5) { ring in
+                Circle().stroke(.white.opacity(0.07), lineWidth: 1)
+                    .padding(CGFloat(30 + ring * 12))
+            }
+            Circle()
+                .fill(DizzyPalette.accent.gradient)
+                .frame(width: 82, height: 82)
+            Image(systemName: "shuffle")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(.black)
+        }
+        .frame(maxWidth: 260)
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityHidden(true)
+    }
+
     var body: some View {
         MainTabPage(tab: .shuffle) {
-            VStack(spacing: 20) {
-                Image(systemName: "shuffle")
-                    .font(.system(size: 64, weight: .light))
-                    .foregroundStyle(DizzyPalette.accent)
-                    .accessibilityHidden(true)
-                Text("让下一首带来惊喜")
-                    .font(.title2.bold())
-                Text("随机发现一首音乐，找到后进入播放器。")
-                    .font(.body)
-                    .foregroundStyle(DizzyPalette.mutedText)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
+            VStack(spacing: 28) {
+                recordArtwork
+                    .padding(.top, 24)
 
-            Button {
-                failure = nil
-                isRequesting = true
-            } label: {
-                HStack {
-                    if isRequesting { ProgressView() }
-                    Label(isRequesting ? "正在寻找…" : "随便听听", systemImage: "shuffle")
+                VStack(spacing: 10) {
+                    Text("下一首，交给偶然")
+                        .font(.title.bold())
+                        .foregroundStyle(DizzyPalette.text)
+                    Text("不必挑选，让一首音乐\n成为今天的小小发现。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
                 }
-                .frame(maxWidth: .infinity)
+
+                Button {
+                    failure = nil
+                    isRequesting = true
+                } label: {
+                    HStack(spacing: 10) {
+                        if isRequesting {
+                            ProgressView().tint(.black)
+                            Text("正在寻找下一首")
+                        } else {
+                            Label(failure == nil ? "开始随便听听" : "再试一次", systemImage: "shuffle")
+                        }
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 30)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .tint(DizzyPalette.accent)
+                .foregroundStyle(.black)
+                .controlSize(.large)
+                .disabled(isRequesting)
+                .padding(.horizontal, 16)
+
+                if let failure {
+                    VStack(spacing: 6) {
+                        Label("暂时没能找到音乐", systemImage: "wifi.exclamationmark")
+                            .font(.subheadline.weight(.medium))
+                        Text(failure).font(.caption).foregroundStyle(.secondary)
+                    }
+                    .multilineTextAlignment(.center)
+                    .accessibilityElement(children: .combine)
+                } else {
+                    Text("遇到喜欢的，就多听一会儿")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .disabled(isRequesting)
-            if let failure {
-                Text("获取歌曲失败：\(failure)\n点击「随便听听」重试。")
-                    .font(.caption)
-                    .foregroundStyle(DizzyPalette.mutedText)
-            }
+            .frame(maxWidth: 480)
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 32)
         }
         .task(id: isRequesting) {
             guard isRequesting else { return }

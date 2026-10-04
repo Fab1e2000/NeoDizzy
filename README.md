@@ -4,7 +4,7 @@
 
 # NeoDizzy
 
-**为 iPhone 打造的第三方 DizzyLab 音乐客户端**
+**为 iPhone 和 Mac 打造的第三方 DizzyLab 音乐客户端**
 
 SwiftUI 原生构建 · 黑金深色界面 · 在线试听与离线音乐
 
@@ -12,10 +12,11 @@ SwiftUI 原生构建 · 黑金深色界面 · 在线试听与离线音乐
 [![Downloads](https://img.shields.io/github/downloads/Fab1e2000/NeoDizzy/total?style=flat-square&color=F0AD4E)](https://github.com/Fab1e2000/NeoDizzy/releases)
 [![CI](https://github.com/Fab1e2000/NeoDizzy/actions/workflows/ci.yml/badge.svg)](https://github.com/Fab1e2000/NeoDizzy/actions/workflows/ci.yml)
 [![iOS 27+](https://img.shields.io/badge/iOS-27%2B-111111?style=flat-square&logo=apple&logoColor=white)](#运行要求)
+[![macOS 27+](https://img.shields.io/badge/macOS-27%2B-111111?style=flat-square&logo=apple&logoColor=white)](#macos-版)
 [![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-F05138?style=flat-square&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
 [![GPLv3](https://img.shields.io/badge/license-GPLv3-8A8F98?style=flat-square)](LICENSE)
 
-[下载](#安装) · [功能](#功能亮点) · [从源码构建](#从源码构建) · [更新日志](docs/releases) · [反馈问题](https://github.com/Fab1e2000/NeoDizzy/issues)
+[下载](#安装) · [功能](#功能亮点) · [macOS 版](#macos-版) · [从源码构建](#从源码构建) · [更新日志](docs/releases) · [反馈问题](https://github.com/Fab1e2000/NeoDizzy/issues)
 
 </div>
 
@@ -26,7 +27,7 @@ SwiftUI 原生构建 · 黑金深色界面 · 在线试听与离线音乐
 
 ## 关于 NeoDizzy
 
-NeoDizzy 将 [DizzyLab](https://www.dizzylab.net) 的音乐浏览、试听、已购库和社区内容带到 iPhone。使用原生 SwiftUI 界面，支持后台播放、锁屏控制，以及将已购音乐下载到自己选择的文件夹。界面提供简体中文。
+NeoDizzy 将 [DizzyLab](https://www.dizzylab.net) 的音乐浏览、试听、已购库和社区内容带到 iPhone 和 Mac。使用原生 SwiftUI 界面，支持后台播放、锁屏控制，以及将已购音乐下载到自己选择的文件夹。界面提供简体中文。
 
 ## 功能亮点
 
@@ -69,9 +70,22 @@ NeoDizzy 将 [DizzyLab](https://www.dizzylab.net) 的音乐浏览、试听、已
 - **标题栏设置**：可选择固定在顶部，或随页面内容滚动。
 - **标签栏设置**：我的 → 设置 → 标签栏，可拖动排序、隐藏页面或恢复默认；至少保留一个页面。默认显示发现、随便听听、社团、关注、已购买、本地库六个页面；超出系统标签栏容量的页面由系统收纳。搜索框位于发现页顶部。
 
+## macOS 版
+
+原生 SwiftUI 的 Mac 版，功能与 iOS 版对齐，界面参考 macOS 的「音乐」App，与 iOS 版一致固定深色界面，强调色为 DizzyLab 金色。
+
+- **窗口布局**：侧边栏顶部搜索，分为「DizzyLab」（发现、随便听听、社团、关注）和「资料库」（已购买、本地库、最近浏览、下载）两组；侧边栏项目可在设置中显示、隐藏和排序。
+- **播放条与面板**：窗口底部是浮动的 Liquid Glass 播放条，包含随机 / 循环、进度、AirPlay 和音量；右侧面板显示逐行歌词或待播清单。
+- **键盘与菜单**：空格键播放 / 暂停（输入文字时不受影响），⌘← / ⌘→ 切歌，⌘↑ / ⌘↓ 调音量，⌘L 前往当前歌曲，⌘F 搜索，⌘R 刷新当前页面，⌘O 添加音乐文件夹，⌥⌘L / ⌥⌘U 打开歌词 / 待播清单面板；键盘媒体键与控制中心「正在播放」同样可用。
+- **专辑页**：曲目列表悬停高亮，双击或回车播放，右键菜单编辑本地曲目标签；网格中悬停封面可直接播放。本地库可切换为可排序的歌曲表格。
+- **设置**（⌘,）：启动页面、侧边栏、歌词高亮位置、下载目录与扫描目录、账户。
+- **沙盒与文件夹授权**：Mac 版运行在 App 沙盒中，只访问你在系统面板中选择的文件夹，并保存为带安全范围的书签，重启后无需重新授权。
+- **购买**：Mac 上没有支付宝 App，收银台在 App 内打开网页版，用手机支付宝扫码或登录支付宝账户付款，完成后自动核验到账。
+
 ## 运行要求
 
 - iPhone，**iOS 27.0 或更高版本**；当前为竖屏界面。
+- Mac，**macOS 27.0 或更高版本**。
 - 构建需要 **Xcode 27**；工程使用 Swift 5 语言模式。
 - 真机安装需要自己的签名证书或可用于签名的 Apple 开发账号。
 
@@ -87,6 +101,8 @@ NeoDizzy 通过 **未签名 IPA** 分发，需要自行签名后安装。
 3. 使用自己的证书或侧载工具重新签名，将 IPA 安装到 iPhone。
 
 发布包不包含开发者的证书或描述文件，也不能直接点击安装。
+
+macOS 版为 ad-hoc 签名的 `NeoDizzy-macOS-vX.Y.Z.zip`（与 IPA 共用 `SHA256SUMS.txt`）。解压后将 NeoDizzy 拖入「应用程序」；首次打开时若系统提示无法验证开发者，在「系统设置 → 隐私与安全性」中选择「仍要打开」。
 
 ## 离线音乐的使用
 
@@ -133,9 +149,13 @@ scripts/package-unsigned.sh
 scripts/setup.sh
 scripts/simulator.sh run    # 构建、安装并启动 iOS 27 iPhone 模拟器
 scripts/simulator.sh test   # 完整 iOS 测试
+scripts/mac.sh run          # 构建并启动 macOS 版（ad-hoc 签名）
+scripts/mac.sh package      # 打包 macOS 版 zip 到 dist/
 python3 scripts/test-core.py
 scripts/deploy-device.sh Debug
 ```
+
+Mac 版使用 `NeoDizzyMac` Scheme 和独立的 `com.elsterlee.NeoDizzyMac` Bundle ID。脚本使用 ad-hoc 签名，每次重新构建后钥匙串可能再次询问是否允许读取登录会话；在 Xcode 中选择开发团队运行可避免。`NeoDizzyMac` target 与 iOS 共用 `NeoDizzy/` 目录，通过 `project.yml` 的 `excludes` 排除 iOS 专属的 `App/`、`Features/` 等文件；新增或移动 iOS 专属文件后需运行 `xcodegen generate`，否则它会被一并编译进 Mac 版。
 
 可通过 `NEODIZZY_SIMULATOR=<UDID>` 指定模拟器。真机设备填入 `.env` 的 `NEODIZZY_DEVICE`；显式环境变量优先于文件配置。Xcode 选择 NeoDizzy Scheme 后，使用 `⌘R` 运行和调试、`⌘U` 测试、`⌘I` 性能分析。
 
@@ -149,13 +169,14 @@ python3 scripts/test-core.py
 
 核心回归测试在 macOS 上直接运行，覆盖解析、账号网络、下载解压、离线目录、购买核验、社区、分页与浏览记录。完整 iOS 测试可在 Xcode 的 Test 操作中运行。
 
-GitHub Actions 在推送和 PR 时自动安装所需 Metal 工具链，执行核心测试与 iOS 模拟器测试，并构建设备版 IPA。推送 `v*` 标签时，测试和构建通过后自动发布 Release，附带 IPA 与 SHA-256 校验文件。版本号必须与 Info.plist 一致，并提供对应的 `docs/releases/vX.Y.Z.md`。
+GitHub Actions 在推送和 PR 时自动安装所需 Metal 工具链，执行核心测试与 iOS 模拟器测试，并构建设备版 IPA 和 macOS 版 zip。推送 `v*` 标签时，测试和构建通过后自动发布 Release，附带 IPA、macOS zip 与 SHA-256 校验文件。iOS 与 macOS 的版本号都必须与标签一致（`project.yml` 中两个 target 的 `CFBundleShortVersionString`），并提供对应的 `docs/releases/vX.Y.Z.md`。
 
 ## 项目结构
 
 ```text
 NeoDizzy/
-├── App/                 # App 入口、共享服务、标签栏与导航
+├── App/                 # iOS 入口与标签栏
+├── Shared/              # iOS 与 macOS 共用：服务容器、导航、页面状态、歌词视图与收银台导航
 ├── Core/
 │   ├── Account/         # 登录与本机会话
 │   ├── BrowsingHistory/ # 专辑浏览记录
@@ -165,8 +186,12 @@ NeoDizzy/
 │   ├── Playback/       # 播放队列、恢复及系统媒体控制
 │   ├── Purchases/      # 购买、收银台导航与到账核验
 │   └── …               # Models、Networking、UI
-├── Features/            # 发现、社团、关注、音乐库、播放页与我的
-└── Resources/           # 图标与界面资源
+├── Features/            # iOS 页面：发现、社团、关注、音乐库、播放页与我的
+└── Resources/           # 图标与界面资源（两个平台共用）
+NeoDizzyMac/
+├── App/                 # macOS 入口、窗口、侧边栏、菜单命令与空格键
+├── Components/          # 专辑网格、曲目列表、页头与加载状态
+└── Features/            # 各页面、播放条、歌词 / 待播清单面板、设置
 NeoDizzyTests/           # 测试与脱敏 / 人工构造的样本
 scripts/                 # 真机部署、打包、测试与图标生成
 design/                  # 可编辑的图标矢量源文件

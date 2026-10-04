@@ -22,15 +22,15 @@ struct LocalLibraryView: View {
 
     var body: some View {
         MainTabPage(tab: .localLibrary, onRefresh: { await library.scan() }) {
-            if library.isScanning { ProgressView().accessibilityLabel("正在扫描本地音乐") }
+            if library.isScanning && items.isEmpty { LoadingView().accessibilityLabel("正在扫描本地音乐") }
             if let issue = library.issue {
                 Label(issue, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(DizzyPalette.accent)
             }
-            if items.isEmpty {
+            if items.isEmpty && !library.isScanning {
                 ContentUnavailableView("还没有本地专辑", systemImage: "music.note.list",
                                        description: Text("在「我的 → 设置 → 扫描目录」添加音乐文件夹。下载的专辑也会自动显示在这里。"))
-            } else {
+            } else if !items.isEmpty {
                 LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                     ForEach(items) { album in
                         NavigationLink(value: album.route) {
@@ -101,6 +101,7 @@ struct LocalAlbumDetailView: View {
         .dizzyPageBackground()
         .sheet(item: $editing) { AudioTagEditorSheet(target: $0) }
         .sheet(item: $batchAlbum) { BatchAudioTagEditorSheet(album: $0) }
+        .safeAreaPadding(.top, 5)
         .navigationTitle("")
         .toolbar(.visible, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)

@@ -25,6 +25,46 @@ private actor MetadataReads {
 }
 
 struct LocalLibraryTests {
+    @Test @MainActor func indexRestoresImmediatelyAndRefreshRemovesDeletedFiles() async throws {
+        let root = try localTestFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = try localTestFile("Album/01.flac", in: root)
+        let suite = "LocalLibrarySnapshot.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let reads = MetadataReads()
+        let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { await reads.read($0) })
+        let first = OfflineLibraryStore(defaults: defaults, scanner: scanner)
+        try await first.addScanFolder(root)
+        #expect(first.localAlbums.count == 1)
+        let restarted = OfflineLibraryStore(defaults: defaults, scanner: scanner)
+        // No await/restore needed to draw the last known library.
+        #expect(restarted.localAlbums.map(\.id) == first.localAlbums.map(\.id))
+        #expect(restarted.localAlbums.first?.tracks.first?.title == "曲目")
+        #expect(await reads.count == 1)
+        try FileManager.default.removeItem(at: file)
+        await restarted.restore()
+        #expect(restarted.localAlbums.isEmpty)
+        #expect(OfflineLibraryStore(defaults: defaults, scanner: scanner).localAlbums.isEmpty)
+    }
+
+    @Test @MainActor func removedSourceDoesNotReturnAfterRestart() async throws {
+        let root = try localTestFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        _ = try localTestFile("Album/01.flac", in: root)
+        let suite = "LocalLibrarySnapshot.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { _ in AudioMetadata(title: "曲目") })
+        let store = OfflineLibraryStore(defaults: defaults, scanner: scanner)
+        try await store.addScanFolder(root)
+        let id = try #require(store.scanFolders.first?.id)
+        await store.removeScanFolder(id)
+        #expect(OfflineLibraryStore(defaults: defaults, scanner: scanner).localAlbums.isEmpty)
+        defaults.set(Data("invalid snapshot".utf8), forKey: "localLibrary.indexSnapshot.v1")
+        #expect(OfflineLibraryStore(defaults: defaults, scanner: scanner).localAlbums.isEmpty)
+    }
+
     @Test func targetedTagRefreshRereadsOnlyEditedFileAndPreservesIdentity() async throws {
         let root = try localTestFolder()
         defer { try? FileManager.default.removeItem(at: root) }

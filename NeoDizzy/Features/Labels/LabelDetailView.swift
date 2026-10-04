@@ -39,6 +39,7 @@ struct LabelDetailView: View {
             .refreshable { await page.load() }
         }
         .dizzyPageBackground()
+        .safeAreaPadding(.top, 5)
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

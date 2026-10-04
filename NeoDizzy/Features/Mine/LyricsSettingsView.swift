@@ -17,6 +17,7 @@ struct LyricsSettingsView: View {
                 Text("默认在播放器中部高亮当前歌词。位置会避开歌曲信息和底部播放控制；设置立即生效。")
             }
         }
+        .safeAreaPadding(.top, 5)
         .navigationTitle("歌词")
         .navigationBarTitleDisplayMode(.inline)
     }

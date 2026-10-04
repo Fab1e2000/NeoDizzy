@@ -94,6 +94,7 @@ struct ScrollingPageHeaderRow<Header: View>: View {
     var body: some View {
         if !pinsTitleBar {
             header.offset(y: -(pull?.distance ?? 0))
+                .padding(.bottom, 5)
         }
     }
 }
@@ -122,7 +123,7 @@ private struct PageHeaderPlacement<Header: View>: ViewModifier {
         content
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaBar(edge: .top, spacing: 0) {
-                if pinsTitleBar { header.padding(.horizontal, 20) }
+                if pinsTitleBar { header.padding(.horizontal, 20).padding(.bottom, 5) }
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in

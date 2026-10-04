@@ -13,23 +13,27 @@ struct AppleMusicLocalLyricsView: View {
     let isActive: Bool
     @Binding var isInterfaceHidden: Bool
     let onSeek: (Double) -> Void
+    /// macOS 侧边歌词面板使用较小的固定字号和随系统外观变化的文字颜色；iOS 播放页保持默认值。
+    var fixedFontSize: CGFloat? = nil
+    var foreground: Color = .white
 
     @Environment(\.accessibilityReduceMotion) private var reducesMotion
     @Environment(\.colorSchemeContrast) private var contrast
-    @ScaledMetric private var fontSize = AppleMusicLyricsTypographyProfile.iOS26_6.primaryFontSize
+    @ScaledMetric private var scaledFontSize = AppleMusicLyricsTypographyProfile.iOS26_6.primaryFontSize
     @State private var browsing = false
     @State private var interacting = false
     @State private var resumeGeneration = 0
     @State private var rowHeights: [Int: CGFloat] = [:]
     @State private var visibility = LyricsScrollInterfaceVisibilityTracker()
     private let motion = AppleMusicLyricsMotionProfile.iOS26_6
+    private var fontSize: CGFloat { fixedFontSize ?? scaledFontSize }
 
     var body: some View {
         GeometryReader { viewport in
             let height = viewport.size.height
             let referenceHeight = max(height - min(max(bottomOverlayHeight, 0), max(height - 1, 0)), 1)
-            let font = UIFont.systemFont(ofSize: fontSize, weight: .bold)
-            let focusedHeight = activeID.flatMap { rowHeights[$0] } ?? font.lineHeight
+            let lineHeight = LyricsFontMetrics.boldLineHeight(size: fontSize)
+            let focusedHeight = activeID.flatMap { rowHeights[$0] } ?? lineHeight
             let visibleHeight = isInterfaceHidden ? height : referenceHeight
             let preferredY = playerFrame.minY + playerFrame.height * min(max(focusPosition.isFinite ? focusPosition : 0.5, 0.05), 0.8)
                 - viewport.frame(in: .global).minY
@@ -40,7 +44,7 @@ struct AppleMusicLocalLyricsView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: motion.lineSpacing) {
                         ForEach(lyrics.lines) { line in
-                            lyricRow(line, focusTop: focusTop, stride: font.lineHeight + motion.lineSpacing)
+                            lyricRow(line, focusTop: focusTop, stride: lineHeight + motion.lineSpacing)
                                 .id(line.id)
                         }
                     }
@@ -109,9 +113,9 @@ struct AppleMusicLocalLyricsView: View {
             Text(line.text.isEmpty ? "♪" : line.text)
                 .font(.system(size: fontSize, weight: .bold))
                 .multilineTextAlignment(.leading)
-                .foregroundStyle(.white.opacity(opacity))
+                .foregroundStyle(foreground.opacity(opacity))
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.white.opacity(pressProgress * 0.12), in: .rect(cornerRadius: 12))
+                .background(foreground.opacity(pressProgress * 0.12), in: .rect(cornerRadius: 12))
         }
         .scaleEffect(focused ? 1 : motion.deselectedScale, anchor: .topLeading)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeights[line.id] = $0 }

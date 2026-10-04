@@ -14,6 +14,18 @@ final class PlayerStore {
     private(set) var isPreview = false
     private(set) var issue: String?
     private(set) var repeatMode: RepeatMode = .off
+    #if os(macOS)
+    /// Mac 版自带音量滑块（与 Music 相同），只调节本 App 的输出音量。
+    var volume: Float = UserDefaults.standard.object(forKey: "player.volume") as? Float ?? 1 {
+        didSet {
+            player.volume = min(max(volume, 0), 1)
+            UserDefaults.standard.set(player.volume, forKey: "player.volume")
+        }
+    }
+
+    /// AirPlay 选择器（AVRoutePickerView）需要直接引用播放器。
+    var routingPlayer: AVPlayer { player }
+    #endif
     private var queue = PlaybackQueue()
     private var loadedFileURL: URL?
     private var tagWritePaths = Set<String>()
@@ -95,7 +107,9 @@ final class PlayerStore {
     /// 地址过期导致的失败只重试一次，避免无限重试。
     @ObservationIgnored private var retriedTrackID: String?
     @ObservationIgnored private var loadedLocalFile = false
+    #if os(iOS)
     @ObservationIgnored private var resumeAfterInterruption = false
+    #endif
     @ObservationIgnored private var isSeeking = false
     @ObservationIgnored private var lastSavedProgress: TimeInterval = 0
     /// `progress` 最近一次更新的时间，用来推算两次刷新之间的播放位置。
@@ -109,6 +123,9 @@ final class PlayerStore {
         self.resolver = resolver
         self.persistence = persistence
         nowPlaying = NowPlayingSession(player: player)
+        #if os(macOS)
+        player.volume = min(max(volume, 0), 1)
+        #endif
         installObservers()
         installRemoteCommands()
     }
@@ -386,12 +403,16 @@ final class PlayerStore {
     }
 
     private func activateAndPlay() {
+        #if os(iOS)
         do {
             try AudioSessionConfigurator.activate()
             nowPlaying.activate()
         } catch {
             debugLog("激活音频会话失败：\(error)")
         }
+        #else
+        nowPlaying.activate()
+        #endif
         player.play()
     }
 
@@ -439,6 +460,7 @@ final class PlayerStore {
                 }
             }
         })
+        #if os(iOS)
         // 文档没有说明这两个通知的 object 是什么，不按 object 过滤。
         observers.append(center.addObserver(forName: AVAudioSession.didBecomeInactiveNotification, object: nil, queue: .main) { [weak self] notification in
             MainActor.assumeIsolated {
@@ -450,6 +472,7 @@ final class PlayerStore {
                 self?.handleResumptionRecommendation(notification)
             }
         })
+        #endif
     }
 
     private func installRemoteCommands() {
@@ -541,6 +564,7 @@ final class PlayerStore {
         }
     }
 
+    #if os(iOS)
     /// 来电、其他 App 播放、耳机断开等，系统停用了音频会话，AVPlayer 已经自己暂停。
     private func handleSessionDeactivated(_ notification: Notification) {
         let context = notification.userInfo?[AVAudioSession.deactivationContextKey] as? AVAudioSession.DeactivationContext
@@ -561,6 +585,7 @@ final class PlayerStore {
         }
         resumeAfterInterruption = false
     }
+    #endif
 
     private func updateNowPlaying() {
         nowPlaying.updatePlayback(
