@@ -171,7 +171,7 @@ python3 scripts/test-core.py
 
 核心回归测试在 macOS 上直接运行，覆盖解析、账号网络、下载解压、离线目录、购买核验、社区、分页与浏览记录。完整 iOS 测试可在 Xcode 的 Test 操作中运行。
 
-GitHub Actions 在推送和 PR 时自动安装所需 Metal 工具链，执行核心测试与 iOS 模拟器测试，并构建设备版 IPA 和 macOS 版 dmg。推送 `v*` 标签时，测试和构建通过后自动发布 Release，附带 IPA、macOS dmg 与 SHA-256 校验文件。iOS 与 macOS 的版本号都必须与标签一致（`project.yml` 中两个 target 的 `CFBundleShortVersionString`），并提供对应的 `docs/releases/vX.Y.Z.md`。
+GitHub Actions 在 PR 时自动安装所需 Metal 工具链，执行核心测试与 iOS 模拟器测试，并构建设备版 IPA 和 macOS 版 dmg。推送 `v*` 标签时，测试和构建通过后自动发布 Release，附带 IPA、macOS dmg 与 SHA-256 校验文件。iOS 与 macOS 的版本号都必须与标签一致（`project.yml` 中两个 target 的 `CFBundleShortVersionString`），并提供对应的 `docs/releases/vX.Y.Z.md`。
 
 ## 项目结构
 

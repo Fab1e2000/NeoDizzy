@@ -1,7 +1,7 @@
 name: CI
 on:
+  # 代码经 PR 合入 main，PR 里已测过同一份代码；合并后推送 main 不再重复跑。发布由 v* 标签触发。
   push:
-    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
