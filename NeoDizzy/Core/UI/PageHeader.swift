@@ -22,15 +22,17 @@ struct PageHeader: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 16)
             Button { mine?.isPresented = true } label: {
+                // 头像是方形的（与社团、用户头像一致），外框用圆角方形而不是圆形。
                 avatar
                     .frame(width: 40, height: 40)
+                    .clipShape(.rect(cornerRadius: 8))
                     .padding(2)
                     .frame(width: 44, height: 44)
-                    .contentShape(Circle())
+                    .contentShape(.rect(cornerRadius: 10))
                     .background {
-                        Circle()
+                        RoundedRectangle(cornerRadius: 10)
                             .fill(.clear)
-                            .glassEffect(.clear.interactive(), in: .circle)
+                            .glassEffect(.clear.interactive(), in: .rect(cornerRadius: 10))
                     }
             }
             .buttonStyle(.plain)
@@ -43,7 +45,7 @@ struct PageHeader: View {
     @ViewBuilder
     private var avatar: some View {
         if let user = account?.account {
-            ArtworkImage(url: user.avatarURL, cornerRadius: 20)
+            AvatarImage(url: user.avatarURL, size: 40)
         } else {
             Image(systemName: "person.crop.circle.fill")
                 .resizable()
@@ -118,13 +120,31 @@ private struct PageHeaderPlacement<Header: View>: ViewModifier {
     let header: Header
     @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
     @State private var pull = PageHeaderPull()
+    /// 窗口自身的顶部安全区（状态栏、灵动岛），不含导航栏。
+    @State private var windowTopInset: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
-            .toolbar(.hidden, for: .navigationBar)
             .safeAreaBar(edge: .top, spacing: 0) {
                 if pinsTitleBar { header.padding(.horizontal, 20).padding(.bottom, 5) }
             }
+            // 页头画在内容里，不需要导航栏让出的空间：忽略整个顶部安全区，只把状态栏的高度加回来，
+            // 页头位置与隐藏导航栏时相同。（负的 safeAreaPadding 不会生效。）
+            .safeAreaPadding(.top, windowTopInset)
+            .ignoresSafeArea(.container, edges: .top)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { _ in
+                windowTopInset = UIApplication.shared.connectedScenes
+                    .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.top }
+                    .first ?? 0
+            }
+            // 导航栏保持显示（透明、无内容），与推入的详情页一致：滑动返回走系统标准过渡，返回按钮原地淡出。
+            // 根页隐藏导航栏时，导航栏会作为详情页的一部分随页面滑出，iOS 27.2 在这个过程中丢掉返回按钮的左边距。
+            .toolbar(.visible, for: .navigationBar)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .scrollEdgeEffectStyle(.soft, for: .top)
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(0, -(geometry.contentOffset.y + geometry.contentInsets.top))

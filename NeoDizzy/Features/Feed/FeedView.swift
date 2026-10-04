@@ -38,8 +38,7 @@ private struct FeedGroupSection: View {
         VStack(alignment: .leading, spacing: 12) {
             NavigationLink(value: AppRoute.label(name: group.labelName)) {
                 HStack(spacing: 10) {
-                    ArtworkImage(url: group.labelCoverURL, cornerRadius: 18)
-                        .frame(width: 36, height: 36)
+                    AvatarImage(url: group.labelCoverURL, size: 36)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.labelName)
                             .font(.headline)

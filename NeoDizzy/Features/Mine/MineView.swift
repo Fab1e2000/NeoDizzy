@@ -73,8 +73,7 @@ struct MineView: View {
         if let user = account.account {
             Section {
                 HStack(spacing: 14) {
-                    ArtworkImage(url: user.avatarURL, cornerRadius: 26)
-                        .frame(width: 52, height: 52)
+                    AvatarImage(url: user.avatarURL, size: 52)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(user.nickname)
                             .font(.headline)

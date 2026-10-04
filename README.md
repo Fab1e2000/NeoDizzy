@@ -74,11 +74,13 @@ NeoDizzy 将 [DizzyLab](https://www.dizzylab.net) 的音乐浏览、试听、已
 
 原生 SwiftUI 的 Mac 版，功能与 iOS 版对齐，界面参考 macOS 的「音乐」App，与 iOS 版一致固定深色界面，强调色为 DizzyLab 金色。
 
-- **窗口布局**：侧边栏顶部搜索，分为「DizzyLab」（发现、随便听听、社团、关注）和「资料库」（已购买、本地库、最近浏览、下载）两组；侧边栏项目可在设置中显示、隐藏和排序。
-- **播放条与面板**：窗口底部是浮动的 Liquid Glass 播放条，包含随机 / 循环、进度、AirPlay 和音量；右侧面板显示逐行歌词或待播清单。
+- **窗口布局**：不使用侧边栏，工具栏正中是一组分段按钮作为顶部导航（搜索、发现、随便听听、社团、关注、已购买、本地库、最近浏览）；窗口变窄时只显示图标，再次点击当前项回到该页的第一页。导航项可在设置中显示、隐藏和排序。
+- **搜索**：独立页面，标题下方是搜索框，回车后依次显示社团、用户与作品；没有搜索时列出最近搜索的关键词，点击即可重新搜索。
+- **播放条与面板**：窗口底部是贴边的三栏播放条（左侧封面与曲目信息，中间播放控制与进度，右侧歌词、待播清单、AirPlay 和音量），窗口变窄时依次收起随机 / 循环和音量滑块。右侧面板显示逐行歌词或待播清单，可拖动分隔线调整宽度；窗口太窄时先自动加宽再展开面板。
 - **键盘与菜单**：空格键播放 / 暂停（输入文字时不受影响），⌘← / ⌘→ 切歌，⌘↑ / ⌘↓ 调音量，⌘L 前往当前歌曲，⌘F 搜索，⌘R 刷新当前页面，⌘O 添加音乐文件夹，⌥⌘L / ⌥⌘U 打开歌词 / 待播清单面板；键盘媒体键与控制中心「正在播放」同样可用。
-- **专辑页**：曲目列表悬停高亮，双击或回车播放，右键菜单编辑本地曲目标签；网格中悬停封面可直接播放。本地库可切换为可排序的歌曲表格。
-- **设置**（⌘,）：启动页面、侧边栏、歌词高亮位置、下载目录与扫描目录、账户。
+- **专辑页**：页头参考「音乐」，标题按长度调整字号，多位艺术家时只列前三位；曲目列表悬停高亮，双击或回车播放，右键菜单编辑本地曲目标签；底部显示同一社团的更多作品。网格中悬停封面可直接播放，并提前加载专辑详情。本地库可切换为可排序的歌曲表格。
+- **下载**：已购专辑在专辑页直接下载并显示进度，下载目录在设置中修改。
+- **设置**（⌘,）：启动页面、导航栏、歌词高亮位置、下载目录与扫描目录、账户。
 - **沙盒与文件夹授权**：Mac 版运行在 App 沙盒中，只访问你在系统面板中选择的文件夹，并保存为带安全范围的书签，重启后无需重新授权。
 - **购买**：Mac 上没有支付宝 App，收银台在 App 内打开网页版，用手机支付宝扫码或登录支付宝账户付款，完成后自动核验到账。
 
@@ -102,7 +104,7 @@ NeoDizzy 通过 **未签名 IPA** 分发，需要自行签名后安装。
 
 发布包不包含开发者的证书或描述文件，也不能直接点击安装。
 
-macOS 版为 ad-hoc 签名的 `NeoDizzy-macOS-vX.Y.Z.zip`（与 IPA 共用 `SHA256SUMS.txt`）。解压后将 NeoDizzy 拖入「应用程序」；首次打开时若系统提示无法验证开发者，在「系统设置 → 隐私与安全性」中选择「仍要打开」。
+macOS 版为 ad-hoc 签名的磁盘映像 `NeoDizzy-macOS-vX.Y.Z.dmg`（与 IPA 共用 `SHA256SUMS.txt`）。打开后将 NeoDizzy 拖到旁边的「应用程序」；首次打开时若系统提示无法验证开发者，在「系统设置 → 隐私与安全性」中选择「仍要打开」。
 
 ## 离线音乐的使用
 
@@ -150,7 +152,7 @@ scripts/setup.sh
 scripts/simulator.sh run    # 构建、安装并启动 iOS 27 iPhone 模拟器
 scripts/simulator.sh test   # 完整 iOS 测试
 scripts/mac.sh run          # 构建并启动 macOS 版（ad-hoc 签名）
-scripts/mac.sh package      # 打包 macOS 版 zip 到 dist/
+scripts/mac.sh package      # 打包 macOS 版 dmg 到 dist/
 python3 scripts/test-core.py
 scripts/deploy-device.sh Debug
 ```
@@ -169,7 +171,7 @@ python3 scripts/test-core.py
 
 核心回归测试在 macOS 上直接运行，覆盖解析、账号网络、下载解压、离线目录、购买核验、社区、分页与浏览记录。完整 iOS 测试可在 Xcode 的 Test 操作中运行。
 
-GitHub Actions 在推送和 PR 时自动安装所需 Metal 工具链，执行核心测试与 iOS 模拟器测试，并构建设备版 IPA 和 macOS 版 zip。推送 `v*` 标签时，测试和构建通过后自动发布 Release，附带 IPA、macOS zip 与 SHA-256 校验文件。iOS 与 macOS 的版本号都必须与标签一致（`project.yml` 中两个 target 的 `CFBundleShortVersionString`），并提供对应的 `docs/releases/vX.Y.Z.md`。
+GitHub Actions 在推送和 PR 时自动安装所需 Metal 工具链，执行核心测试与 iOS 模拟器测试，并构建设备版 IPA 和 macOS 版 dmg。推送 `v*` 标签时，测试和构建通过后自动发布 Release，附带 IPA、macOS dmg 与 SHA-256 校验文件。iOS 与 macOS 的版本号都必须与标签一致（`project.yml` 中两个 target 的 `CFBundleShortVersionString`），并提供对应的 `docs/releases/vX.Y.Z.md`。
 
 ## 项目结构
 
@@ -189,7 +191,7 @@ NeoDizzy/
 ├── Features/            # iOS 页面：发现、社团、关注、音乐库、播放页与我的
 └── Resources/           # 图标与界面资源（两个平台共用）
 NeoDizzyMac/
-├── App/                 # macOS 入口、窗口、侧边栏、菜单命令与空格键
+├── App/                 # macOS 入口、窗口、顶部导航、菜单命令与空格键
 ├── Components/          # 专辑网格、曲目列表、页头与加载状态
 └── Features/            # 各页面、播放条、歌词 / 待播清单面板、设置
 NeoDizzyTests/           # 测试与脱敏 / 人工构造的样本
