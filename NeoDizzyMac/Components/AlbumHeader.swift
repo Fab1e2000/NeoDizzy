@@ -31,7 +31,7 @@ struct AlbumHeader<Subtitle: View, Actions: View, Footer: View>: View {
                     .accessibilityAddTraits(.isHeader)
                 subtitle
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.dizzyGold)
+                    .foregroundStyle(Color.dizzyAccent)
                     .lineLimit(2)
                     .padding(.top, 6)
                 if !metadata.isEmpty {
@@ -134,10 +134,10 @@ private struct AccentPillBody: View {
     var body: some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(Color.dizzyGold)
+            .foregroundStyle(Color.dizzyAccent)
             .padding(.horizontal, 16)
             .frame(height: 30)
-            .background(Color.dizzyGold.opacity(configuration.isPressed ? 0.32 : isHovering ? 0.24 : 0.17),
+            .background(Color.dizzyAccent.opacity(configuration.isPressed ? 0.32 : isHovering ? 0.24 : 0.17),
                         in: .rect(cornerRadius: 7))
             .opacity(isEnabled ? 1 : 0.4)
             .contentShape(.rect)

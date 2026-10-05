@@ -164,7 +164,7 @@ struct QueuePanel: View {
                             .toggleStyle(.button)
                             .help("随机播放")
                             Button { player.cycleRepeatMode() } label: { Image(systemName: player.repeatMode.systemImage) }
-                                .foregroundStyle(player.repeatMode == .off ? Color.secondary : Color.dizzyGold)
+                                .foregroundStyle(player.repeatMode == .off ? Color.secondary : Color.dizzyAccent)
                                 .help(player.repeatMode.accessibilityTitle)
                         }
                     }
@@ -190,7 +190,7 @@ private struct QueueRow: View {
                 .frame(width: 36, height: 36)
             VStack(alignment: .leading, spacing: 1) {
                 Text(track.title).lineLimit(1)
-                    .foregroundStyle(isCurrent ? Color.dizzyGold : .primary)
+                    .foregroundStyle(isCurrent ? Color.dizzyAccent : .primary)
                 Text(track.artists).font(.callout).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 4)

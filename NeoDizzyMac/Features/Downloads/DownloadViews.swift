@@ -28,7 +28,7 @@ struct DownloadJobRow: View {
                     .lineLimit(1)
                 Text("\(job.format.uppercased()) · \(job.statusText)")
                     .font(.callout)
-                    .foregroundStyle(job.canRetry ? Color.dizzyGold : .secondary)
+                    .foregroundStyle(job.canRetry ? Color.dizzyAccent : .secondary)
                     .lineLimit(2)
                 if job.isActive {
                     DownloadProgressBar(job: job)
@@ -88,7 +88,7 @@ struct DownloadFolderSection: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "folder.fill")
                 .font(.title)
-                .foregroundStyle(Color.dizzyGold)
+                .foregroundStyle(Color.dizzyAccent)
             VStack(alignment: .leading, spacing: 4) {
                 Text(offline.folderName ?? String(localized: "尚未选择下载目录")).font(.headline)
                 Text(offline.folderName == nil
@@ -97,7 +97,7 @@ struct DownloadFolderSection: View {
                     .foregroundStyle(.secondary)
                 if let issue = selectionError ?? offline.downloadFolderIssue {
                     Label(issue, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(Color.dizzyGold)
+                        .foregroundStyle(Color.dizzyAccent)
                 }
             }
             Spacer()

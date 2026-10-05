@@ -15,6 +15,8 @@ struct DownloadQueueSection: View {
 
 struct DownloadJobRow: View {
     let job: DownloadJob
+    /// 放在专辑页的购买卡片里时不再画自己的底色。
+    var isEmbedded = false
     @Environment(DownloadStore.self) private var downloads
     @Environment(OfflineLibraryStore.self) private var offline
     @State private var isRetrying = false
@@ -34,7 +36,7 @@ struct DownloadJobRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(job.title)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(DizzyPalette.text)
+                        .foregroundStyle(isEmbedded ? Color.primary : DizzyPalette.text)
                         .lineLimit(2)
                     Text(job.statusText)
                         .font(.caption)
@@ -65,8 +67,8 @@ struct DownloadJobRow: View {
                 DownloadJobProgressView(job: job)
             }
         }
-        .padding(14)
-        .background(DizzyPalette.surface, in: .rect(cornerRadius: 12))
+        .padding(isEmbedded ? 0 : 14)
+        .background(isEmbedded ? .clear : DizzyPalette.surface, in: .rect(cornerRadius: 12))
         .accessibilityElement(children: .contain)
     }
 }

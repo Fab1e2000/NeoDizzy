@@ -211,7 +211,7 @@ struct CoverWell: View {
                 }
                 .frame(width: 150, height: 150)
                 .clipShape(.rect(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isTargeted ? Color.dizzyGold : .primary.opacity(0.1),
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isTargeted ? Color.dizzyAccent : .primary.opacity(0.1),
                                                                          lineWidth: isTargeted ? 3 : 1))
             }
             .buttonStyle(.plain)

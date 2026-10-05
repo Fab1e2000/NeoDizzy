@@ -85,7 +85,7 @@ struct LocalLibraryPage: View {
     @ViewBuilder private var issue: some View {
         if let issue = library.issue {
             Label(issue, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(Color.dizzyGold)
+                .foregroundStyle(Color.dizzyAccent)
         }
     }
 }
@@ -162,7 +162,7 @@ private struct LocalSongsTable: View {
         Table(rows, selection: $selection, sortOrder: $sortOrder) {
             TableColumn("") { row in
                 if player.currentTrack?.id == row.id {
-                    Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.dizzyGold)
+                    Image(systemName: "speaker.wave.2.fill").foregroundStyle(Color.dizzyAccent)
                 }
             }
             .width(18)

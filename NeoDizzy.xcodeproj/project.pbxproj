@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0DC54EB46AE7F6B61E147831 /* NeoDizzyWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1BEEA9CD6936284340A0EC33 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 1BAC143009061BC618983E57 /* Nuke */; };
 		6CC6FFB1533EA361B0420189 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 105A3BCA6B90A96E1D42BEBB /* Nuke */; };
 		741A17DBA1B89E66C458471D /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 499B2BFF8E5C41E5CEF046E7 /* ZIPFoundation */; };
@@ -27,9 +28,31 @@
 			remoteGlobalIDString = 7B34A05017631F95C6D93E8C;
 			remoteInfo = NeoDizzy;
 		};
+		CEAD55B837FCC1FAA86ED569 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F1E373040D3D8959D3BE1747 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 044F953941CB40672A6A121F;
+			remoteInfo = NeoDizzyWidget;
+		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		A6121781EE6E7653F1B72A3F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0DC54EB46AE7F6B61E147831 /* NeoDizzyWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = NeoDizzyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		89175AF12F06E62B7BC35428 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NeoDizzy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NeoDizzyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -38,11 +61,20 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		22DE5524606831764F616599 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 044F953941CB40672A6A121F /* NeoDizzyWidget */;
+		};
 		49E59DC00E4F8222A2C05521 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				App/NeoDizzyApp.swift,
+				App/NowPlayingWidgetBridge.swift,
 				App/RootView.swift,
+				App/ThemeIconController.swift,
 				Core/Playback/AudioSessionConfigurator.swift,
 				Core/UI/DiscCard.swift,
 				Core/UI/LoadStateViews.swift,
@@ -77,6 +109,7 @@
 				Features/Library/LibraryView.swift,
 				Features/Library/LocalLibraryView.swift,
 				Features/Mine,
+				Features/Mine/AppearanceSettingsView.swift,
 				Features/Mine/BrowsingHistoryView.swift,
 				Features/Mine/DisclaimerView.swift,
 				Features/Mine/LibraryFoldersView.swift,
@@ -103,6 +136,33 @@
 				Features/Tags,
 				Features/Tags/TagDiscsView.swift,
 				Info.plist,
+				"Resources/AppIcons/NeoDizzyIcon-blue.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-blue.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-blue.icon/icon.json",
+				"Resources/AppIcons/NeoDizzyIcon-cocoa.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-cocoa.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-cocoa.icon/icon.json",
+				"Resources/AppIcons/NeoDizzyIcon-coral.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-coral.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-coral.icon/icon.json",
+				"Resources/AppIcons/NeoDizzyIcon-graphite.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-graphite.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-graphite.icon/icon.json",
+				"Resources/AppIcons/NeoDizzyIcon-green.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-green.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-green.icon/icon.json",
+				"Resources/AppIcons/NeoDizzyIcon-orange.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-orange.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-orange.icon/icon.json",
+				"Resources/AppIcons/NeoDizzyIcon-pink.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-pink.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-pink.icon/icon.json",
+				"Resources/AppIcons/NeoDizzyIcon-teal.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-teal.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-teal.icon/icon.json",
+				"Resources/AppIcons/NeoDizzyIcon-violet.icon/Assets",
+				"Resources/AppIcons/NeoDizzyIcon-violet.icon/Assets/Mark.svg",
+				"Resources/AppIcons/NeoDizzyIcon-violet.icon/icon.json",
 				"Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png",
 				Resources/Assets.xcassets/AppIcon.appiconset/Contents.json,
 			);
@@ -133,6 +193,27 @@
 			explicitFolders = (
 			);
 			path = NeoDizzyTests;
+			sourceTree = "<group>";
+		};
+		A88537E00FD3538659F85461 /* WidgetShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = WidgetShared;
+			sourceTree = "<group>";
+		};
+		DE526EDCB9439C2D576FC12B /* NeoDizzyWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				22DE5524606831764F616599 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = NeoDizzyWidget;
 			sourceTree = "<group>";
 		};
 		E27E12D563830DA22A0BEC1E /* NeoDizzyMac */ = {
@@ -191,6 +272,7 @@
 				893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */,
 				A87D9E8001FA29A97C53BD6E /* NeoDizzyMac.app */,
 				911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */,
+				25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -202,7 +284,9 @@
 				0D8FCDB38B251488A6FA8FEC /* NeoDizzy */,
 				E27E12D563830DA22A0BEC1E /* NeoDizzyMac */,
 				976EFF2EBCA4EB2742D677A7 /* NeoDizzyTests */,
+				DE526EDCB9439C2D576FC12B /* NeoDizzyWidget */,
 				ECDD35C4244B04A526CB54F7 /* Packages */,
+				A88537E00FD3538659F85461 /* WidgetShared */,
 				6CD405DB60C4F274B4821664 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -218,6 +302,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		044F953941CB40672A6A121F /* NeoDizzyWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D49357BC432968920F6C2523 /* Build configuration list for PBXNativeTarget "NeoDizzyWidget" */;
+			buildPhases = (
+				CF7A9B76504052F490C4BBCE /* Sources */,
+				88AFBBC90F31171CABF1AE1A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DE526EDCB9439C2D576FC12B /* NeoDizzyWidget */,
+				A88537E00FD3538659F85461 /* WidgetShared */,
+			);
+			name = NeoDizzyWidget;
+			packageProductDependencies = (
+			);
+			productName = NeoDizzyWidget;
+			productReference = 25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		4F18C0F88F5D3983448496BD /* NeoDizzyMac */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7B7D6525206FE3594665CDFB /* Build configuration list for PBXNativeTarget "NeoDizzyMac" */;
@@ -253,13 +359,16 @@
 				231809BA963B45D2F8D06DB8 /* Sources */,
 				7FEECD489E3FF506BF8930A3 /* Resources */,
 				1EB468E0F2EED31986FFEE6E /* Frameworks */,
+				A6121781EE6E7653F1B72A3F /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C6C6A312C91451F2C27F4E32 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				0D8FCDB38B251488A6FA8FEC /* NeoDizzy */,
+				A88537E00FD3538659F85461 /* WidgetShared */,
 			);
 			name = NeoDizzy;
 			packageProductDependencies = (
@@ -304,6 +413,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					044F953941CB40672A6A121F = {
+						ProvisioningStyle = Automatic;
+					};
 					4F18C0F88F5D3983448496BD = {
 						ProvisioningStyle = Automatic;
 					};
@@ -336,6 +448,7 @@
 			projectRoot = "";
 			targets = (
 				7B34A05017631F95C6D93E8C /* NeoDizzy */,
+				044F953941CB40672A6A121F /* NeoDizzyWidget */,
 				4F18C0F88F5D3983448496BD /* NeoDizzyMac */,
 				FFA693109D8BA51FB749A914 /* NeoDizzyTests */,
 			);
@@ -344,6 +457,13 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		7FEECD489E3FF506BF8930A3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		88AFBBC90F31171CABF1AE1A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -388,6 +508,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CF7A9B76504052F490C4BBCE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -396,14 +523,21 @@
 			target = 7B34A05017631F95C6D93E8C /* NeoDizzy */;
 			targetProxy = 7BD4CCDC4A4C39D2082F5F72 /* PBXContainerItemProxy */;
 		};
+		C6C6A312C91451F2C27F4E32 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 044F953941CB40672A6A121F /* NeoDizzyWidget */;
+			targetProxy = CEAD55B837FCC1FAA86ED569 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		12CCDC13F3BF8EB324051315 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "NeoDizzyIcon-orange NeoDizzyIcon-coral NeoDizzyIcon-pink NeoDizzyIcon-violet NeoDizzyIcon-blue NeoDizzyIcon-teal NeoDizzyIcon-green NeoDizzyIcon-cocoa NeoDizzyIcon-graphite";
 				ASSETCATALOG_COMPILER_APPICON_NAME = NeoDizzyIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/NeoDizzy.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_PREVIEWS = YES;
@@ -413,7 +547,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.elsterlee.NeoDizzy;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -446,6 +580,7 @@
 			baseConfigurationReference = 89175AF12F06E62B7BC35428 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				APP_BUNDLE_ID = com.elsterlee.NeoDizzy;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -501,6 +636,46 @@
 			};
 			name = Release;
 		};
+		74B7A9DAC530A7B004273A5C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/NeoDizzyWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = NeoDizzyWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID).Widget";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		79E6EACE6A80046558C84CE5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/NeoDizzyWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = NeoDizzyWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID).Widget";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 		7BFE6D79E3276EE8D5BC7AFC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -547,6 +722,7 @@
 			baseConfigurationReference = 89175AF12F06E62B7BC35428 /* Signing.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				APP_BUNDLE_ID = com.elsterlee.NeoDizzy;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -612,8 +788,10 @@
 		B446E5D4009B1DC0525A03FB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "NeoDizzyIcon-orange NeoDizzyIcon-coral NeoDizzyIcon-pink NeoDizzyIcon-violet NeoDizzyIcon-blue NeoDizzyIcon-teal NeoDizzyIcon-green NeoDizzyIcon-cocoa NeoDizzyIcon-graphite";
 				ASSETCATALOG_COMPILER_APPICON_NAME = NeoDizzyIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Config/NeoDizzy.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_PREVIEWS = YES;
@@ -623,7 +801,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.elsterlee.NeoDizzy;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(APP_BUNDLE_ID)";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -683,6 +861,15 @@
 			buildConfigurations = (
 				B446E5D4009B1DC0525A03FB /* Debug */,
 				12CCDC13F3BF8EB324051315 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D49357BC432968920F6C2523 /* Build configuration list for PBXNativeTarget "NeoDizzyWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				79E6EACE6A80046558C84CE5 /* Debug */,
+				74B7A9DAC530A7B004273A5C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

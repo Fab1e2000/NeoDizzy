@@ -37,7 +37,7 @@ struct AlbumCard<Menu: View>: View {
                                 .font(.caption2.weight(.bold))
                                 .padding(.horizontal, 5).padding(.vertical, 2)
                                 .background(.black.opacity(0.55), in: .capsule)
-                                .foregroundStyle(DizzyPalette.accent)
+                                .foregroundStyle(DizzyPalette.accentOnDark)
                                 .padding(7)
                         }
                     }

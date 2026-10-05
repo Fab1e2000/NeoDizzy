@@ -66,7 +66,7 @@ private struct DiscoverSectionPicker: View {
                     } label: {
                         Text(section.title)
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(isSelected ? DizzyPalette.background : DizzyPalette.text)
+                            .foregroundStyle(isSelected ? DizzyPalette.onAccent : DizzyPalette.text)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                             .background(isSelected ? DizzyPalette.accent : DizzyPalette.surface, in: .capsule)

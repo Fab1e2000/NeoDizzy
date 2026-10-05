@@ -116,7 +116,7 @@ struct FollowLabelButton: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .tint(state?.isFollowing == true ? .secondary : .dizzyGold)
+            .tint(state?.isFollowing == true ? .secondary : .dizzyAccent)
             .disabled(busy || (account.isLoggedIn && !loaded))
             .help(state?.isFollowing == true ? "取消关注" : "关注社团")
             if let failure {

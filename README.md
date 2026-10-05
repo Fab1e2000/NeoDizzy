@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="NeoDizzy/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png" width="128" height="128" alt="NeoDizzy 黑金 D 图标">
+<img src="NeoDizzy/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png" width="128" height="128" alt="NeoDizzy D 图标">
 
 # NeoDizzy
 
 **为 iPhone 和 Mac 打造的第三方 DizzyLab 音乐客户端**
 
-SwiftUI 原生构建 · 黑金深色界面 · 在线试听与离线音乐
+SwiftUI 原生构建 · 浅色 / 深色外观与主题色 · 在线试听与离线音乐
 
 [![Release](https://img.shields.io/github/v/release/Fab1e2000/NeoDizzy?style=flat-square&color=F0AD4E&label=release)](https://github.com/Fab1e2000/NeoDizzy/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Fab1e2000/NeoDizzy/total?style=flat-square&color=F0AD4E)](https://github.com/Fab1e2000/NeoDizzy/releases)
@@ -72,7 +72,7 @@ NeoDizzy 将 [DizzyLab](https://www.dizzylab.net) 的音乐浏览、试听、已
 
 ## macOS 版
 
-原生 SwiftUI 的 Mac 版，功能与 iOS 版对齐，界面参考 macOS 的「音乐」App，与 iOS 版一致固定深色界面，强调色为 DizzyLab 金色。
+原生 SwiftUI 的 Mac 版，功能与 iOS 版对齐，界面参考 macOS 的「音乐」App，外观（跟随系统、浅色、深色）与主题色与 iOS 版共用设置，默认强调色为 DizzyLab 金色；换主题色时 Dock 图标同步换色。
 
 - **窗口布局**：不使用侧边栏，工具栏正中是一组分段按钮作为顶部导航（搜索、发现、随便听听、社团、关注、已购买、本地库、最近浏览）；窗口变窄时只显示图标，再次点击当前项回到该页的第一页。导航项可在设置中显示、隐藏和排序。
 - **搜索**：独立页面，标题下方是搜索框，回车后依次显示社团、用户与作品；没有搜索时列出最近搜索的关键词，点击即可重新搜索。

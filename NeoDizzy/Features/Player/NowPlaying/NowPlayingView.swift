@@ -83,7 +83,9 @@ struct NowPlayingView: View {
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { playerFrame = $0 }
         .onChange(of: page) { _, _ in isLyricsInterfaceHidden = false }
         .foregroundStyle(.white)
-        .preferredColorScheme(.dark)
+        // 播放页铺着封面取色的深色背景，不随 App 外观变化。只改环境、不用 preferredColorScheme，
+        // 否则偏好会冒泡到整个窗口，下面的页面也跟着变深。
+        .environment(\.colorScheme, .dark)
         .onChange(of: player.currentTrack == nil) { _, isEmpty in
             if isEmpty { dismiss() }
         }

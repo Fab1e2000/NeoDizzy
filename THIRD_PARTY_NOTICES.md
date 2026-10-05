@@ -43,7 +43,7 @@
 - NeoDizzy 不包含 DizzyLab 的商标、Logo 或任何音乐内容。
 - 单元测试样本 `NeoDizzyTests/Fixtures/` 保存了少量公开页面和接口响应的片段，只用于解析测试。样本已删去脚本、导航、页脚和其他用户的头像与昵称。
 
-应用图标的立体字母构图参考 NeoBili（MIT）；NeoDizzy 的 D 字形、黑金配色和 SVG 由本仓库的 `scripts/generate-app-icon.swift` 生成。
+应用图标的立体字母构图参考 NeoBili（MIT）；单色挤出字母与镂空正面的配色方式同样沿用 NeoBili；NeoDizzy 的 D 字形、各主题色图标和 SVG 由本仓库的 `scripts/generate-app-icon.swift` 生成。
 
 ## TagLib 与 utfcpp（内嵌标签编辑）
 

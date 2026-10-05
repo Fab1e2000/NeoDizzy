@@ -178,8 +178,8 @@ final class MacAppModel {
 }
 
 extension Color {
-    /// DizzyLab 金色。显式使用资源里的颜色，不随系统强调色变化；浅色外观自动换成更深的金色。
-    static let dizzyGold = Color("AccentColor")
+    /// 主题色（默认 DizzyLab 金色）。不随系统强调色变化；浅色外观自动换成更深的一档。
+    static var dizzyAccent: Color { DizzyPalette.accent }
 }
 
 extension Bundle {

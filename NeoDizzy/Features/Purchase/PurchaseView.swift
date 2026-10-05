@@ -94,7 +94,6 @@ struct PurchaseView: View {
             }
         }
         .tint(DizzyPalette.accent)
-        .preferredColorScheme(.dark)
     }
 
     private var albumHeader: some View {
@@ -283,6 +282,5 @@ private struct CheckoutView: View {
             .onReceive(NotificationCenter.default.publisher(for: .dizzyAccountDidChange)) { _ in dismiss() }
         }
         .tint(DizzyPalette.accent)
-        .preferredColorScheme(.dark)
     }
 }

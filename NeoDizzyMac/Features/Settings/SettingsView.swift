@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// 设置窗口（⌘,）：通用、播放、资料库、账户与关于。
+/// 设置窗口（⌘,）：通用、外观、播放、资料库、账户与关于。
 struct SettingsView: View {
     var body: some View {
         TabView {
             Tab("通用", systemImage: "gearshape") { GeneralSettings() }
+            Tab("外观", systemImage: "paintpalette") { AppearanceSettingsPane() }
             Tab("播放", systemImage: "play.circle") { PlaybackSettings() }
             Tab("资料库", systemImage: "square.stack") { LibrarySettings() }
             Tab("账户", systemImage: "person.crop.circle") { AccountSettings() }
@@ -52,6 +53,64 @@ private struct GeneralSettings: View {
         }
         .formStyle(.grouped)
         .frame(height: 400)
+    }
+}
+
+/// 外观与主题色，对应 iOS 的「外观与主题」。Dock 图标由 `MacAppearanceSync` 跟着换。
+private struct AppearanceSettingsPane: View {
+    var body: some View {
+        @Bindable var settings = AppearanceSettings.shared
+        Form {
+            Picker("外观", selection: $settings.mode) {
+                ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Section {
+                HStack(spacing: 10) {
+                    ForEach(AppTheme.presets) { theme in
+                        ThemeSwatch(theme: theme, isSelected: theme.id == settings.themeID) {
+                            settings.themeID = theme.id
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+            } header: {
+                Text("主题色 · \(settings.theme.name)")
+            } footer: {
+                Text("App 运行时 Dock 图标换成同色版本，并按当前外观使用浅色或深色图标。退出后 Dock 与访达里仍显示默认图标。")
+            }
+        }
+        .formStyle(.grouped)
+        .frame(height: 260)
+    }
+}
+
+private struct ThemeSwatch: View {
+    let theme: AppTheme
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(theme.color)
+                .frame(width: 26, height: 26)
+                .overlay {
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(theme.onColor)
+                    }
+                }
+                .padding(3)
+                .overlay { Circle().strokeBorder(isSelected ? theme.color : .clear, lineWidth: 2) }
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .help(theme.name)
+        .accessibilityLabel(theme.name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -102,7 +161,7 @@ private struct LibrarySettings: View {
                     HStack {
                         Label(folder.name, systemImage: "folder")
                         if let issue = folder.issue {
-                            Text(issue).font(.callout).foregroundStyle(Color.dizzyGold).lineLimit(2)
+                            Text(issue).font(.callout).foregroundStyle(Color.dizzyAccent).lineLimit(2)
                         }
                         Spacer()
                         Button("重新授权…") { Task { await choose(replacing: folder.id) } }
@@ -119,7 +178,7 @@ private struct LibrarySettings: View {
                     Button("重新扫描") { Task { await library.scan() } }
                 }
                 if let issue = issue ?? library.issue {
-                    Text(issue).font(.callout).foregroundStyle(Color.dizzyGold)
+                    Text(issue).font(.callout).foregroundStyle(Color.dizzyAccent)
                 }
             } header: {
                 Text("其他扫描目录")

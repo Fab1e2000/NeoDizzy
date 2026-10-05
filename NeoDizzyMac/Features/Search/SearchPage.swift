@@ -116,7 +116,7 @@ private struct SearchField: View {
         .background(.primary.opacity(0.07), in: .rect(cornerRadius: 10))
         .overlay {
             RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(isFocused.wrappedValue ? Color.dizzyGold.opacity(0.6) : .primary.opacity(0.08), lineWidth: 1)
+                .strokeBorder(isFocused.wrappedValue ? Color.dizzyAccent.opacity(0.6) : .primary.opacity(0.08), lineWidth: 1)
         }
     }
 }
