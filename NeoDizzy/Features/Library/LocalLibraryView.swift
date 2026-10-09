@@ -81,7 +81,7 @@ struct LocalAlbumDetailView: View {
                             }
                             let entries = album.entries.filter { $0.discNumber == disc }
                             ForEach(entries, id: \.track.id) { entry in
-                                AlbumTrackRow(track: entry.track, showsSeparator: entry.track.id != entries.last?.track.id, editTags: {
+                                AlbumTrackRow(track: entry.track, editTags: {
                                     editing = AudioTagEditTarget(track: entry.track, url: entry.fileURL)
                                 }) {
                                     if let index = album.tracks.firstIndex(where: { $0.id == entry.track.id }) {

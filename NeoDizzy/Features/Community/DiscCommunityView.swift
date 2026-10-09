@@ -226,6 +226,7 @@ private struct DiscCommentComposerModifier: ViewModifier {
         content
             .sheet(isPresented: $isComposing) {
                 DiscCommentComposer(model: model)
+                    .restoringAppColorScheme()
             }
             .confirmationDialog("删除自己的短评？", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
                 Button("删除短评", role: .destructive) {

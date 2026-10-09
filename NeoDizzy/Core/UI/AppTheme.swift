@@ -87,6 +87,8 @@ final class AppearanceSettings {
     static let shared = AppearanceSettings()
     static let themeKey = "appearance.theme"
     static let modeKey = "appearance.mode"
+    static let albumDimmingKey = "appearance.albumDimming"
+    static let defaultAlbumDimming = 5
 
     var themeID: String {
         didSet { defaults.set(themeID, forKey: Self.themeKey) }
@@ -94,6 +96,15 @@ final class AppearanceSettings {
 
     var mode: AppAppearance {
         didSet { defaults.set(mode.rawValue, forKey: Self.modeKey) }
+    }
+
+    /// 专辑页封面取色背景上叠的黑（深色）或白（浅色）的不透明度，0–100。
+    var albumDimming: Int {
+        didSet {
+            let clamped = min(max(albumDimming, 0), 100)
+            if clamped != albumDimming { albumDimming = clamped }
+            defaults.set(clamped, forKey: Self.albumDimmingKey)
+        }
     }
 
     var theme: AppTheme { .selected(themeID) }
@@ -104,6 +115,8 @@ final class AppearanceSettings {
         self.defaults = defaults
         themeID = AppTheme.selected(defaults.string(forKey: Self.themeKey) ?? AppTheme.defaultID).id
         mode = defaults.string(forKey: Self.modeKey).flatMap(AppAppearance.init(rawValue:)) ?? .system
+        albumDimming = (defaults.object(forKey: Self.albumDimmingKey) as? Int).map { min(max($0, 0), 100) }
+            ?? Self.defaultAlbumDimming
     }
 }
 

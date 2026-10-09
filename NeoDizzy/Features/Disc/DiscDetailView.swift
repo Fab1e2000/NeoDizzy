@@ -189,8 +189,7 @@ private struct DiscDetailContent: View {
                 // 整张都是试听时由购买卡片统一说明，只在部分曲目可完整播放时逐行标注。
                 AlbumTrackRow(track: track,
                               isPreview: !isPreviewOnly && !localTrackIDs.contains(track.id)
-                                && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false),
-                              showsSeparator: index < tracks.count - 1) {
+                                && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false)) {
                     play(from: index)
                 }
             }
@@ -284,6 +283,7 @@ private struct DiscStoreCard: View {
         .background(.fill.quaternary, in: .rect(cornerRadius: 20))
         .sheet(item: $downloadSheet) { sheet in
             DownloadAlbumView(detail: sheet.detail, isGift: sheet.isGift)
+                .restoringAppColorScheme()
         }
     }
 
@@ -345,34 +345,102 @@ struct PurchaseSheet: Identifiable {
     var id: String { summary.id }
 }
 
-/// 专辑介绍摘录，与 Apple Music 专辑页的介绍相同：标题下方显示前三行，
-/// 轻点打开完整的「介绍」和「曲目与制作人员」。
+/// 专辑介绍摘录，与 Apple Music 专辑页的介绍相同：标题下方显示前三行，段落连成一段；
+/// 被截断时「更多」接在最后一行末尾，前面的文字渐隐，轻点打开完整的「介绍」和「曲目与制作人员」。
+/// 没被截断就是全部内容，不显示「更多」，也不能点。
 private struct DiscNotesExcerpt: View {
     let detail: DiscDetail
     @State private var isPresented = false
+    @State private var isTruncated = false
+    @State private var collapsedHeight: CGFloat = 0
+    @State private var moreSize: CGSize = .zero
+    private static let lineLimit = 3
+    private static let fadeWidth: CGFloat = 32
 
-    private var excerpt: String { detail.description.isEmpty ? detail.credits : detail.description }
+    private var excerpt: String {
+        [detail.description, detail.credits]
+            .flatMap { $0.split(whereSeparator: \.isNewline) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .reduce(into: "") { result, line in
+                // 中文行之间直接相连，西文行之间补一个空格。
+                if let last = result.last, !Self.isWide(last), !Self.isWide(line.first!) { result += " " }
+                result += line
+            }
+    }
+
+    /// 中日韩文字和全角标点，前后不需要空格。
+    private static func isWide(_ character: Character) -> Bool {
+        character.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x2E80...0x9FFF, 0xAC00...0xD7AF, 0xF900...0xFAFF, 0xFE30...0xFE4F, 0xFF00...0xFFEF: true
+            default: false
+            }
+        }
+    }
 
     var body: some View {
-        Button { isPresented = true } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(excerpt)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text("更多")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.primary)
+        if isTruncated {
+            Button { isPresented = true } label: { content }
+                .buttonStyle(.plain)
+                .accessibilityLabel("专辑介绍")
+                .accessibilityValue(excerpt)
+                .accessibilityHint("显示完整介绍")
+                .sheet(isPresented: $isPresented) { DiscNotesSheet(detail: detail).restoringAppColorScheme() }
+        } else {
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("专辑介绍")
+                .accessibilityValue(excerpt)
+        }
+    }
+
+    private var content: some View {
+        styled(Text(excerpt))
+            .lineLimit(Self.lineLimit)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { collapsedHeight = $0 }
+            .background {
+                // 用不限行数的同一段文字比较高度，判断是否真的被截断。
+                styled(Text(excerpt))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { full in
+                        isTruncated = full > collapsedHeight + 1
+                    }
+            }
+            .mask { if isTruncated { fadeMask } else { Rectangle() } }
+            .overlay(alignment: .bottomTrailing) {
+                if isTruncated {
+                    Text("更多")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { moreSize = $0 }
+                }
             }
             .contentShape(.rect)
+    }
+
+    private func styled(_ text: Text) -> some View {
+        text
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineSpacing(2)
+            .multilineTextAlignment(.leading)
+    }
+
+    /// 最后一行末尾给「更多」让位，文字在它前面渐隐，不会和它挤在一起。
+    private var fadeMask: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+            HStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: Self.fadeWidth)
+                Color.clear.frame(width: moreSize.width + 4)
+            }
+            .frame(height: moreSize.height)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("专辑介绍")
-        .accessibilityValue(excerpt)
-        .accessibilityHint("显示完整介绍")
-        .sheet(isPresented: $isPresented) { DiscNotesSheet(detail: detail) }
     }
 }
 
@@ -409,7 +477,9 @@ private struct DiscNotesSheet: View {
     private func section(_ title: LocalizedStringKey, text: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-            Text(text).font(.body).lineSpacing(4).textSelection(.enabled)
+            // 网页里常有连续好几个空行，最多保留一个，段落间距才均匀。
+            Text(text.replacing(#/\n\s*\n\s*(\n\s*)+/#, with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines))
+                .font(.body).lineSpacing(4).textSelection(.enabled)
         }
     }
 }

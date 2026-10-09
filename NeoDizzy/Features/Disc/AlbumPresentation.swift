@@ -1,6 +1,6 @@
 // Layout adapted from MeloX (GPLv3), StandardMusicCollectionDetailHero.
 import Nuke
-import CoreImage.CIFilterBuiltins
+import CoreImage
 import SwiftUI
 
 struct AlbumHero<Subtitle: View, Actions: View>: View {
@@ -28,39 +28,37 @@ struct AlbumHero<Subtitle: View, Actions: View>: View {
     }
 }
 
-/// 与 Apple Music 专辑页相同：两个等宽的玻璃按钮，文字和图标用主题色。
-/// 其他操作（网页、分享、批量编辑）放在导航栏里。
+/// 两个等宽的按钮，底色和文字都用主题色。按钮在页面内容里，不用玻璃材质：
+/// 玻璃留给浮在内容上方的导航栏和标签栏。其他操作（网页、分享、批量编辑）放在导航栏里。
 struct AlbumPlaybackActions: View {
     let isEmpty: Bool
     var isPreview = false
     let play: (Bool) -> Void
 
     var body: some View {
-        GlassEffectContainer(spacing: 12) {
-            HStack(spacing: 12) {
-                Button { play(false) } label: {
-                    Label(isPreview ? "试听" : "播放", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                Button { play(true) } label: {
-                    Label(isPreview ? "随机试听" : "随机播放", systemImage: "shuffle")
-                        .frame(maxWidth: .infinity)
-                }
+        HStack(spacing: 12) {
+            Button { play(false) } label: {
+                Label(isPreview ? "试听" : "播放", systemImage: "play.fill")
+                    .frame(maxWidth: .infinity)
             }
-            .font(.headline)
-            .foregroundStyle(DizzyPalette.accent)
-            .buttonStyle(.glass)
-            .buttonBorderShape(.capsule)
-            .controlSize(.large)
-            .disabled(isEmpty)
+            Button { play(true) } label: {
+                Label(isPreview ? "随机试听" : "随机播放", systemImage: "shuffle")
+                    .frame(maxWidth: .infinity)
+            }
         }
+        .font(.headline)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.large)
+        .tint(DizzyPalette.accent)
+        .disabled(isEmpty)
     }
 }
 
 // Adapted from MeloX AlbumDetailView / AlbumDetailContent / MusicCollectionArtworkBackdrop
 // and ArtworkAccentColorProvider (GPL-3.0).
-/// 专辑页：背景取封面的平均色，深色封面压暗、浅色封面提亮，再叠一层模糊封面；
-/// 整页的深浅外观跟着封面走，文字和按钮在任何封面上都看得清。
+/// 专辑页：背景直接用封面边缘的主色，不改写；再叠一层可调的黑或白遮罩。
+/// 与 Apple Music 相同，页面深浅跟着背景色走：深色背景配白字，浅色背景配黑字。
 struct AlbumDetailScrollView<Content: View>: View {
     let artworkURL: URL?
     @ViewBuilder var content: Content
@@ -84,6 +82,8 @@ struct AlbumDetailScrollView<Content: View>: View {
                 .scrollIndicators(.hidden)
         }
         .environment(\.colorScheme, colorScheme)
+        // 表单的底色由系统按 App 外观决定，弹出的内容要换回这个外观，见 restoringAppColorScheme()。
+        .environment(\.appColorScheme, systemColorScheme)
         .toolbarColorScheme(backdrop?.colorScheme, for: .navigationBar, .tabBar)
         .task(id: artworkURL) {
             guard let artworkURL else { return }
@@ -94,66 +94,118 @@ struct AlbumDetailScrollView<Content: View>: View {
     }
 }
 
+extension EnvironmentValues {
+    /// 专辑页按背景色改了深浅外观时，App 本来的外观。
+    @Entry var appColorScheme: ColorScheme?
+}
+
+extension View {
+    /// 用在专辑页里弹出的表单内容上。表单继承了页面按背景色改过的深浅外观，
+    /// 底色却跟着 App 外观走，不换回来会出现白底白字。
+    func restoringAppColorScheme() -> some View { modifier(RestoreAppColorScheme()) }
+}
+
+private struct RestoreAppColorScheme: ViewModifier {
+    @Environment(\.appColorScheme) private var appColorScheme
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.environment(\.colorScheme, appColorScheme ?? colorScheme)
+    }
+}
+
 private struct AlbumArtworkBackground: View {
     let backdrop: AlbumBackdrop?
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                backdrop?.backgroundColor ?? DizzyPalette.background
-                if let image = backdrop?.blurredImage {
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .opacity(0.22)
-                        .transition(.opacity)
-                }
-                LinearGradient(colors: overlayColors, startPoint: .top, endPoint: .bottom)
+        ZStack {
+            if let backdrop {
+                Color(red: backdrop.edgeRGB.x, green: backdrop.edgeRGB.y, blue: backdrop.edgeRGB.z)
+                // 深色背景叠一层黑，浅色背景叠一层白，浓度在「外观与主题」里调，默认 5%。
+                (backdrop.prefersDarkAppearance ? Color.black : Color.white)
+                    .opacity(Double(AppearanceSettings.shared.albumDimming) / 100)
+            } else {
+                DizzyPalette.background
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .clipped()
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
-
-    /// 深色页往下逐渐压暗，浅色页往下逐渐提亮，长列表底部依然清楚。
-    private var overlayColors: [Color] {
-        guard let backdrop else { return [.clear] }
-        let tint: Color = backdrop.prefersDarkAppearance ? .black : .white
-        return backdrop.prefersDarkAppearance
-            ? [tint.opacity(0.08), tint.opacity(0.24), tint.opacity(0.40)]
-            : [tint.opacity(0.06), tint.opacity(0.16), tint.opacity(0.30)]
-    }
 }
 
-/// 封面取色结果：底色、深浅外观和预先模糊好的封面。
-nonisolated struct AlbumBackdrop: Equatable, @unchecked Sendable {
-    let backgroundRGB: SIMD3<Double>
-    let prefersDarkAppearance: Bool
-    let blurredImage: CGImage?
+/// 封面取色结果：边缘主色，以及它配白字还是黑字。
+nonisolated struct AlbumBackdrop: Equatable, Sendable {
+    let edgeRGB: SIMD3<Double>
 
+    /// 按对比度在白字、黑字之间选：白字更清楚就用深色外观。与主题色上文字颜色的算法相同。
+    var prefersDarkAppearance: Bool { Self.relativeLuminance(edgeRGB) <= 0.179 }
     var colorScheme: ColorScheme { prefersDarkAppearance ? .dark : .light }
-    var backgroundColor: Color { Color(red: backgroundRGB.x, green: backgroundRGB.y, blue: backgroundRGB.z) }
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.backgroundRGB == rhs.backgroundRGB && lhs.prefersDarkAppearance == rhs.prefersDarkAppearance
-            && lhs.blurredImage === rhs.blurredImage
+    /// WCAG 相对亮度：先把 sRGB 换回线性值再加权。
+    static func relativeLuminance(_ color: SIMD3<Double>) -> Double {
+        func linear(_ value: Double) -> Double {
+            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(color.x) + 0.7152 * linear(color.y) + 0.0722 * linear(color.z)
     }
 
-    /// 与 MeloX 相同：按平均色的亮度决定深浅，再把平均色混进接近黑或接近白的底色。
-    static func palette(from source: SIMD3<Double>) -> (background: SIMD3<Double>, prefersDark: Bool) {
-        let luminance = source.x * 0.2126 + source.y * 0.7152 + source.z * 0.0722
-        let prefersDark = luminance < 0.52
-        let background = prefersDark
-            ? source * 0.38 + SIMD3<Double>(repeating: 0.055) * 0.62
-            : source * 0.30 + SIMD3<Double>(repeating: 0.94) * 0.70
-        return (background.clamped(lowerBound: .zero, upperBound: .one), prefersDark)
+    /// 取封面外圈像素里占比最多的颜色。颜色按每通道 8 档分组，组和相邻的组一起计数，
+    /// 渐变或噪点不会被拆散；外圈颜色太杂、最多的一组不到四分之一时，改取整张封面的主色。
+    /// `pixels` 是 RGBA8，透明像素不计。
+    static func edgeColor(pixels: [UInt8], width: Int, height: Int) -> SIMD3<Double> {
+        let band = max(2, Int((Double(min(width, height)) * 0.08).rounded()))
+        let edge = dominantColor(pixels: pixels, width: width, height: height) { x, y in
+            x < band || y < band || x >= width - band || y >= height - band
+        }
+        if let edge, edge.share >= 0.25 { return edge.color }
+        return dominantColor(pixels: pixels, width: width, height: height) { _, _ in true }?.color
+            ?? edge?.color ?? SIMD3(repeating: 0.16)
+    }
+
+    private static func dominantColor(pixels: [UInt8], width: Int, height: Int,
+                                      include: (Int, Int) -> Bool) -> (color: SIMD3<Double>, share: Double)? {
+        var counts = [Double](repeating: 0, count: 512)
+        var sums = [SIMD3<Double>](repeating: .zero, count: 512)
+        var total = 0.0
+        for y in 0..<height {
+            for x in 0..<width where include(x, y) {
+                let index = (y * width + x) * 4
+                guard pixels[index + 3] >= 128 else { continue }
+                let color = unpremultiplied(pixels, at: index)
+                let bin = SIMD3<Int>((color * 7.999).rounded(.down))
+                let key = bin.x << 6 | bin.y << 3 | bin.z
+                counts[key] += 1
+                sums[key] += color
+                total += 1
+            }
+        }
+        guard total > 0 else { return nil }
+        var best: (count: Double, sum: SIMD3<Double>) = (0, .zero)
+        for key in 0..<512 where counts[key] > 0 {
+            var count = 0.0, sum = SIMD3<Double>.zero
+            let r = key >> 6, g = key >> 3 & 7, b = key & 7
+            for nr in max(0, r - 1)...min(7, r + 1) {
+                for ng in max(0, g - 1)...min(7, g + 1) {
+                    for nb in max(0, b - 1)...min(7, b + 1) {
+                        let neighbor = nr << 6 | ng << 3 | nb
+                        count += counts[neighbor]
+                        sum += sums[neighbor]
+                    }
+                }
+            }
+            if count > best.count { best = (count, sum) }
+        }
+        return (best.sum / best.count, best.count / total)
+    }
+
+    private static func unpremultiplied(_ pixels: [UInt8], at index: Int) -> SIMD3<Double> {
+        let alpha = Double(pixels[index + 3])
+        let color = SIMD3(Double(pixels[index]), Double(pixels[index + 1]), Double(pixels[index + 2])) / alpha
+        return color.clamped(lowerBound: .zero, upperBound: .one)
     }
 }
 
-/// 缩到 160 像素后取平均色、模糊，结果按封面地址缓存。模糊前先把边缘像素向外延伸，与上游一致。
+/// 缩到 160 像素、居中裁成正方形后取边缘主色，结果按封面地址缓存。
 private actor AlbumBackdropProvider {
     static let shared = AlbumBackdropProvider()
     private let context = CIContext(options: [.cacheIntermediates: false])
@@ -168,30 +220,17 @@ private actor AlbumBackdropProvider {
         if let cached = AlbumBackdropCache.shared.backdrop(for: url) { return cached }
         let extent = source.extent.integral
         guard !extent.isEmpty, !extent.isInfinite else { return nil }
-        let palette = AlbumBackdrop.palette(from: averageColor(of: source, in: extent))
-        let backdrop = AlbumBackdrop(backgroundRGB: palette.background, prefersDarkAppearance: palette.prefersDark,
-                                     blurredImage: blurred(source, extent: extent))
+        // 缩略图只按短边缩放，不是正方形的封面会比 160 宽或高。页面上的封面是居中裁成正方形的，
+        // 取色也只看这个正方形，否则会取到被裁掉的那一截。
+        let side = min(extent.width, extent.height)
+        let square = CGRect(x: extent.midX - side / 2, y: extent.midY - side / 2, width: side, height: side).integral
+        let width = Int(square.width), height = Int(square.height)
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        context.render(source, toBitmap: &pixels, rowBytes: width * 4, bounds: square,
+                       format: .RGBA8, colorSpace: colorSpace)
+        let backdrop = AlbumBackdrop(edgeRGB: AlbumBackdrop.edgeColor(pixels: pixels, width: width, height: height))
         AlbumBackdropCache.shared.insert(backdrop, for: url)
         return backdrop
-    }
-
-    private func averageColor(of image: CIImage, in extent: CGRect) -> SIMD3<Double> {
-        let filter = CIFilter.areaAverage()
-        filter.inputImage = image
-        filter.extent = extent
-        guard let output = filter.outputImage else { return SIMD3(repeating: 0.16) }
-        var pixel = [UInt8](repeating: 0, count: 4)
-        context.render(output, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
-                       format: .RGBA8, colorSpace: colorSpace)
-        return SIMD3(Double(pixel[0]), Double(pixel[1]), Double(pixel[2])) / 255
-    }
-
-    private func blurred(_ image: CIImage, extent: CGRect) -> CGImage? {
-        let filter = CIFilter.gaussianBlur()
-        filter.inputImage = image.clampedToExtent()
-        filter.radius = 18
-        guard let output = filter.outputImage?.cropped(to: extent) else { return nil }
-        return context.createCGImage(output, from: extent, format: .RGBA8, colorSpace: colorSpace)
     }
 }
 
@@ -200,8 +239,6 @@ private actor AlbumBackdropProvider {
 struct AlbumTrackRow: View {
     let track: Track
     var isPreview = false
-    /// 行与行之间的分隔线，从标题处开始，与系统列表一致；最后一行不画。
-    var showsSeparator = true
     var editTags: (() -> Void)?
     let play: () -> Void
     @Environment(PlayerStore.self) private var player
@@ -231,13 +268,11 @@ struct AlbumTrackRow: View {
         }
         .padding(.leading, 20)
         .padding(.trailing, 8)
-        .padding(.vertical, 3)
+        // 与 MeloX 相同：44pt 的更多按钮上下再各留 11pt，每行 66pt。
+        .padding(.vertical, 11)
         .foregroundStyle(.primary)
         .tint(.primary)
         .background(isCurrent ? Color.primary.opacity(0.10) : .clear)
-        .overlay(alignment: .bottom) {
-            if showsSeparator { Divider().padding(.leading, 72) }
-        }
         .accessibilityElement(children: .contain)
     }
 
@@ -282,7 +317,7 @@ struct AlbumTrackRow: View {
             .frame(width: 40)
         } else {
             Text(track.number)
-                .font(.body)
+                .font(.title3)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -302,12 +337,9 @@ private nonisolated final class AlbumBackdropCache: @unchecked Sendable {
     static let shared = AlbumBackdropCache()
     private final class Box { let backdrop: AlbumBackdrop; init(_ backdrop: AlbumBackdrop) { self.backdrop = backdrop } }
     private let cache = NSCache<NSURL, Box>()
-    private init() { cache.totalCostLimit = 8 * 1024 * 1024 }
+    private init() { cache.countLimit = 500 }
     func backdrop(for url: URL) -> AlbumBackdrop? { cache.object(forKey: url as NSURL)?.backdrop }
-    func insert(_ backdrop: AlbumBackdrop, for url: URL) {
-        let cost = backdrop.blurredImage.map { $0.bytesPerRow * $0.height } ?? 0
-        cache.setObject(Box(backdrop), forKey: url as NSURL, cost: cost)
-    }
+    func insert(_ backdrop: AlbumBackdrop, for url: URL) { cache.setObject(Box(backdrop), forKey: url as NSURL) }
 }
 
 enum AlbumArtworkPreload {

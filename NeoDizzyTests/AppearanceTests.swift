@@ -28,6 +28,21 @@ struct AppearanceTests {
         #expect(restored.theme.iconName == "NeoDizzyIcon-teal")
     }
 
+    @Test func albumDimmingDefaultsPersistsAndClamps() {
+        let defaults = makeDefaults()
+        let settings = AppearanceSettings(defaults: defaults)
+        #expect(settings.albumDimming == AppearanceSettings.defaultAlbumDimming)
+        settings.albumDimming = 40
+        #expect(AppearanceSettings(defaults: defaults).albumDimming == 40)
+        settings.albumDimming = 150
+        #expect(settings.albumDimming == 100)
+        #expect(AppearanceSettings(defaults: defaults).albumDimming == 100)
+        settings.albumDimming = -3
+        #expect(settings.albumDimming == 0)
+        defaults.set(999, forKey: AppearanceSettings.albumDimmingKey)
+        #expect(AppearanceSettings(defaults: defaults).albumDimming == 100)
+    }
+
     /// 删掉的主题或改坏的存档回到默认主题，不会指向不存在的图标。
     @Test func unknownStoredThemeFallsBackToDefault() {
         let defaults = makeDefaults()
