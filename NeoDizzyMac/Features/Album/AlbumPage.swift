@@ -193,7 +193,7 @@ private struct AlbumContent: View {
                 if hasMissingLocalFiles {
                     HStack {
                         Label("部分本地文件不可用，可重新扫描或下载覆盖。", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(Color.dizzyGold)
+                            .foregroundStyle(Color.dizzyAccent)
                         Button("重新扫描") { Task { await offline.scan() } }
                             .disabled(offline.isScanning)
                     }

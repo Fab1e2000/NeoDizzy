@@ -5,7 +5,13 @@ import SwiftUI
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
     let model = MacAppModel()
     private var keyMonitor: PlaybackKeyMonitor?
+    private let appearanceSync = MacAppearanceSync()
     private var observers: [NSObjectProtocol] = []
+
+    /// 在主窗口建立前设好外观，避免先按系统外观闪一下。
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        appearanceSync.start()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Task { await model.services.restore() }

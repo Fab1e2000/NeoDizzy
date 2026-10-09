@@ -5,6 +5,8 @@ struct RootView: View {
     @State private var tabSettings = TabSettings()
     @State private var paymentSheet: PurchaseSheet?
     @State private var mine = MinePresentation()
+    @State private var themeIcon = ThemeIconController()
+    private let appearance = AppearanceSettings.shared
     let services: AppServices
     private var player: PlayerStore { services.player }
     private var offlineLibrary: OfflineLibraryStore { services.offlineLibrary }
@@ -67,7 +69,6 @@ struct RootView: View {
                         }
                     }
             }
-            .preferredColorScheme(.dark)
         }
         // 放在所有 sheet 外层，弹出的页面也能拿到播放器和账号。
         .environment(tabSettings)
@@ -77,6 +78,7 @@ struct RootView: View {
         .environment(offlineLibrary)
         .environment(downloads)
         .environment(services.purchases)
+        .environment(themeIcon)
         .environment(\.openRoute, OpenRouteAction { route in
             mine.isPresented = false
             if isNowPlayingPresented {
@@ -86,7 +88,6 @@ struct RootView: View {
                 paths[selection, default: []].append(route)
             }
         })
-        .preferredColorScheme(.dark)
         .onOpenURL { url in
             guard AlipayReturnRouter.isCallback(url) else { return }
             // 回调仅作为唤醒信号，到账仍由当前账号的网站订单核验。
@@ -103,7 +104,18 @@ struct RootView: View {
             NotificationCenter.default.post(name: .dizzyPaymentReturned, object: nil)
             Task { await services.purchases.check() }
         }
+        // 「正在播放」小组件跟着当前歌曲换封面；换歌时取消上一次未完成的封面请求。
+        .task(id: player.currentTrack?.id) { await NowPlayingWidgetBridge.update(for: player.currentTrack) }
+        .onChange(of: appearance.mode, initial: true) { WindowAppearance.apply(appearance) }
+        .onChange(of: appearance.themeID) { WindowAppearance.apply(appearance) }
+        .task(id: "\(appearance.themeID)-\(scenePhase == .active)") {
+            guard scenePhase == .active else { return }
+            // 连续点选主题时只提交最后一次，系统每换一次图标都会弹提示。
+            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+            await themeIcon.apply(theme: appearance.theme)
+        }
         .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { WindowAppearance.apply(appearance) }
             if phase == .background {
                 player.saveState()
                 services.purchases.pause()

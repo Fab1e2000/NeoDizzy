@@ -42,8 +42,13 @@ extension View {
             .environment(services.downloads)
             .environment(services.purchases)
             .environment(\.openRoute, OpenRouteAction { model.open($0) })
-            .tint(.dizzyGold)
-            // 与 iOS 版一致固定深色界面。
-            .preferredColorScheme(.dark)
+            .modifier(ThemeTint())
+    }
+}
+
+/// 在视图的 body 里读主题色，换主题后各场景立即重绘。外观由 `MacAppearanceSync` 设在 NSApp 上。
+private struct ThemeTint: ViewModifier {
+    func body(content: Content) -> some View {
+        content.tint(DizzyPalette.accent)
     }
 }

@@ -44,7 +44,7 @@ private struct CommunityContent: View {
                           systemImage: model.likes?.ilikethis == true ? "heart.fill" : "heart")
                 }
                 .buttonStyle(.bordered)
-                .tint(model.likes?.ilikethis == true ? .dizzyGold : nil)
+                .tint(model.likes?.ilikethis == true ? .dizzyAccent : nil)
                 .help(model.likes?.ilikethis == true ? "取消 +dB" : "+2 dB")
                 .disabled(model.busy || !model.loaded)
                 Picker("社区内容", selection: $showsReviews) {

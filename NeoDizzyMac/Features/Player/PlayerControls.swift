@@ -30,7 +30,7 @@ private struct PlayerButtonBody: View {
 
     var body: some View {
         configuration.label
-            .foregroundStyle(isActive ? Color.dizzyGold : tone.primary)
+            .foregroundStyle(isActive ? accent : tone.primary)
             .opacity(isEnabled ? 1 : 0.35)
             .padding(6)
             .background(background, in: .circle)
@@ -40,9 +40,12 @@ private struct PlayerButtonBody: View {
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }
 
-    /// 开启的模式（随机、循环、歌词面板）用金色底标出，悬停时浅灰底。
+    /// 深色底上用主题色明亮的一档，浅色外观下也看得清。
+    private var accent: Color { tone == .onDark ? DizzyPalette.accentOnDark : .dizzyAccent }
+
+    /// 开启的模式（随机、循环、歌词面板）用主题色底标出，悬停时浅灰底。
     private var background: Color {
-        if isActive { return Color.dizzyGold.opacity(isHovering ? 0.24 : 0.16) }
+        if isActive { return accent.opacity(isHovering ? 0.24 : 0.16) }
         return tone.primary.opacity(isHovering && isEnabled ? 0.1 : 0)
     }
 }
@@ -208,7 +211,7 @@ struct AirPlayButton: NSViewRepresentable {
         let view = AVRoutePickerView()
         view.isRoutePickerButtonBordered = false
         view.player = player.routingPlayer
-        view.setRoutePickerButtonColor(NSColor(Color.dizzyGold), for: .active)
+        view.setRoutePickerButtonColor(NSColor(Color.dizzyAccent), for: .active)
         view.setAccessibilityLabel(String(localized: "AirPlay"))
         return view
     }

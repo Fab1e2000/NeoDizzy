@@ -122,7 +122,7 @@ struct PurchaseSheet: View {
                     }
                 }
                 if let amount = PurchaseAmount(text: model.amountText), let percent = offer.boostPercentage(amount: amount) {
-                    Text("BOOST \(percent)%").font(.headline.monospacedDigit()).foregroundStyle(Color.dizzyGold)
+                    Text("BOOST \(percent)%").font(.headline.monospacedDigit()).foregroundStyle(Color.dizzyAccent)
                 }
             }
             .padding(16)
@@ -140,7 +140,7 @@ struct PurchaseSheet: View {
                     .textFieldStyle(.roundedBorder)
             }
             if let message = model.failure ?? validationMessage(offer) {
-                Text(message).foregroundStyle(Color.dizzyGold)
+                Text(message).foregroundStyle(Color.dizzyAccent)
             }
             Button {
                 Task { await model.prepare(summary: summary, account: account, purchases: purchases) }
@@ -179,7 +179,7 @@ struct PurchaseSheet: View {
                 Label(purchases.state == .confirmed ? "已确认到账" : "等待付款确认",
                       systemImage: purchases.state == .confirmed ? "checkmark.seal.fill" : "clock")
                     .font(.title3.bold())
-                    .foregroundStyle(purchases.state == .confirmed ? DizzyPalette.success : Color.dizzyGold)
+                    .foregroundStyle(purchases.state == .confirmed ? DizzyPalette.success : Color.dizzyAccent)
             }
             Text("\(pending.title) · ¥\(pending.attempt.amount.text)")
             if purchases.state == .confirmed {
@@ -188,7 +188,7 @@ struct PurchaseSheet: View {
             } else {
                 Text("如果已完成支付，到账可能稍有延迟。尚未确认前，请勿重复付款；稍后也可从「已购买」继续核验。")
                     .foregroundStyle(.secondary)
-                if let failure = purchases.failure { Text(failure).foregroundStyle(Color.dizzyGold) }
+                if let failure = purchases.failure { Text(failure).foregroundStyle(Color.dizzyAccent) }
                 HStack {
                     Button("我已付款，重新核验") { Task { await purchases.check() } }
                         .buttonStyle(.borderedProminent)
@@ -229,7 +229,7 @@ private struct CheckoutSheet: View {
             if let message = failure ?? notice {
                 Text(message)
                     .font(.callout)
-                    .foregroundStyle(failure == nil ? Color.secondary : Color.dizzyGold)
+                    .foregroundStyle(failure == nil ? Color.secondary : Color.dizzyAccent)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)

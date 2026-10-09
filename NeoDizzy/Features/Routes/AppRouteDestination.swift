@@ -11,6 +11,7 @@ struct AppRouteDestination: View {
         case .pack(let id): PackDetailView(id: id)
         case .user(let id): CommunityProfileView(userID: id)
         case .review(let id): ReviewDetailView(id: id)
+        case .discCommunity(let id): DiscCommunityPage(discID: id)
         }
     }
 }

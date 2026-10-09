@@ -247,14 +247,14 @@ private struct TopNavigationButton: View {
             Label(item.title, systemImage: item.systemImage)
                 .labelStyle(NavigationLabelStyle(showsTitle: !isCompact))
                 .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                .foregroundStyle(isSelected ? AnyShapeStyle(Color.dizzyGold) : AnyShapeStyle(.secondary))
+                .foregroundStyle(isSelected ? AnyShapeStyle(Color.dizzyAccent) : AnyShapeStyle(.secondary))
                 .fixedSize()
                 .padding(.horizontal, isCompact ? 9 : 12)
                 .frame(height: 28)
                 .background {
                     if isSelected {
                         Capsule()
-                            .fill(Color.dizzyGold.opacity(0.2))
+                            .fill(Color.dizzyAccent.opacity(0.2))
                             .matchedGeometryEffect(id: "selection", in: namespace)
                     } else if isHovering {
                         Capsule().fill(.primary.opacity(0.07))
@@ -336,6 +336,8 @@ struct RouteDestination: View {
         case .tag(let tag): TagPage(tag: tag)
         case .pack(let id): PackPage(id: id)
         case .review(let id): ReviewPage(id: id)
+        // Mac 的专辑页里已经完整展示社区内容。
+        case .discCommunity(let id): AlbumPage(id: id)
         }
     }
 }

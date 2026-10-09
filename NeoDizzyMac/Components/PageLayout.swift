@@ -180,7 +180,7 @@ struct PriceLabel: View {
         switch price {
         case .free: DizzyPalette.success
         case .redeem: DizzyPalette.info
-        case .price, .deal: .dizzyGold
+        case .price, .deal: .dizzyAccent
         }
     }
 }
@@ -195,8 +195,8 @@ struct TagBadge: View {
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 5)
             .padding(.vertical, 1.5)
-            .foregroundStyle(prominent ? Color.dizzyGold : .secondary)
-            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(prominent ? Color.dizzyGold : .secondary, lineWidth: 0.8))
+            .foregroundStyle(prominent ? Color.dizzyAccent : .secondary)
+            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(prominent ? Color.dizzyAccent : .secondary, lineWidth: 0.8))
     }
 }
 

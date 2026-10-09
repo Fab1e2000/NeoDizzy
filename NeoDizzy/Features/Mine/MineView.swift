@@ -29,6 +29,7 @@ struct MineView: View {
                             Text(tab.title + (tabs.isVisible(tab) ? "" : "（已隐藏）")).tag(tab)
                         }
                     }
+                    NavigationLink("外观与主题") { AppearanceSettingsView() }
                     NavigationLink("扫描目录") { LibraryFoldersView() }
                     NavigationLink("标签栏") { TabSettingsView() }
                     NavigationLink("歌词") { LyricsSettingsView() }
@@ -65,7 +66,6 @@ struct MineView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder

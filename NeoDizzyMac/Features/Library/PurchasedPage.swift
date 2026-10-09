@@ -25,11 +25,11 @@ struct PurchasedPage: View {
                         Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                     }
                     .padding(14)
-                    .background(Color.dizzyGold.opacity(0.12), in: .rect(cornerRadius: 12))
+                    .background(Color.dizzyAccent.opacity(0.12), in: .rect(cornerRadius: 12))
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.dizzyGold)
+                .foregroundStyle(Color.dizzyAccent)
                 .frame(maxWidth: 560)
             }
             if let userID = model.library.userID, let purchases = model.library.purchases {

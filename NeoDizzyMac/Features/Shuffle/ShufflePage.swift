@@ -51,7 +51,7 @@ struct ShufflePage: View {
     private var record: some View {
         ZStack {
             Circle()
-                .fill(RadialGradient(colors: [Color.dizzyGold.opacity(0.28), .clear], center: .center, startRadius: 30, endRadius: 150))
+                .fill(RadialGradient(colors: [Color.dizzyAccent.opacity(0.28), .clear], center: .center, startRadius: 30, endRadius: 150))
             Circle()
                 .fill(LinearGradient(colors: [Color(white: 0.24), Color(white: 0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .padding(24)

@@ -25,7 +25,7 @@ struct ShuffleView: View {
                 .frame(width: 82, height: 82)
             Image(systemName: "shuffle")
                 .font(.system(size: 30, weight: .semibold))
-                .foregroundStyle(.black)
+                .foregroundStyle(DizzyPalette.onAccent)
         }
         .frame(maxWidth: 260)
         .aspectRatio(1, contentMode: .fit)
@@ -55,7 +55,7 @@ struct ShuffleView: View {
                 } label: {
                     HStack(spacing: 10) {
                         if isRequesting {
-                            ProgressView().tint(.black)
+                            ProgressView().tint(DizzyPalette.onAccent)
                             Text("正在寻找下一首")
                         } else {
                             Label(failure == nil ? "开始随便听听" : "再试一次", systemImage: "shuffle")
@@ -68,7 +68,7 @@ struct ShuffleView: View {
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.capsule)
                 .tint(DizzyPalette.accent)
-                .foregroundStyle(.black)
+                .foregroundStyle(DizzyPalette.onAccent)
                 .controlSize(.large)
                 .disabled(isRequesting)
                 .padding(.horizontal, 16)

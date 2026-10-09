@@ -12,6 +12,8 @@ enum AppRoute: Hashable {
     case tag(String)
     case pack(id: String)
     case review(id: Int)
+    /// 专辑的全部短评与 repo。
+    case discCommunity(id: String)
 
     var title: String {
         switch self {
@@ -22,6 +24,7 @@ enum AppRoute: Hashable {
         case .tag(let tag): "#\(tag)"
         case .pack: String(localized: "合集")
         case .review: "repo 长评"
+        case .discCommunity: String(localized: "社区")
         }
     }
 }

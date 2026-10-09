@@ -3,7 +3,7 @@
 # 用法：scripts/deploy-device.sh [Debug|Release] [--no-launch]
 # 设备从环境变量或仓库根目录的 .env 读取（模板见 .env.example），
 # 团队 ID 从 Config/Signing.local.xcconfig 读取。
-# 使用 Xcode 自动签名，Bundle ID 与其他 App 互不冲突。
+# 使用 Xcode 自动签名，Bundle ID 与其他 App 互不冲突；小组件的 ID 自动跟着 App 改。
 set -euo pipefail
 
 ROOT=${0:A:h:h}
@@ -39,7 +39,7 @@ fi
 
 xcodebuild -project "$ROOT/NeoDizzy.xcodeproj" -scheme NeoDizzy -configuration "$CONFIG" \
   -destination "id=$DEVICE" -derivedDataPath "$DERIVED" \
-  CODE_SIGN_STYLE=Automatic PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+  CODE_SIGN_STYLE=Automatic APP_BUNDLE_ID="$BUNDLE_ID" \
   -allowProvisioningUpdates -allowProvisioningDeviceRegistration build -quiet
 
 APP=$DERIVED/Build/Products/$CONFIG-iphoneos/NeoDizzy.app

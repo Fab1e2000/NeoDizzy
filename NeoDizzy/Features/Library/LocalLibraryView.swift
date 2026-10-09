@@ -69,7 +69,7 @@ struct LocalAlbumDetailView: View {
                                   metadata: "\(album.tracks.count) 首") {
                             Text(album.artist)
                         } actions: {
-                            AlbumPlaybackActions(isEmpty: album.tracks.isEmpty, batchEdit: { batchAlbum = album }) { shuffled in
+                            AlbumPlaybackActions(isEmpty: album.tracks.isEmpty) { shuffled in
                                 guard !album.tracks.isEmpty else { return }
                                 player.play(album.tracks, startAt: shuffled ? Int.random(in: album.tracks.indices) : 0)
                                 if player.isShuffled != shuffled { player.toggleShuffle() }
@@ -79,7 +79,8 @@ struct LocalAlbumDetailView: View {
                             if Set(album.entries.map(\.discNumber)).count > 1 {
                                 Text("Disc \(disc)").font(.headline).padding(.vertical, 12)
                             }
-                            ForEach(album.entries.filter { $0.discNumber == disc }, id: \.track.id) { entry in
+                            let entries = album.entries.filter { $0.discNumber == disc }
+                            ForEach(entries, id: \.track.id) { entry in
                                 AlbumTrackRow(track: entry.track, editTags: {
                                     editing = AudioTagEditTarget(track: entry.track, url: entry.fileURL)
                                 }) {
@@ -106,5 +107,12 @@ struct LocalAlbumDetailView: View {
         .toolbar(.visible, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            if let album = library.localAlbum(id: id) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("批量编辑", systemImage: "square.and.pencil") { batchAlbum = album }
+                }
+            }
+        }
     }
 }

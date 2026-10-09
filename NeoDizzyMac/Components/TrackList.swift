@@ -80,7 +80,7 @@ private struct TrackRow<RowMenu: View>: View {
             HStack(spacing: 6) {
                 Text(track.title)
                     .lineLimit(1)
-                    .foregroundStyle(isCurrent ? Color.dizzyGold : .primary)
+                    .foregroundStyle(isCurrent ? Color.dizzyAccent : .primary)
                 if isPreview { TagBadge(text: "试听") }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -129,7 +129,7 @@ private struct TrackRow<RowMenu: View>: View {
     }
 
     private var background: Color {
-        if isSelected { return Color.accentColor.opacity(0.22) }
+        if isSelected { return Color.dizzyAccent.opacity(0.22) }
         return isHovering ? Color.primary.opacity(0.07) : .clear
     }
 
@@ -142,10 +142,10 @@ private struct TrackRow<RowMenu: View>: View {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.dizzyGold)
+                .foregroundStyle(Color.dizzyAccent)
             } else {
                 Image(systemName: "speaker.wave.2.fill")
-                    .foregroundStyle(Color.dizzyGold)
+                    .foregroundStyle(Color.dizzyAccent)
                     .symbolEffect(.variableColor.iterative, options: .repeating, isActive: player.isPlaying)
             }
         } else if isHovering {

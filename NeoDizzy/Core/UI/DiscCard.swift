@@ -17,7 +17,7 @@ struct DiscCard: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(.black.opacity(0.6), in: .capsule)
-                            .foregroundStyle(DizzyPalette.accent)
+                            .foregroundStyle(DizzyPalette.accentOnDark)
                             .padding(6)
                     }
                 }
