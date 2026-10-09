@@ -6,7 +6,7 @@
 
 **为 iPhone 和 Mac 打造的第三方 DizzyLab 音乐客户端**
 
-SwiftUI 原生构建 · 浅色 / 深色外观与主题色 · 在线试听与离线音乐
+SwiftUI 原生构建 · 在线试听与离线音乐
 
 [![Release](https://img.shields.io/github/v/release/Fab1e2000/NeoDizzy?style=flat-square&color=F0AD4E&label=release)](https://github.com/Fab1e2000/NeoDizzy/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Fab1e2000/NeoDizzy/total?style=flat-square&color=F0AD4E)](https://github.com/Fab1e2000/NeoDizzy/releases)
