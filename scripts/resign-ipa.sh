@@ -35,7 +35,8 @@ security cms -D -i "$PROFILE" > "$WORK/profile.plist"
 APP_ID=$(plutil -extract Entitlements.application-identifier raw "$WORK/profile.plist")
 TEAM=$(plutil -extract 'TeamIdentifier.0' raw "$WORK/profile.plist")
 BUNDLE_ID=${APP_ID#$TEAM.}
-if [[ $BUNDLE_ID == *'*'* ]]; then BUNDLE_ID=com.elsterlee.NeoDizzy; APP_ID=$TEAM.$BUNDLE_ID; fi
+WILDCARD=0
+if [[ $BUNDLE_ID == *'*'* ]]; then WILDCARD=1; BUNDLE_ID=com.elsterlee.NeoDizzy; APP_ID=$TEAM.$BUNDLE_ID; fi
 GET_TASK_ALLOW=$(plutil -extract Entitlements.get-task-allow raw "$WORK/profile.plist" 2>/dev/null || echo false)
 echo "描述文件：$(plutil -extract Name raw "$WORK/profile.plist")，到期 $(plutil -extract ExpirationDate raw "$WORK/profile.plist")"
 echo "Bundle ID 将设为 $BUNDLE_ID"
@@ -62,6 +63,7 @@ cd "$WORK"
 unzip -q "$IPA"
 APP=$(print -l Payload/*.app(N) | head -1)
 [[ -n $APP ]] || { echo "ipa 里没有 .app" >&2; exit 1; }
+ORIGINAL_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP/Info.plist"
 cp "$PROFILE" "$APP/embedded.mobileprovision"
 rm -rf "$APP/_CodeSignature"
@@ -77,6 +79,22 @@ cat > entitlements.plist <<PLIST
 PLIST
 for nested in "$APP"/Frameworks/*(N); do
   codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" "$nested"
+done
+# 小组件扩展的 Bundle ID 必须以 App 的 Bundle ID 开头，并由描述文件覆盖。
+# 通配描述文件可以一起签；只绑定一个 App ID 的描述文件签不了，只能去掉小组件，否则系统拒绝安装。
+for appex in "$APP"/PlugIns/*.appex(N); do
+  if (( WILDCARD )); then
+    APPEX_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$appex/Info.plist")
+    APPEX_ID=$BUNDLE_ID${APPEX_ID#$ORIGINAL_ID}
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $APPEX_ID" "$appex/Info.plist"
+    cp "$PROFILE" "$appex/embedded.mobileprovision"
+    rm -rf "$appex/_CodeSignature"
+    sed "s/$APP_ID/$TEAM.$APPEX_ID/g" entitlements.plist > appex-entitlements.plist
+    codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --entitlements appex-entitlements.plist "$appex"
+  else
+    echo "描述文件只覆盖 $BUNDLE_ID，已移除 ${appex:t}（「正在播放」小组件不可用）"
+    rm -rf "$appex"
+  fi
 done
 codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --entitlements entitlements.plist "$APP"
 codesign --verify --strict "$APP"
