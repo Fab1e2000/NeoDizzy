@@ -135,6 +135,46 @@ struct LibraryImportTests {
         #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("星海/星海 - 01.flac").path))
     }
 
+    @Test func duplicateSharedToInboxIsRemoved() async throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let album = root.appendingPathComponent("星海", isDirectory: true)
+        try FileManager.default.createDirectory(at: album, withIntermediateDirectories: true)
+        _ = try file("星海 - 01.flac", in: album)
+        let inbox = root.appendingPathComponent("Inbox", isDirectory: true)
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let shared = try file("星海 - 01.flac", in: inbox)
+        let unsupported = try file("说明.txt", in: inbox)
+        let summary = try await LibraryImporter.importItems([shared, unsupported], into: root, albumTitle: albumFromName)
+        #expect(summary.duplicates == 1)
+        // 跳过的副本也不能留在 Inbox，否则会被扫描成一张「Inbox」专辑。
+        #expect(try FileManager.default.contentsOfDirectory(atPath: inbox.path).isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: album.path) == ["星海 - 01.flac"])
+    }
+
+    @Test func sameNameImageBecomesAlbumCover() async throws {
+        let base = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let root = base.appendingPathComponent("library", isDirectory: true)
+        let picked = base.appendingPathComponent("picked", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: picked, withIntermediateDirectories: true)
+        _ = try await LibraryImporter.importItems([
+            try file("星海 - 01.flac", in: picked),
+            try file("星海 - 01.webp", in: picked),
+        ], into: root, albumTitle: albumFromName)
+        let folder = root.appendingPathComponent("星海", isDirectory: true)
+        #expect(LocalLibraryScanner.cover(in: folder)?.lastPathComponent == "cover.webp")
+
+        // 已有封面时，后来的图片保留原名，不覆盖封面。
+        _ = try await LibraryImporter.importItems([
+            try file("星海 - 02.flac", in: picked),
+            try file("星海 - 02.png", in: picked),
+        ], into: root, albumTitle: albumFromName)
+        #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("星海 - 02.png").path))
+        #expect(LocalLibraryScanner.cover(in: folder)?.lastPathComponent == "cover.webp")
+    }
+
     @Test @MainActor func appFolderLibraryForgetsExternalFoldersAndIndexesImports() async throws {
         let base = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: base) }

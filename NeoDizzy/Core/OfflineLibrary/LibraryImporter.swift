@@ -36,11 +36,16 @@ nonisolated enum LibraryImporter {
         // 分享菜单交来的文件可能还在原位置，需要临时授权；选择器复制来的文件不需要，调用也无害。
         let scoped = urls.filter { $0.startAccessingSecurityScopedResource() }
         defer { scoped.forEach { $0.stopAccessingSecurityScopedResource() } }
+        // 跳过、重复或解压后的临时副本也要删掉；留在 Documents/Inbox 里会被扫描成一张「Inbox」专辑。
+        defer {
+            for url in urls where isTemporaryCopy(url, root: root) && !isLibraryFile(url, root: root) {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
         for url in urls {
             try Task.checkCancellation()
             // 在「文件」里打开音乐文件夹中已有的文件时，不再复制一份。
-            if (try? OfflinePaths.relativePath(of: url, inside: root)) != nil,
-               (try? OfflinePaths.relativePath(of: url, inside: inbox(of: root))) == nil {
+            if isLibraryFile(url, root: root) {
                 summary.alreadyInLibrary += 1
                 continue
             }
@@ -85,9 +90,17 @@ nonisolated enum LibraryImporter {
         let manager = FileManager.default
         for name in groups.keys.sorted() {
             let folder = try albumFolder(named: name, in: root)
-            for url in groups[name]! {
+            // 先放名为 cover / folder 的图片，其余图片只在专辑还没有封面时改名为 cover。
+            let files = groups[name]!.sorted { isCoverName($0) && !isCoverName($1) }
+            for url in files {
                 try Task.checkCancellation()
-                let target = folder.appendingPathComponent(url.lastPathComponent)
+                var fileName = url.lastPathComponent
+                let ext = url.pathExtension.lowercased()
+                if LocalLibraryScanner.coverExtensions.contains(ext), !isCoverName(url), LocalLibraryScanner.cover(in: folder) == nil {
+                    // 本地库只认 cover / folder 作封面，同名封面（如「01.jpg」）改名才能显示。
+                    fileName = "cover.\(ext)"
+                }
+                let target = folder.appendingPathComponent(fileName)
                 if manager.fileExists(atPath: target.path) {
                     if size(of: target) == size(of: url) {
                         summary.duplicates += 1
@@ -169,6 +182,12 @@ nonisolated enum LibraryImporter {
         return inboxes.contains { path.hasPrefix($0) }
     }
 
+    /// 已经在音乐文件夹里（Inbox 之外）的文件。
+    private static func isLibraryFile(_ url: URL, root: URL) -> Bool {
+        (try? OfflinePaths.relativePath(of: url, inside: root)) != nil &&
+        (try? OfflinePaths.relativePath(of: url, inside: inbox(of: root))) == nil
+    }
+
     /// 系统把分享来的文件放在 Documents/Inbox，也就是音乐文件夹里，需要移出来。
     private static func inbox(of root: URL) -> URL {
         root.appendingPathComponent("Inbox", isDirectory: true)
@@ -188,6 +207,10 @@ nonisolated enum LibraryImporter {
             if !manager.fileExists(atPath: candidate.path) { return candidate }
         }
         return url
+    }
+
+    private static func isCoverName(_ url: URL) -> Bool {
+        LocalLibraryScanner.coverNames.contains(url.deletingPathExtension().lastPathComponent.lowercased())
     }
 
     private static func stem(_ url: URL) -> String {
