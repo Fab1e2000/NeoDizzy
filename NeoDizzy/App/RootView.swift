@@ -89,6 +89,17 @@ struct RootView: View {
             }
         })
         .onOpenURL { url in
+            // 从其他 App 的分享菜单「用 NeoDizzy 打开」的歌曲或压缩包，导入音乐文件夹后打开本地库。
+            if url.isFileURL {
+                mine.isPresented = false
+                isNowPlayingPresented = false
+                if tabSettings.isVisible(.localLibrary) {
+                    selection = .localLibrary
+                    paths[.localLibrary] = []
+                }
+                Task { await offlineLibrary.importItems([url]) }
+                return
+            }
             guard AlipayReturnRouter.isCallback(url) else { return }
             // 回调仅作为唤醒信号，到账仍由当前账号的网站订单核验。
             debugLog("收到支付宝返回，继续核验付款")
@@ -114,8 +125,12 @@ struct RootView: View {
             do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
             await themeIcon.apply(theme: appearance.theme)
         }
-        .onChange(of: scenePhase, initial: true) { _, phase in
+        .onChange(of: scenePhase, initial: true) { oldPhase, phase in
             if phase == .active { WindowAppearance.apply(appearance) }
+            // 用户可能刚在「文件」App 里往音乐文件夹放了歌。
+            if oldPhase == .background, phase == .active {
+                Task { await offlineLibrary.scan(refreshMetadata: false) }
+            }
             if phase == .background {
                 player.saveState()
                 services.purchases.pause()

@@ -15,7 +15,12 @@ final class AppServices {
             guard let account, !account.isSessionExpired else { return nil }
             return account.account?.userID
         })
+        #if os(iOS)
+        // 「文件 › 我的 iPhone › NeoDizzy」就是 App 的 Documents 文件夹，下载和导入都存在这里。
+        let library = OfflineLibraryStore(libraryRoot: .documentsDirectory)
+        #else
         let library = OfflineLibraryStore()
+        #endif
         offlineLibrary = library
         downloads = DownloadStore(library: library)
         player = PlayerStore(resolver: StreamResolver(localFile: { [weak library] track in

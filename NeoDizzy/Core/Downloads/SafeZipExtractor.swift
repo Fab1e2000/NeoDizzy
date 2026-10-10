@@ -15,7 +15,8 @@ nonisolated enum SafeZipExtractor {
 
     /// Prefer valid UTF-8. Legacy encodings can both decode the same bytes to different names;
     /// use the album's published track titles to disambiguate instead of silently importing mojibake.
-    static func decodedPaths(_ entries: [Entry], expectedTracks: [Track]) throws -> [String] {
+    /// User imports have no published titles; `preferLegacyEncoding` picks the encoding when the names give no hint.
+    static func decodedPaths(_ entries: [Entry], expectedTracks: [Track], preferLegacyEncoding: String.Encoding? = nil) throws -> [String] {
         let utf8 = entries.map { $0.path(using: .utf8) }
         if utf8.allSatisfy({ !$0.isEmpty }) { return utf8 }
         var candidates: [[String]] = []
@@ -26,6 +27,10 @@ nonisolated enum SafeZipExtractor {
         guard !candidates.isEmpty else { throw DownloadFailure.unsafeArchive }
         if candidates.count == 1 { return candidates[0] }
         let titles = expectedTracks.map { normalizedTitle($0.title) }.filter { !$0.isEmpty }
+        if titles.isEmpty, let preferLegacyEncoding {
+            let paths = entries.map { $0.path(using: preferLegacyEncoding) }
+            if paths.allSatisfy({ !$0.isEmpty }) { return paths }
+        }
         let scores = candidates.map { paths in
             paths.reduce(0) { score, path in
                 let stem = normalizedTitle(URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent)
@@ -74,7 +79,8 @@ nonisolated enum SafeZipExtractor {
 
     /// Extracts into a new private staging directory. The caller imports it transactionally and removes it.
     @concurrent
-    static func extract(_ zip: URL, into destination: URL, limits: Limits = Limits(), expectedTracks: [Track] = []) async throws {
+    static func extract(_ zip: URL, into destination: URL, limits: Limits = Limits(), expectedTracks: [Track] = [],
+                        preferLegacyEncoding: String.Encoding? = nil) async throws {
         try validateZIP(zip, limits: limits)
         let manager = FileManager.default
         guard !manager.fileExists(atPath: destination.path) else { throw DownloadFailure.unsafeArchive }
@@ -86,7 +92,7 @@ nonisolated enum SafeZipExtractor {
                 guard rawEntries.count < limits.entries else { throw DownloadFailure.archiveTooLarge }
                 rawEntries.append(entry)
             }
-            let decoded = try decodedPaths(rawEntries, expectedTracks: expectedTracks)
+            let decoded = try decodedPaths(rawEntries, expectedTracks: expectedTracks, preferLegacyEncoding: preferLegacyEncoding)
             var entries: [(Entry, String)] = []
             var paths = Set<String>()
             var advertisedTotal: UInt64 = 0
