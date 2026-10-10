@@ -41,6 +41,14 @@ final class MacAppearanceSync {
             return
         }
         let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        NSApp.applicationIconImage = NSImage(named: "DockIcon-\(theme.id)-\(isDark ? "dark" : "light")")
+        guard let artwork = NSImage(named: "DockIcon-\(theme.id)-\(isDark ? "dark" : "light")") else { return }
+        // ictool 的导出图贴满画布；编译后的 icns 在 256 点画布上每侧留 25 点。
+        // NSApp 不会替运行时图片补留白，使用同样的比例，换色前后 Dock 尺寸一致。
+        let size = NSSize(width: 512, height: 512)
+        NSApp.applicationIconImage = NSImage(size: size, flipped: false) { rect in
+            artwork.draw(in: rect.insetBy(dx: rect.width * 25 / 256, dy: rect.height * 25 / 256),
+                         from: .zero, operation: .sourceOver, fraction: 1)
+            return true
+        }
     }
 }

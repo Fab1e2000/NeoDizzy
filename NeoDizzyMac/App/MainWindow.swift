@@ -131,6 +131,18 @@ struct MainWindow: View {
     private static let minimumContentWidth: CGFloat = 560
 }
 
+enum NavigationDisplayMode: String, CaseIterable {
+    case iconOnly, titleOnly, titleAndIcon
+
+    var title: String {
+        switch self {
+        case .iconOnly: String(localized: "图标")
+        case .titleOnly: String(localized: "文本")
+        case .titleAndIcon: String(localized: "图标和文本")
+        }
+    }
+}
+
 /// 顶部导航栏：工具栏正中的一组分段按钮，参考 Petrichor 的 TabbedButtons。
 /// 选中背景在按钮之间滑动；空间不够时只显示图标，悬停显示名称。再次点击当前项回到它的根页面。
 ///
@@ -144,6 +156,7 @@ struct TopNavigationBar: View {
     let fullWidth: CGFloat
     @Environment(MacAppModel.self) private var model
     @Environment(TabSettings.self) private var tabs
+    @AppStorage("navigation.displayMode") private var displayMode = NavigationDisplayMode.titleAndIcon
 
     var body: some View {
         let isCompact = windowWidth < fullWidth + 300
@@ -152,6 +165,7 @@ struct TopNavigationBar: View {
             // 已经收进溢出菜单的整组按钮换成图标后仍然藏着。SwiftUI 更新工具栏项的时机不固定，
             // 所以在这些时刻之后分几次让标题栏重新布局；拖动缩放结束时再补一次。
             .onChange(of: isCompact) { window?.scheduleToolbarRelayout() }
+            .onChange(of: displayMode) { window?.scheduleToolbarRelayout() }
             .onReceive(NotificationCenter.default.publisher(for: NSToolbar.willAddItemNotification, object: window?.toolbar)) { _ in
                 window?.scheduleToolbarRelayout()
             }
@@ -193,7 +207,7 @@ struct NavigationBarWidthReader: View {
     @Binding var width: CGFloat
 
     var body: some View {
-        NavigationButtons(isCompact: false)
+        NavigationButtons(isCompact: false, isMeasuring: true)
             .fixedSize()
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .hidden()
@@ -205,9 +219,11 @@ struct NavigationBarWidthReader: View {
 
 private struct NavigationButtons: View {
     let isCompact: Bool
+    var isMeasuring = false
     @Environment(MacAppModel.self) private var model
     @Environment(TabSettings.self) private var tabs
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("navigation.displayMode") private var displayMode = NavigationDisplayMode.titleAndIcon
     @Namespace private var selectionNamespace
 
     private var items: [NavigationItem] { [.search] + tabs.visiblePrimary.map(NavigationItem.tab) + [.history] }
@@ -216,8 +232,8 @@ private struct NavigationButtons: View {
         let navigation = model.navigation
         HStack(spacing: 2) {
             ForEach(items, id: \.self) { item in
-                TopNavigationButton(item: item, isSelected: navigation.selection == item, isCompact: isCompact,
-                                    namespace: selectionNamespace) {
+                TopNavigationButton(item: item, isSelected: navigation.selection == item, displayMode: isCompact ? .iconOnly : displayMode,
+                                    namespace: selectionNamespace, allowsContextMenu: !isMeasuring) {
                     if navigation.selection == item {
                         navigation.popToRoot(item)
                     } else {
@@ -235,21 +251,25 @@ private struct NavigationButtons: View {
 private struct TopNavigationButton: View {
     let item: NavigationItem
     let isSelected: Bool
-    let isCompact: Bool
+    let displayMode: NavigationDisplayMode
     let namespace: Namespace.ID
+    let allowsContextMenu: Bool
     let action: () -> Void
     @Environment(TabSettings.self) private var tabs
     @Environment(\.openSettings) private var openSettings
     @State private var isHovering = false
+    @AppStorage("navigation.displayMode") private var preferredDisplayMode = NavigationDisplayMode.titleAndIcon
 
     var body: some View {
         Button(action: action) {
-            Label(item.title, systemImage: item.systemImage)
-                .labelStyle(NavigationLabelStyle(showsTitle: !isCompact))
+            HStack(spacing: 5) {
+                if displayMode != .titleOnly { Image(systemName: item.systemImage) }
+                if displayMode != .iconOnly { Text(item.title) }
+            }
                 .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
                 .foregroundStyle(isSelected ? AnyShapeStyle(Color.dizzyAccent) : AnyShapeStyle(.secondary))
                 .fixedSize()
-                .padding(.horizontal, isCompact ? 9 : 12)
+                .padding(.horizontal, displayMode == .iconOnly ? 9 : 12)
                 .frame(height: 28)
                 .background {
                     if isSelected {
@@ -267,24 +287,82 @@ private struct TopNavigationButton: View {
         .help(item.title)
         .accessibilityLabel(item.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .contextMenu {
-            if case .tab(let tab) = item {
-                Button("从导航栏隐藏「\(tab.title)」") { tabs.setVisible(false, for: tab) }
-                    .disabled(!tabs.canHide(tab))
+        .overlay {
+            if allowsContextMenu {
+                NavigationContextMenu(mode: $preferredDisplayMode, item: item, tabs: tabs, openSettings: { openSettings() })
             }
-            Button("编辑导航栏…") { openSettings() }
         }
     }
 }
 
-/// 图标与文字的间距比系统 Label 更紧凑；窄窗口只留图标。
-private struct NavigationLabelStyle: LabelStyle {
-    let showsTitle: Bool
+/// 工具栏会吞掉 SwiftUI contextMenu；只拦截右键，普通点击仍交给 SwiftUI 按钮。
+private struct NavigationContextMenu: NSViewRepresentable {
+    @Binding var mode: NavigationDisplayMode
+    let item: NavigationItem
+    let tabs: TabSettings
+    let openSettings: () -> Void
 
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 5) {
-            configuration.icon
-            if showsTitle { configuration.title }
+    func makeNSView(context: Context) -> MenuView {
+        let view = MenuView()
+        view.startMonitoring()
+        return view
+    }
+
+    static func dismantleNSView(_ view: MenuView, coordinator: ()) { view.stopMonitoring() }
+
+    func updateNSView(_ view: MenuView, context: Context) {
+        view.options = NavigationDisplayMode.allCases.map { option in
+            (option.title, mode == option, true, { mode = option })
+        }
+        if case .tab(let tab) = item {
+            view.options.append((String(localized: "从导航栏隐藏「\(tab.title)」"), false, tabs.canHide(tab), {
+                tabs.setVisible(false, for: tab)
+            }))
+        }
+        view.options.append((String(localized: "编辑导航栏…"), false, true, openSettings))
+    }
+
+    final class MenuView: NSView {
+        var options: [(title: String, checked: Bool, enabled: Bool, action: () -> Void)] = []
+
+        private var eventMonitor: Any?
+
+        func startMonitoring() {
+            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak self] event in
+                guard let self, event.window === self.window, !self.isHiddenOrHasHiddenAncestor,
+                      event.type == .rightMouseDown || event.modifierFlags.contains(.control),
+                      self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else { return event }
+                self.showMenu(event)
+                return nil
+            }
+        }
+
+        func stopMonitoring() {
+            if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
+            eventMonitor = nil
+        }
+
+        // 不参与命中测试，左键、悬停和辅助功能继续由下面的按钮处理。
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        private func showMenu(_ event: NSEvent) {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            for (index, option) in options.enumerated() {
+                if index == NavigationDisplayMode.allCases.count { menu.addItem(.separator()) }
+                let entry = NSMenuItem(title: option.title, action: #selector(selectOption(_:)), keyEquivalent: "")
+                entry.tag = index
+                entry.target = self
+                entry.state = option.checked ? .on : .off
+                entry.isEnabled = option.enabled
+                menu.addItem(entry)
+            }
+            NSMenu.popUpContextMenu(menu, with: event, for: self)
+        }
+
+        @objc private func selectOption(_ sender: NSMenuItem) {
+            guard options.indices.contains(sender.tag) else { return }
+            options[sender.tag].action()
         }
     }
 }
