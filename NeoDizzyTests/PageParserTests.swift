@@ -61,6 +61,16 @@ struct PageParserTests {
         #expect(first.disc.id == "obs-CD06BP")
         #expect(first.disc.labelName == "obscuRE TRAX")
         #expect(first.excerpt.hasPrefix("来自obscuRE TRAX"))
+        #expect(results.discs.allSatisfy { $0.excerpt.count <= SearchPageParser.excerptLimit + 1 })
+    }
+
+    /// 摘要合并换行和多余空白，超过上限时截断并加省略号，避免卡片排版整段介绍。
+    @Test func searchExcerptIsShortSingleParagraph() {
+        #expect(SearchPageParser.excerpt("  第一行\n\n第二行   结尾 ") == "第一行 第二行 结尾")
+        #expect(SearchPageParser.excerpt(nil) == "")
+        let long = SearchPageParser.excerpt(String(repeating: "东方同人 ", count: 100))
+        #expect(long.count == SearchPageParser.excerptLimit + 1)
+        #expect(long.hasSuffix("…"))
     }
 
     @Test func packPageListsIncludedDiscsAndPrice() throws {

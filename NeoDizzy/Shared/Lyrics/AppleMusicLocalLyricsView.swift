@@ -24,6 +24,10 @@ struct AppleMusicLocalLyricsView: View {
     @State private var interacting = false
     @State private var resumeGeneration = 0
     @State private var rowHeights: [Int: CGFloat] = [:]
+    /// 每行在可视区域里的实际上沿，用来确认滚动后当前行真的停在聚焦位置。
+    @State private var rowTops: [Int: CGFloat] = [:]
+    /// 上一次对齐到的行；与新行相邻时才用弹簧动画，跳转（拖进度条、点歌词）直接到位。
+    @State private var lastFocusedID: Int?
     @State private var visibility = LyricsScrollInterfaceVisibilityTracker()
     private let motion = AppleMusicLyricsMotionProfile.iOS26_6
     private var fontSize: CGFloat { fixedFontSize ?? scaledFontSize }
@@ -78,23 +82,15 @@ struct AppleMusicLocalLyricsView: View {
                         try await Task.sleep(for: .seconds(3))
                         try Task.checkCancellation()
                         browsing = false
-                        focus(proxy, anchor: anchor)
                     } catch { }
                 }
-                .onChange(of: anchor) { _, _ in
-                    if !browsing { focus(proxy, anchor: anchor) }
-                }
-                .onChange(of: activeID) { _, _ in
-                    if !browsing { focus(proxy, anchor: anchor) }
-                }
                 .onChange(of: isActive) { _, active in
-                    if active { browsing = false; focus(proxy, anchor: anchor) }
-                    else { resumeGeneration += 1 }
+                    if active { browsing = false } else { resumeGeneration += 1 }
                 }
-                .onChange(of: browsing) { _, value in
-                    if !value { focus(proxy, anchor: anchor) }
+                // 当前行、聚焦位置、页面是否显示或是否在手动浏览变化时，重新对齐；新请求会取消旧的。
+                .task(id: FocusRequest(id: activeID, focusTop: focusTop, isActive: isActive, browsing: browsing)) {
+                    await focus(proxy, anchor: anchor, focusTop: focusTop, viewportHeight: height)
                 }
-                .onAppear { focus(proxy, anchor: anchor, animated: false) }
             }
         }
     }
@@ -119,6 +115,9 @@ struct AppleMusicLocalLyricsView: View {
         }
         .scaleEffect(focused ? 1 : motion.deselectedScale, anchor: .topLeading)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeights[line.id] = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("localLyricsViewport")).minY } action: {
+            rowTops[line.id] = $0
+        }
         .visualEffect { content, geometry in
             let distance = abs(geometry.frame(in: .named("localLyricsViewport")).midY - focusTop)
             let relativeDistance = max(distance / max(stride, 1), 0)
@@ -146,12 +145,36 @@ struct AppleMusicLocalLyricsView: View {
         .animation(reducesMotion ? nil : .smooth(duration: 0.35), value: isInterfaceHidden)
     }
 
-    private func focus(_ proxy: ScrollViewProxy, anchor: CGFloat, animated: Bool = true) {
-        guard isActive, let id = activeID else { return }
+    /// 移植 MeloX 的 ensureFocusAlignment：LazyVStack 里还没排版的行只有估算高度，
+    /// 跳到较远的行时 scrollTo 会按估算位置停下，歌词就错位了。所以滚动后核对这一行的实际位置，
+    /// 不在聚焦位置就不带动画再滚一次，直到对齐。
+    private func focus(_ proxy: ScrollViewProxy, anchor: CGFloat, focusTop: CGFloat, viewportHeight: CGFloat) async {
+        guard isActive, !browsing, let id = activeID else { return }
+        // 相邻的行、或者已经在屏幕上的行（点了一句歌词）用弹簧滚过去；其余直接跳到位。
+        let isAdjacent = lastFocusedID.map { abs($0 - id) <= 1 } ?? false
+        let isOnScreen = lastFocusedID != nil && rowTops[id].map { abs($0 - focusTop) < viewportHeight } == true
+        lastFocusedID = id
         let spring = motion.lineChangeSpring
-        withAnimation(animated && !reducesMotion ? .interpolatingSpring(
+        let animated = (isAdjacent || isOnScreen) && !reducesMotion
+        withAnimation(animated ? .interpolatingSpring(
             mass: spring.mass, stiffness: spring.stiffness, damping: spring.damping) : nil) {
             proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: anchor))
         }
+        // 动画中的位置还在变化，等弹簧基本停下再核对。
+        do { try await Task.sleep(for: .milliseconds(animated ? 700 : 32)) } catch { return }
+        for _ in 0..<8 {
+            if let top = rowTops[id], abs(top - focusTop) <= 2 { return }
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: anchor)) }
+            do { try await Task.sleep(for: .milliseconds(32)) } catch { return }
+        }
     }
+}
+
+private struct FocusRequest: Hashable {
+    let id: Int?
+    let focusTop: CGFloat
+    let isActive: Bool
+    let browsing: Bool
 }

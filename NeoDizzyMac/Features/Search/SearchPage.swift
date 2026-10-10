@@ -7,8 +7,60 @@ struct SearchPage: View {
 
     private var search: SearchModel { model.search }
 
+    @Environment(\.pageScrollKey) private var scrollKey
+    @State private var position = ScrollPosition(edge: .top)
+
     var body: some View {
-        PageScroll(title: String(localized: "搜索")) {
+        // 单一惰性网格直接位于 ScrollView 内；标题作为跨列 section header，
+        // 避免 LazyVStack 再测量整个嵌套网格，已加载卡片增多时仍只排版可见行。
+        ScrollView {
+            LazyVGrid(columns: PageMetrics.gridColumns, alignment: .leading, spacing: PageMetrics.gridSpacing) {
+                Section {
+                    if let discs = search.discs {
+                        ForEach(discs.items) { result in
+                            DiscCard(disc: result.disc, caption: result.excerpt)
+                        }
+                    }
+                } header: {
+                    searchHeader
+                } footer: {
+                    if let keyword = search.keyword, let discs = search.discs {
+                        SearchResultsFooter(list: discs, keyword: keyword)
+                            .id(keyword)
+                    }
+                }
+            }
+            .pageContentFrame()
+            .padding(.top, 12)
+            .padding(.bottom, 28)
+        }
+        .scrollPosition($position)
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, offset in
+            if let scrollKey { model.scrollOffsets[scrollKey] = offset }
+        }
+        .onAppear {
+            if let scrollKey, let offset = model.scrollOffsets[scrollKey], offset > 0 { position.scrollTo(y: offset) }
+        }
+        .onChange(of: search.keyword) { position.scrollTo(edge: .top) }
+        .navigationTitle("搜索")
+        .pageRefresh { await model.search.discs?.reload() }
+        .onChange(of: search.query) { _, query in
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { search.clear() }
+        }
+        // 进入页面时还没有搜索过、或从菜单按下 ⌘F，都直接把光标放进搜索框。
+        .onChange(of: model.isSearchFocused, initial: true) { _, focused in
+            guard focused || search.keyword == nil else { return }
+            // 等页面挂载后再聚焦，也消费窗口创建前的 ⌘F 请求。
+            DispatchQueue.main.async {
+                isFieldFocused = true
+                model.isSearchFocused = false
+            }
+        }
+    }
+
+    private var searchHeader: some View {
+        VStack(alignment: .leading, spacing: PageMetrics.sectionSpacing) {
+            PageTitleRow(title: String(localized: "搜索")) { EmptyView() }
             VStack(alignment: .leading, spacing: 10) {
                 SearchField(isFocused: $isFieldFocused)
                 if let keyword = search.keyword {
@@ -17,7 +69,7 @@ struct SearchPage: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            if let keyword = search.keyword, let discs = search.discs {
+            if search.keyword != nil {
                 if !search.labels.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
                         SectionTitle(String(localized: "社团"))
@@ -39,45 +91,46 @@ struct SearchPage: View {
                         .scrollIndicators(.never)
                     }
                 }
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionTitle(String(localized: "作品"))
-                    PagedSection(list: discs, webURL: DizzyURL.search(keyword), emptyTitle: "没有找到相关作品",
-                                 emptySystemImage: "magnifyingglass") { results in
-                        LazyVGrid(columns: PageMetrics.gridColumns, alignment: .leading, spacing: PageMetrics.gridSpacing) {
-                            ForEach(results) { result in
-                                DiscCard(disc: result.disc, caption: result.excerpt)
-                            }
-                        }
+                SectionTitle(String(localized: "作品"))
+            }
+            if search.keyword == nil {
+                if !model.recentSearches.isEmpty {
+                    RecentSearches { keyword in
+                        model.search.query = keyword
+                        model.submitSearch()
                     }
+                } else {
+                    ContentUnavailableView {
+                        Label("搜索 DizzyLab", systemImage: "magnifyingglass")
+                    } description: {
+                        Text("输入专辑、社团或用户名称，按回车键搜索。")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
                 }
-                .id(keyword)
-            } else if !model.recentSearches.isEmpty {
-                RecentSearches { keyword in
-                    model.search.query = keyword
-                    model.submitSearch()
-                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 状态变化只更新分页底栏，不重建所有卡片。
+private struct SearchResultsFooter: View {
+    let list: PagedList<SearchDisc>
+    let keyword: String
+
+    var body: some View {
+        if list.items.isEmpty {
+            if let failure = list.failure {
+                FailureView(message: failure, webURL: DizzyURL.search(keyword)) { await list.reload() }
+            } else if list.isEmpty {
+                ContentUnavailableView("没有找到相关作品", systemImage: "magnifyingglass")
+                    .padding(.vertical, 40)
             } else {
-                ContentUnavailableView {
-                    Label("搜索 DizzyLab", systemImage: "magnifyingglass")
-                } description: {
-                    Text("输入专辑、社团或用户名称，按回车键搜索。")
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 60)
+                DelayedProgress().task { await list.loadMore() }
             }
-        }
-        .pageRefresh { await model.search.discs?.reload() }
-        .onChange(of: search.query) { _, query in
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { search.clear() }
-        }
-        // 进入页面时还没有搜索过、或从菜单按下 ⌘F，都直接把光标放进搜索框。
-        .onChange(of: model.isSearchFocused, initial: true) { _, focused in
-            guard focused || search.keyword == nil else { return }
-            // 等页面挂载后再聚焦，也消费窗口创建前的 ⌘F 请求。
-            DispatchQueue.main.async {
-                isFieldFocused = true
-                model.isSearchFocused = false
-            }
+        } else if list.hasMore || list.failure != nil {
+            PaginationLoader(list: list)
         }
     }
 }
