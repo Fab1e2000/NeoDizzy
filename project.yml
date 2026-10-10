@@ -74,8 +74,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleLocalizations: [zh-Hans]
         CFBundleDisplayName: NeoDizzy
-        CFBundleShortVersionString: "0.4.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "0.4.1"
+        CFBundleVersion: "5"
         CFBundleURLTypes:
           - CFBundleURLName: com.elsterlee.NeoDizzy.payment
             CFBundleURLSchemes: [neodizzy-pay]
@@ -138,8 +138,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleDisplayName: NeoDizzy
         # 版本号须与 App 一致，发版时一起改。
-        CFBundleShortVersionString: "0.4.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "0.4.1"
+        CFBundleVersion: "5"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -193,8 +193,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleLocalizations: [zh-Hans]
         CFBundleDisplayName: NeoDizzy
-        CFBundleShortVersionString: "0.4.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "0.4.1"
+        CFBundleVersion: "5"
         LSApplicationCategoryType: public.app-category.music
         ITSAppUsesNonExemptEncryption: false
         NSHumanReadableCopyright: "NeoDizzy 以 GNU GPLv3 发布，与 DizzyLab 无隶属关系。"
