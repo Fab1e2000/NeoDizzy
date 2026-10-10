@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct LocalLibraryView: View {
     @Environment(OfflineLibraryStore.self) private var library
+    @State private var isPickingFiles = false
 
     private struct AlbumItem: Identifiable {
         let id: String
@@ -22,6 +23,15 @@ struct LocalLibraryView: View {
 
     var body: some View {
         MainTabPage(tab: .localLibrary, onRefresh: { await library.scan() }) {
+            HStack(spacing: 12) {
+                Button("导入音乐", systemImage: "square.and.arrow.down") { isPickingFiles = true }
+                    .buttonStyle(.bordered)
+                    .disabled(library.isImporting)
+                if library.isImporting { ProgressView().accessibilityLabel("正在导入") }
+            }
+            if let message = library.importMessage {
+                Text(message).font(.caption).foregroundStyle(DizzyPalette.mutedText)
+            }
             if library.isScanning && items.isEmpty { LoadingView().accessibilityLabel("正在扫描本地音乐") }
             if let issue = library.issue {
                 Label(issue, systemImage: "exclamationmark.triangle")
@@ -29,7 +39,7 @@ struct LocalLibraryView: View {
             }
             if items.isEmpty && !library.isScanning {
                 ContentUnavailableView("还没有本地专辑", systemImage: "music.note.list",
-                                       description: Text("在「我的 → 设置 → 扫描目录」添加音乐文件夹。下载的专辑也会自动显示在这里。"))
+                                       description: Text("点「导入音乐」，或在「文件」App 中把音乐放进「我的 iPhone › NeoDizzy」。下载的专辑也会显示在这里。"))
             } else if !items.isEmpty {
                 LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                     ForEach(items) { album in
@@ -50,6 +60,7 @@ struct LocalLibraryView: View {
                 }
             }
         }
+        .musicImporter(isPresented: $isPickingFiles, library: library)
     }
 }
 
@@ -96,7 +107,7 @@ struct LocalAlbumDetailView: View {
                 }
             } else {
                 ContentUnavailableView("找不到本地专辑", systemImage: "folder.badge.questionmark",
-                                       description: Text("请检查扫描目录授权和音乐文件，然后重新扫描。"))
+                                       description: Text("专辑可能已被移动或删除，请下拉本地库重新扫描。"))
             }
         }
         .dizzyPageBackground()

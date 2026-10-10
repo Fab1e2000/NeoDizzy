@@ -14,6 +14,8 @@ struct NeoDizzyMacApp: App {
         // 每次启动都打开主窗口，不沿用上次退出时窗口已关闭的状态。
         .defaultLaunchBehavior(.presented)
         .windowToolbarStyle(.unified(showsTitle: false))
+        // 导航组自行显示图标/文字，避免系统把首个按钮标题再画在整组下方。
+        .windowToolbarLabelStyle(fixed: .iconOnly)
         .commands { AppCommands(model: appDelegate.model) }
 
         Settings {

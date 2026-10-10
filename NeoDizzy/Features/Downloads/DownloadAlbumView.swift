@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 下载面板先取得文件夹授权，再读取当前会话可用的格式。
+/// 下载面板：读取当前会话可用的格式，下载到 App 的音乐文件夹。
 struct DownloadAlbumView: View {
     let detail: DiscDetail
     var isGift = false
@@ -23,10 +23,9 @@ struct DownloadAlbumView: View {
                     Text(detail.summary.title)
                         .font(.title3.bold())
                         .foregroundStyle(DizzyPalette.text)
-                    OfflineFolderSection()
                     if let activeJob {
                         DownloadJobRow(job: activeJob)
-                    } else if offline.folderName != nil {
+                    } else {
                         formatSelection
                     }
                 }
@@ -41,10 +40,7 @@ struct DownloadAlbumView: View {
                     Button("完成") { dismiss() }
                 }
             }
-            .task(id: offline.folderName) {
-                guard offline.folderName != nil else { return }
-                await loadOptions()
-            }
+            .task { await loadOptions() }
         }
         .tint(DizzyPalette.accent)
     }

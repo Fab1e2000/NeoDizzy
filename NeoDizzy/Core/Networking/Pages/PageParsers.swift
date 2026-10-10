@@ -106,6 +106,21 @@ nonisolated enum TagPageParser {
 
 /// 搜索页 `/search/?s=<关键词>&page=<n>`：第一页依次是「社团」「作品」「用户」三组，之后每页只有作品（10 张）。
 nonisolated enum SearchPageParser {
+    /// 结果卡片只显示两行摘要。网页给的是整段介绍（有的长达几百字），整段交给文字排版时
+    /// 每次绘制、悬停和网格测量都要重排全文，Mac 上滚动搜索结果会明显卡顿。
+    static let excerptLimit = 120
+
+    static func excerpt(_ text: String?) -> String {
+        let words = (text ?? "").split(whereSeparator: \.isWhitespace)
+        var result = ""
+        for word in words {
+            if !result.isEmpty { result += " " }
+            result += word
+            if result.count > excerptLimit { return String(result.prefix(excerptLimit)) + "…" }
+        }
+        return result
+    }
+
     static func parse(_ html: String) throws -> SearchResults {
         try HTML.parsing("search") {
             let document = try HTML.document(html, page: "search")
@@ -120,7 +135,7 @@ nonisolated enum SearchPageParser {
                 return SearchLabel(
                     name: name,
                     coverURL: HTML.imageURL(try link.select("img").first()),
-                    description: try link.select("h3.truncate-limit").first()?.text() ?? ""
+                    description: excerpt(try link.select("h3.truncate-limit").first()?.text())
                 )
             }
             let discs = try document.select("a[href*=/d/]:has(h1)").array().compactMap { link -> SearchDisc? in
@@ -131,7 +146,7 @@ nonisolated enum SearchPageParser {
                     coverURL: HTML.imageURL(try link.select("img").first()),
                     labelName: try link.select("h3:not(.truncate-limit)").first()?.text()
                 )
-                return SearchDisc(disc: disc, excerpt: try link.select("h3.truncate-limit").first()?.text() ?? "")
+                return SearchDisc(disc: disc, excerpt: excerpt(try link.select("h3.truncate-limit").first()?.text()))
             }
             let users = try document.select("a[href*=/u/]:has(h1)").array().compactMap { link -> CommunityUser? in
                 guard let id = LoggedInHomeParser.userID(fromHref: try link.attr("href")) else { return nil }

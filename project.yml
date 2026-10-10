@@ -74,13 +74,27 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleLocalizations: [zh-Hans]
         CFBundleDisplayName: NeoDizzy
-        CFBundleShortVersionString: "0.4.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "0.4.1"
+        CFBundleVersion: "5"
         CFBundleURLTypes:
           - CFBundleURLName: com.elsterlee.NeoDizzy.payment
             CFBundleURLSchemes: [neodizzy-pay]
             CFBundleTypeRole: Viewer
         ITSAppUsesNonExemptEncryption: false
+        # 音乐库就是 App 的 Documents 文件夹：在「文件 › 我的 iPhone › NeoDizzy」中可见，
+        # 电脑访达连接 iPhone 时也能直接拖入。读写自己的文件夹不需要用户授权。
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # 其他 App 的分享菜单可以「用 NeoDizzy 打开」歌曲或压缩包，导入音乐文件夹。
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: 音乐文件
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.audio]
+          - CFBundleTypeName: ZIP 压缩包
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.zip-archive]
         # 后台继续播放（M1 接入播放器后生效）。
         UIBackgroundModes: [audio]
         # 外观由「我的 › 外观与主题」决定（跟随系统、浅色、深色）；启动画面底色随系统外观切换。
@@ -124,8 +138,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleDisplayName: NeoDizzy
         # 版本号须与 App 一致，发版时一起改。
-        CFBundleShortVersionString: "0.4.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "0.4.1"
+        CFBundleVersion: "5"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -179,8 +193,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleLocalizations: [zh-Hans]
         CFBundleDisplayName: NeoDizzy
-        CFBundleShortVersionString: "0.4.0"
-        CFBundleVersion: "4"
+        CFBundleShortVersionString: "0.4.1"
+        CFBundleVersion: "5"
         LSApplicationCategoryType: public.app-category.music
         ITSAppUsesNonExemptEncryption: false
         NSHumanReadableCopyright: "NeoDizzy 以 GNU GPLv3 发布，与 DizzyLab 无隶属关系。"

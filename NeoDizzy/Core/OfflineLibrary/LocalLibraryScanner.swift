@@ -219,12 +219,14 @@ actor LocalLibraryScanner {
         return try result?.get() ?? FileListing(files: [], issues: [])
     }
 
-    nonisolated private static func cover(in directory: URL) -> URL? {
-        let names = ["cover", "folder"]
+    nonisolated static let coverNames: Set<String> = ["cover", "folder"]
+    nonisolated static let coverExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "webp"]
+
+    nonisolated static func cover(in directory: URL) -> URL? {
         let images = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey])) ?? []
         return images.filter { url in
-            names.contains(url.deletingPathExtension().lastPathComponent.lowercased()) &&
-            ["jpg", "jpeg", "png", "heic"].contains(url.pathExtension.lowercased()) &&
+            coverNames.contains(url.deletingPathExtension().lastPathComponent.lowercased()) &&
+            coverExtensions.contains(url.pathExtension.lowercased()) &&
             (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false &&
             (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
         }.sorted { $0.lastPathComponent < $1.lastPathComponent }.first

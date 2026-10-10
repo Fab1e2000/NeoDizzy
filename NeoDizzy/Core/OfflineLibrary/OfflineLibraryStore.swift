@@ -27,6 +27,14 @@ final class OfflineLibraryStore {
     private(set) var downloadFolderIssue: String?
     private(set) var isScanning = false
     private(set) var issue: String?
+    /// 最近一次导入的结果，显示在本地库和音乐文件夹页。
+    private(set) var importMessage: String?
+    private var importsRunning = 0
+    var isImporting: Bool { importsRunning > 0 }
+
+    /// iOS 的音乐库固定在 App 自己的文件夹（「文件 › 我的 iPhone › NeoDizzy」），读写都不需要用户授权。
+    /// 为 nil 时（Mac、测试）沿用用户选择并授权的文件夹。
+    @ObservationIgnored let libraryRoot: URL?
 
     @ObservationIgnored private let worker = OfflineLibraryWorker()
     @ObservationIgnored private let defaults: UserDefaults
@@ -38,9 +46,18 @@ final class OfflineLibraryStore {
     @ObservationIgnored private var folderSelectionsInFlight = 0
     private static let bookmarkKey = "offlineLibrary.folderBookmark.v1"
 
-    init(defaults: UserDefaults = .standard, scanner: LocalLibraryScanner = LocalLibraryScanner()) {
+    init(defaults: UserDefaults = .standard, scanner: LocalLibraryScanner = LocalLibraryScanner(), libraryRoot: URL? = nil) {
         self.defaults = defaults
         self.scanner = scanner
+        self.libraryRoot = libraryRoot
+        if let libraryRoot {
+            // 旧版本记住的外部文件夹不再使用；那里的音乐需要用户自己移进 App 文件夹。
+            defaults.removeObject(forKey: Self.bookmarkKey)
+            defaults.removeObject(forKey: Self.sourcesKey)
+            try? FileManager.default.createDirectory(at: libraryRoot, withIntermediateDirectories: true)
+            folder = OfflineFolderAccess(url: libraryRoot)
+            folderName = "NeoDizzy"
+        }
         // Seed UI before the first frame. Bookmarks are still restored before file access.
         if let data = defaults.data(forKey: Self.snapshotKey),
            let snapshot = try? JSONDecoder().decode(IndexSnapshot.self, from: data),
@@ -54,6 +71,10 @@ final class OfflineLibraryStore {
     func restore() async {
         guard !hasRestored else { return }
         hasRestored = true
+        if libraryRoot != nil {
+            await scan(refreshMetadata: false)
+            return
+        }
         folderGeneration += 1
         let generation = folderGeneration
         if let data = defaults.data(forKey: Self.sourcesKey) {
@@ -111,6 +132,22 @@ final class OfflineLibraryStore {
         folderGeneration += 1
         saveSources()
         await scan()
+    }
+
+    /// 把选中或分享来的文件放进 App 的音乐文件夹，然后刷新本地库。
+    func importItems(_ urls: [URL]) async {
+        guard let libraryRoot, !urls.isEmpty else { return }
+        importsRunning += 1
+        defer { importsRunning -= 1 }
+        importMessage = nil
+        do {
+            let summary = try await LibraryImporter.importItems(urls, into: libraryRoot)
+            importMessage = summary.message
+            if summary.tracks > 0 { await scan(refreshMetadata: false) }
+        } catch is CancellationError {
+        } catch {
+            importMessage = "导入失败：\(error.localizedDescription)"
+        }
     }
 
     private func saveSources() {
