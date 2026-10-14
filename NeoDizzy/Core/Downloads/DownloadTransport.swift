@@ -65,10 +65,9 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: queue)
     }
 
-    func start(url: URL, id: UUID) {
+    func start(url: URL, id: UUID, headers: [String: String] = [:]) {
         var request = URLRequest(url: url)
-        request.setValue(DizzyHTTPClient.userAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue(DizzyURL.site.absoluteString + "/", forHTTPHeaderField: "Referer")
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
         let task = session.downloadTask(with: request)
         task.taskDescription = id.uuidString
         task.resume()
@@ -98,7 +97,6 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
                   (200..<300).contains(response.statusCode), !Self.isErrorContentType(response.mimeType) else {
                 throw DownloadFailure.invalidResponse
             }
-            try SafeZipExtractor.validateZIP(location)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let target = archiveURL(id)
             try? FileManager.default.removeItem(at: target)

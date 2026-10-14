@@ -23,7 +23,7 @@ struct DownloadJobRow: View {
 
     private var retryUnavailableReason: String? {
         if offline.folderName == nil { return "请先选择音乐文件夹" }
-        if downloads.jobs.contains(where: { $0.discID == job.discID && $0.isGift == job.isGift && $0.isActive }) {
+        if downloads.jobs.contains(where: { $0.identity == job.identity && $0.isActive }) {
             return "这张专辑已有下载任务"
         }
         if offline.isScanning { return "请等待文件夹扫描完成" }

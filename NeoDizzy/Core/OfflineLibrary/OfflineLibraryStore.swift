@@ -68,6 +68,8 @@ final class OfflineLibraryStore {
         }
     }
 
+    var downloadRoot: URL? { folder?.url }
+
     func restore() async {
         guard !hasRestored else { return }
         hasRestored = true

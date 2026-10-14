@@ -1,17 +1,28 @@
 import Foundation
+import Observation
 
-@Observable
-final class DownloadStore {
+@Observable final class DownloadStore {
     private(set) var jobs: [DownloadJob]
     @ObservationIgnored private let library: OfflineLibraryStore
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let transport: DownloadTransport
+    @ObservationIgnored private var providers: [String: any DownloadProvider] = [:]
     @ObservationIgnored private var operations: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var eventTask: Task<Void, Never>?
     @ObservationIgnored private var restored = false
     @ObservationIgnored private var progressByID: [UUID: DownloadProgress] = [:]
 
-    /// Only the progress view observes this object; byte updates never mutate jobs.
+    init(library: OfflineLibraryStore, migrateLegacy: (Data) -> [DownloadJob]? = { _ in nil }) {
+        self.library = library
+        directory = URL.applicationSupportDirectory.appendingPathComponent("Downloads", isDirectory: true)
+        if let data = try? Data(contentsOf: directory.appendingPathComponent("jobs.json")) {
+            if let snapshot = try? JSONDecoder().decode(DownloadSnapshot.self, from: data), snapshot.version == 2 { jobs = snapshot.jobs }
+            else { jobs = migrateLegacy(data) ?? [] }
+        } else { jobs = [] }
+        transport = DownloadTransport(directory: directory, identifier: BackgroundDownloadBridge.identifier)
+    }
+
+    func register(_ provider: any DownloadProvider) { providers[provider.id] = provider }
     func progress(for job: DownloadJob) -> DownloadProgress {
         if let progress = progressByID[job.id] { return progress }
         let progress = DownloadProgress(fraction: job.progress)
@@ -19,212 +30,199 @@ final class DownloadStore {
         return progress
     }
 
-    init(library: OfflineLibraryStore) {
-        self.library = library
-        directory = URL.applicationSupportDirectory.appendingPathComponent("Downloads", isDirectory: true)
-        let persistence = directory.appendingPathComponent("jobs.json")
-        jobs = (try? Data(contentsOf: persistence)).flatMap { try? JSONDecoder().decode([DownloadJob].self, from: $0) } ?? []
-        transport = DownloadTransport(directory: directory, identifier: BackgroundDownloadBridge.identifier)
-    }
-
-    /// Reconnects OS-owned transfers. Completed temporary files are already moved by the delegate,
-    /// and buffered delegate events are consumed only after the library has restored its bookmark.
     func restore() async {
         guard !restored else { return }
-        restored = true
-        // Existing albums may belong to an earlier download. Resume this job
-        // from its own task/archive; never infer completion from the library.
-        cleanupInactiveFiles()
         let tasks = await transport.tasks()
-        var liveIDs = Set<UUID>()
+        let live = Set(tasks.compactMap { $0.taskDescription.flatMap(UUID.init(uuidString:)) })
+        for index in jobs.indices where jobs[index].isActive {
+            for file in jobs[index].transfers.indices {
+                let transfer = jobs[index].transfers[file]
+                guard transfer.state != .completed && transfer.state != .failed else { continue }
+                if FileManager.default.fileExists(atPath: transport.archiveURL(transfer.id).path) {
+                    jobs[index].transfers[file].state = .downloaded
+                } else if live.contains(transfer.id) { jobs[index].transfers[file].state = .downloading }
+                else { jobs[index].transfers[file].state = .queued }
+            }
+            jobs[index].state = .queued
+        }
+        let active = Set(jobs.filter(\.isActive).flatMap { $0.transfers.map(\.id) })
         for task in tasks {
-            guard let id = task.taskDescription.flatMap(UUID.init(uuidString:)),
-                  let job = jobs.first(where: { $0.id == id }), job.isActive else { task.cancel(); continue }
-            liveIDs.insert(id)
-            update(id) { $0.state = .downloading }
+            guard let id = task.taskDescription.flatMap(UUID.init(uuidString:)), active.contains(id) else { task.cancel(); continue }
             if task.state == .suspended { task.resume() }
         }
-        for job in jobs where job.isActive && job.state != .queued {
-            if FileManager.default.fileExists(atPath: transport.archiveURL(job.id).path) {
-                processArchive(job.id)
-            } else if !liveIDs.contains(job.id), operations[job.id] == nil {
-                fail(job.id, DownloadFailure.interrupted.localizedDescription)
-            }
-        }
-        let events = transport.events
+        restored = true
         eventTask = Task { [weak self] in
-            for await event in events {
+            for await event in transport.events {
                 guard let self else { break }
                 await self.handle(event)
             }
         }
-        save()
-        pump()
+        save(); pump()
     }
 
-    /// Inserts immediately so the sheet can dismiss while fresh authorization is fetched.
-    func enqueue(detail: DiscDetail, option: DownloadOption) async {
-        guard !jobs.contains(where: { $0.discID == detail.id && $0.isGift == option.isGift && $0.isActive }) else { return }
-        let job = DownloadJob(id: UUID(), album: DownloadAlbum(detail), format: option.format)
+    func enqueue(providerID: String, request: DownloadRequest) async {
+        guard let data = try? JSONEncoder().encode(request) else { return }
+        let job = DownloadJob(id: UUID(), providerID: providerID, requestData: data)
+        guard !jobs.contains(where: { $0.identity == job.identity && $0.isActive }) else { return }
         jobs.insert(job, at: 0)
-        save()
-        pump()
+        save(); pump()
     }
 
     func cancel(_ job: DownloadJob) {
-        guard jobs.first(where: { $0.id == job.id })?.isActive == true else { return }
+        guard let current = jobs.first(where: { $0.id == job.id }), current.isActive else { return }
         update(job.id) { $0.state = .cancelled; $0.progress = nil }
         operations[job.id]?.cancel()
-        operations[job.id] = nil
+        let ids = Set(current.transfers.map(\.id))
         Task {
-            for task in await transport.tasks() where task.taskDescription == job.id.uuidString { task.cancel() }
+            for task in await transport.tasks() where task.taskDescription.flatMap(UUID.init(uuidString:)).map(ids.contains) == true { task.cancel() }
         }
-        // Keep extraction cleanup within its operation to avoid racing an open file handle.
-        if !FileManager.default.fileExists(atPath: extractionURL(job.id).path) {
-            try? FileManager.default.removeItem(at: transport.archiveURL(job.id))
-        }
-        save()
-        pump()
+        save(); pump()
     }
 
     func retry(_ job: DownloadJob) async {
         guard let current = jobs.first(where: { $0.id == job.id }), current.canRetry,
-              !jobs.contains(where: { $0.discID == current.discID && $0.isGift == current.isGift && $0.isActive }) else { return }
-        try? FileManager.default.removeItem(at: transport.archiveURL(job.id))
-        try? FileManager.default.removeItem(at: extractionURL(job.id))
-        // A new ID prevents a late cancellation/error from an old URLSession task affecting the retry.
-        let replacement = DownloadJob(id: UUID(), album: current.album, format: current.format)
-        progressByID.removeValue(forKey: job.id)
-        jobs.removeAll { $0.id == job.id }
+              operations[current.id] == nil,
+              !jobs.contains(where: { $0.identity == current.identity && $0.isActive }) else { return }
+        let replacement = DownloadJob(id: UUID(), providerID: current.providerID, requestData: current.requestData)
+        cleanup(current)
+        jobs.removeAll { $0.id == current.id }
         jobs.insert(replacement, at: 0)
-        save()
-        pump()
+        save(); pump()
     }
 
-    /// Bound total in-flight work, including extraction/import, to two albums.
     private func pump() {
         guard restored else { return }
-        let running = jobs.filter { $0.isActive && $0.state != .queued }.count
-        for job in jobs.reversed().filter({ $0.state == .queued }).prefix(max(0, 2 - running)) {
-            update(job.id) { $0.state = .preparing }
-            prepare(job.id)
+        var running = jobs.filter { $0.isActive && $0.state != .queued }.count
+        for job in jobs.reversed() where job.isActive && operations[job.id] == nil {
+            if job.state == .queued {
+                guard running < 2 else { continue }
+                running += 1
+                update(job.id) { $0.state = .preparing }
+            }
+            guard !job.transfers.contains(where: { $0.state == .downloading }) else { continue }
+            operations[job.id] = Task { [weak self] in await self?.advance(job.id) }
         }
         save()
     }
 
-    private func prepare(_ id: UUID) {
-        operations[id] = Task { [weak self] in
-            guard let self, let job = jobs.first(where: { $0.id == id }) else { return }
-            defer { operations[id] = nil; pump() }
-            do {
-                guard library.folderName != nil else { throw DownloadFailure.folderMissing }
-                let options = try await DizzyPages.shared.downloadOptions(discID: job.discID, gift: job.isGift)
-                guard let fresh = options.first(where: { $0.format == job.format }) else { throw DownloadFailure.unavailable }
-                let url = try await DownloadLinkResolver.resolve(fresh.url, credentials: DizzyHTTPClient.shared.credentials)
-                try Task.checkCancellation()
-                guard jobs.first(where: { $0.id == id })?.state == .preparing else { return }
-                update(id) { $0.state = .downloading }
-                save()
-                transport.start(url: url, id: id)
-            } catch is CancellationError { }
-            catch { fail(id, DownloadTransport.message(for: error)) }
+    private func advance(_ id: UUID) async {
+        defer { operations[id] = nil; save(); pump() }
+        guard let job = jobs.first(where: { $0.id == id }), let provider = providers[job.providerID] else {
+            update(id) { $0.state = .failed; $0.failureMessage = "下载来源不可用" }; return
         }
+        do {
+            guard library.folderName != nil else { throw DownloadFailure.folderMissing }
+            if job.transfers.isEmpty {
+                let plan = try await provider.plan(job.requestData)
+                try Task.checkCancellation()
+                update(id) { $0.transfers = plan }
+                save()
+            }
+            while let current = jobs.first(where: { $0.id == id }), current.isActive {
+                try Task.checkCancellation()
+                if let file = current.transfers.first(where: { $0.state == .downloaded }) {
+                    let staging = directory.appendingPathComponent("\(file.id).contents")
+                    defer { try? FileManager.default.removeItem(at: staging) }
+                    do {
+                        try? FileManager.default.removeItem(at: staging)
+                        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+                        update(id) { $0.state = .importing }
+                        let prepared = try await provider.finalize(transport.archiveURL(file.id), metadata: file.metadata, staging: staging)
+                        try Task.checkCancellation()
+                        try await library.commit(staging: staging, folderName: prepared.folderName, provenance: prepared.provenance)
+                        updateTransfer(id, file.id) { $0.state = .completed }
+                        // 提交成功后保留结果，即使取消恰好在提交时到达。
+                        if current.transfers.count == 1 { update(id) { $0.state = .completed; $0.progress = 1 } }
+                    } catch is CancellationError { throw CancellationError() }
+                    catch { updateTransfer(id, file.id) { $0.state = .failed; $0.failure = DownloadTransport.message(for: error) } }
+                    try? FileManager.default.removeItem(at: transport.archiveURL(file.id))
+                    save()
+                    if current.transfers.count == 1, jobs.first(where: { $0.id == id })?.state == .completed {
+                        try await provider.completed(current.requestData, transfers: jobs.first(where: { $0.id == id })?.transfers ?? current.transfers)
+                        return
+                    }
+                } else if let file = current.transfers.first(where: { $0.state == .queued }) {
+                    do {
+                        guard let source = try await provider.source(file) else {
+                            updateTransfer(id, file.id) { $0.state = .completed }
+                            continue
+                        }
+                        try Task.checkCancellation()
+                        updateTransfer(id, file.id) { $0.metadata = source.metadata; $0.state = .downloading }
+                        update(id) { $0.state = .downloading }
+                        save()
+                        transport.start(url: source.url, id: file.id, headers: source.headers)
+                        return
+                    } catch is CancellationError { throw CancellationError() }
+                    catch { updateTransfer(id, file.id) { $0.state = .failed; $0.failure = DownloadTransport.message(for: error) } }
+                } else {
+                    try await provider.completed(current.requestData, transfers: jobs.first(where: { $0.id == id })?.transfers ?? current.transfers)
+                    let failures = current.transfers.filter { $0.state == .failed }
+                    update(id) {
+                        $0.state = !failures.isEmpty && failures.count == current.transfers.count ? .failed : .completed
+                        $0.progress = 1
+                        $0.failureMessage = failures.isEmpty ? nil : "\(failures.count) 首无法下载：\(failures.first?.failure ?? "请重试")"
+                    }
+                    return
+                }
+            }
+        } catch is CancellationError { }
+        catch { update(id) { $0.state = .failed; $0.failureMessage = DownloadTransport.message(for: error) } }
     }
 
     private func handle(_ event: DownloadEvent) async {
+        if case .finishedBackgroundEvents = event {
+            for operation in Array(operations.values) { await operation.value }
+            BackgroundDownloadBridge.finishEvents(); return
+        }
+        let fileID: UUID
         switch event {
-        case .progress(let id, let written, let expected):
-            guard let job = jobs.first(where: { $0.id == id }), job.state == .downloading else { return }
-            progress(for: job).fraction = expected > 0 ? min(1, max(0, Double(written) / Double(expected))) : nil
-        case .downloaded(let id):
-            // A completed task can disappear from allTasks just before its final delegate callback.
-            if let job = jobs.first(where: { $0.id == id }), job.state == .failed,
-               job.failureMessage == DownloadFailure.interrupted.localizedDescription {
-                update(id) { $0.state = .extracting; $0.failureMessage = nil }
-            }
-            guard jobs.first(where: { $0.id == id })?.isActive == true else {
-                try? FileManager.default.removeItem(at: transport.archiveURL(id)); return
-            }
-            processArchive(id)
-        case .failed(let id, let message): fail(id, message)
-        case .finishedBackgroundEvents:
-            // Processing is part of this background delivery; release iOS's completion only after it finishes.
-            let pending = Array(operations.values)
-            for operation in pending { await operation.value }
-            BackgroundDownloadBridge.finishEvents()
+        case .progress(let id, _, _), .downloaded(let id), .failed(let id, _): fileID = id
+        case .finishedBackgroundEvents: return
+        }
+        guard let job = jobs.first(where: { $0.transfers.contains { $0.id == fileID } }), job.isActive else {
+            if case .downloaded = event { try? FileManager.default.removeItem(at: transport.archiveURL(fileID)) }
+            return
+        }
+        switch event {
+        case .progress(_, let written, let expected):
+            let completed = job.transfers.filter { $0.state == .completed || $0.state == .failed }.count
+            progress(for: job).fraction = expected > 0 ? (Double(completed) + min(1, Double(written) / Double(expected))) / Double(max(1, job.transfers.count)) : nil
+        case .downloaded:
+            updateTransfer(job.id, fileID) { if $0.state != .completed { $0.state = .downloaded; $0.failure = nil } }
+            save(); pump()
+        case .failed(_, let message):
+            updateTransfer(job.id, fileID) { if $0.state == .downloading { $0.state = .failed; $0.failure = message } }
+            save(); pump()
+        case .finishedBackgroundEvents: break
         }
     }
-
-    private func processArchive(_ id: UUID) {
-        guard operations[id] == nil, let job = jobs.first(where: { $0.id == id }), job.isActive else { return }
-        update(id) { $0.state = .extracting; $0.progress = nil }
-        save()
-        operations[id] = Task { [weak self] in
-            guard let self else { return }
-            let zip = transport.archiveURL(id)
-            let extraction = extractionURL(id)
-            defer {
-                operations[id] = nil
-                pump()
-            }
-            do {
-                await SafeZipExtractor.removeTemporaryFiles([extraction])
-                try Task.checkCancellation()
-                try await SafeZipExtractor.extract(zip, into: extraction, expectedTracks: job.isGift ? [] : job.album.tracks)
-                try Task.checkCancellation()
-                guard jobs.first(where: { $0.id == id })?.isActive == true else { throw CancellationError() }
-                update(id) { $0.state = .importing }
-                save()
-                if job.isGift {
-                    try await library.importGift(from: extraction, detail: job.album.detail)
-                } else {
-                    try await library.importAlbum(from: extraction, detail: job.album.detail)
-                }
-                // A successful atomic import wins a late cancellation; the album really exists.
-                update(id) { $0.state = .completed; $0.progress = 1 }
-                save()
-            } catch is CancellationError { }
-            catch { fail(id, DownloadTransport.message(for: error)) }
-            await SafeZipExtractor.removeTemporaryFiles([extraction, zip])
-        }
-    }
-
-    private func cleanupInactiveFiles() {
-        let active = Set(jobs.filter(\.isActive).map(\.id))
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
-        for file in files where ["zip", "contents"].contains(file.pathExtension) {
-            guard let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent), !active.contains(id) else { continue }
-            try? FileManager.default.removeItem(at: file)
-        }
-    }
-
-    private func extractionURL(_ id: UUID) -> URL { directory.appendingPathComponent(id.uuidString + ".contents", isDirectory: true) }
 
     private func update(_ id: UUID, _ change: (inout DownloadJob) -> Void) {
         guard let index = jobs.firstIndex(where: { $0.id == id }) else { return }
         change(&jobs[index])
-        if jobs[index].state != .downloading {
-            progressByID.removeValue(forKey: id)
+        if jobs[index].state != .downloading { progressByID[id] = nil }
+    }
+    private func updateTransfer(_ job: UUID, _ file: UUID, _ change: (inout DownloadTransfer) -> Void) {
+        update(job) { value in
+            guard let index = value.transfers.firstIndex(where: { $0.id == file }) else { return }
+            change(&value.transfers[index])
         }
     }
-
-    private func fail(_ id: UUID, _ message: String) {
-        guard jobs.first(where: { $0.id == id })?.isActive == true else { return }
-        update(id) { $0.state = .failed; $0.failureMessage = message; $0.progress = nil }
-        if operations[id] == nil { try? FileManager.default.removeItem(at: transport.archiveURL(id)) }
-        save()
-        pump()
+    private func cleanup(_ job: DownloadJob) {
+        for file in job.transfers {
+            try? FileManager.default.removeItem(at: transport.archiveURL(file.id))
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent("\(file.id).contents"))
+        }
     }
-
     private func save() {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(jobs)
+            let data = try JSONEncoder().encode(DownloadSnapshot(version: 2, jobs: jobs))
             try data.write(to: directory.appendingPathComponent("jobs.json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             var location = directory
-            var values = URLResourceValues()
-            values.isExcludedFromBackup = true
+            var values = URLResourceValues(); values.isExcludedFromBackup = true
             try? location.setResourceValues(values)
-        } catch { /* Keep usable in-memory state; an interrupted unsaved job is reconciled against URLSession on restore. */ }
+        } catch { }
     }
 }

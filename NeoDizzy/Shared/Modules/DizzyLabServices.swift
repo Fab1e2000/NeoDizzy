@@ -13,7 +13,8 @@ final class DizzyLabServices {
             guard let account, !account.isSessionExpired else { return nil }
             return account.account?.userID
         })
-        downloads = DownloadStore(library: library)
+        downloads = DownloadStore(library: library, migrateLegacy: DizzyLabDownloadProvider.migrate)
+        downloads.register(DizzyLabDownloadProvider(library: library))
         account.restore()
     }
     func restore() async { await downloads.restore() }
