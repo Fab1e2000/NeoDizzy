@@ -14,17 +14,17 @@ struct DiscDetailView: View {
     }
 
     private var historySummary: DiscSummary? {
-        offline.album(id: model.id)?.detail.summary ?? model.detail.value?.summary
+        offline.collection(provider: "dizzylab", kind: "album", id: model.id)?.detail.summary ?? model.detail.value?.summary
     }
 
     private var displayedArtworkURL: URL? {
-        offline.album(id: model.id)?.coverURL ?? model.detail.value?.summary.coverURL ?? initialArtworkURL
+        offline.collection(provider: "dizzylab", kind: "album", id: model.id)?.coverURL ?? model.detail.value?.summary.coverURL ?? initialArtworkURL
     }
 
     var body: some View {
         // Keep background state alive when loading content is replaced by album details.
         AlbumDetailScrollView(artworkURL: displayedArtworkURL) {
-            if let album = offline.album(id: model.id) {
+            if let album = offline.collection(provider: "dizzylab", kind: "album", id: model.id) {
                 // 已扫描到的专辑立即显示，不发起详情或试听时长请求。
                 DiscDetailContent(detail: album.detail, tracks: album.tracks, artworkURL: album.coverURL)
             } else {
@@ -97,7 +97,7 @@ private struct DiscDetailContent: View {
     @State private var checkedLocalTrackIDs: Set<String>?
 
     private var summary: DiscSummary { detail.summary }
-    private var localAlbum: OfflineAlbum? { offline.album(id: detail.id) }
+    private var localAlbum: OfflineAlbum? { offline.collection(provider: "dizzylab", kind: "album", id: detail.id) }
     private var localTrackIDs: Set<String> {
         checkedLocalTrackIDs ?? Set(localAlbum?.manifest.entries.map { $0.track.id } ?? [])
     }
@@ -137,7 +137,8 @@ private struct DiscDetailContent: View {
         .task(id: LocalAvailabilityRequest(discID: detail.id, revision: offline.contentRevision)) {
             checkedLocalTrackIDs = nil
             do {
-                let ids = try await offline.availableTrackIDs(discID: detail.id)
+                let keys = try await offline.localTrackKeys(provider: "dizzylab", collectionID: detail.id)
+                let ids = Set(keys.map(\.itemID))
                 try Task.checkCancellation()
                 checkedLocalTrackIDs = ids
             } catch is CancellationError {
@@ -241,7 +242,7 @@ private struct DiscStoreCard: View {
     @State private var downloadSheet: DownloadSheet?
 
     private var summary: DiscSummary { detail.summary }
-    private var localAlbum: OfflineAlbum? { offline.album(id: detail.id) }
+    private var localAlbum: OfflineAlbum? { offline.collection(provider: "dizzylab", kind: "album", id: detail.id) }
     private var activeJob: DownloadJob? {
         downloads.jobs.first { $0.discID == detail.id && !$0.isGift && $0.isActive }
     }

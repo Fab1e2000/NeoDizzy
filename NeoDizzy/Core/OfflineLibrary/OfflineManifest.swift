@@ -1,50 +1,99 @@
 import Foundation
 import CryptoKit
 
-/// 随音频保存在专辑目录中，不保存账号、token 或会过期的播放地址。
-nonisolated struct OfflineManifest: Codable, Sendable {
+/// 附加的来源信息不参与文件标签和目录边界的判断。
+nonisolated struct LibrarySource: Codable, Hashable, Sendable {
+    let provider: String
+    let kind: String
+    let id: String
+}
+
+/// 各来源自行解释 extra；本地库只负责无损编解码。
+nonisolated indirect enum LibraryJSON: Codable, Equatable, Sendable {
+    case object([String: LibraryJSON]), array([LibraryJSON]), string(String), number(Decimal), bool(Bool), null
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if value.decodeNil() { self = .null }
+        else if let flag = try? value.decode(Bool.self) { self = .bool(flag) }
+        else if let text = try? value.decode(String.self) { self = .string(text) }
+        else if let number = try? value.decode(Decimal.self) { self = .number(number) }
+        else if let object = try? value.decode([String: LibraryJSON].self) { self = .object(object) }
+        else { self = .array(try value.decode([LibraryJSON].self)) }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var value = encoder.singleValueContainer()
+        switch self {
+        case .object(let object): try value.encode(object)
+        case .array(let array): try value.encode(array)
+        case .string(let text): try value.encode(text)
+        case .number(let number): try value.encode(number)
+        case .bool(let flag): try value.encode(flag)
+        case .null: try value.encodeNil()
+        }
+    }
+}
+
+/// 随音频保存的可选来源记录，不保存签名地址、cookie 或账号凭据。
+nonisolated struct LibraryManifest: Codable, Sendable {
     static let filename = ".neodizzy.json"
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     struct Entry: Codable, Sendable {
-        let track: Track
         let relativePath: String
+        let itemID: String
+        let track: Track
+        let quality: String?
+
+        init(relativePath: String, itemID: String, track: Track, quality: String? = nil) {
+            self.relativePath = relativePath
+            self.itemID = itemID
+            self.track = track
+            self.quality = quality
+        }
     }
 
     let version: Int
-    let discID: String
+    let source: LibrarySource
     let title: String
-    let labelName: String
-    let releaseDate: String?
-    let description: String
-    let credits: String
-    let labelDescription: String
+    let artist: String
     let artworkURL: URL?
     let coverPath: String?
     private(set) var entries: [Entry]
+    let extra: LibraryJSON
 
-    init(detail: DiscDetail, files: [String: String], coverPath: String?) throws {
-        guard !detail.id.isEmpty, !detail.tracks.isEmpty,
-              Set(detail.tracks.map(\.number)).count == detail.tracks.count,
-              detail.tracks.allSatisfy({ $0.discID == detail.id && !$0.number.isEmpty && $0.localSource == nil }) else {
-            throw OfflineLibraryError.invalidManifest
-        }
+    init(source: LibrarySource, title: String, artist: String, artworkURL: URL? = nil,
+         coverPath: String? = nil, entries: [Entry], extra: LibraryJSON = .object([:])) {
         version = Self.currentVersion
-        discID = detail.id
-        title = detail.summary.title
-        labelName = detail.summary.labelName ?? "未知社团"
-        releaseDate = detail.releaseDate
-        description = detail.description
-        credits = detail.credits
-        labelDescription = detail.labelDescription
-        artworkURL = detail.summary.coverURL
+        self.source = source
+        self.title = title
+        self.artist = artist
+        self.artworkURL = artworkURL
         self.coverPath = coverPath
-        entries = try detail.tracks.map { track in
-            guard let path = files[track.number] else {
-                throw OfflineLibraryError.missingTrack(track.title)
-            }
-            return Entry(track: track, relativePath: path)
+        self.entries = entries
+        self.extra = extra
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version, source, title, artist, artworkURL, coverPath, entries, extra
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let version = try values.decode(Int.self, forKey: .version)
+        if version == 1 {
+            self = try LegacyLibraryManifest(from: decoder).converted()
+            return
         }
+        self.version = version
+        source = try values.decode(LibrarySource.self, forKey: .source)
+        title = try values.decode(String.self, forKey: .title)
+        artist = try values.decode(String.self, forKey: .artist)
+        artworkURL = try values.decodeIfPresent(URL.self, forKey: .artworkURL)
+        coverPath = try values.decodeIfPresent(String.self, forKey: .coverPath)
+        entries = try values.decode([Entry].self, forKey: .entries)
+        extra = try values.decodeIfPresent(LibraryJSON.self, forKey: .extra) ?? .object([:])
     }
 
     func validate(in directory: URL) throws {
@@ -57,7 +106,7 @@ nonisolated struct OfflineManifest: Codable, Sendable {
     }
 
     /// Repair only the in-memory index. Never rewrite the user's manifest or audio files.
-    func resolvingRenamedFiles(relativePaths: [String], in directory: URL) throws -> OfflineManifest {
+    func resolvingRenamedFiles(relativePaths: [String], in directory: URL) throws -> LibraryManifest {
         try validateStructure(in: directory)
         let matches = try AudioFileMatcher.match(tracks: entries.map(\.track), relativePaths: relativePaths)
         for entry in entries where try fileExists(entry, in: directory) {
@@ -69,7 +118,7 @@ nonisolated struct OfflineManifest: Codable, Sendable {
         var resolved = self
         resolved.entries = try entries.map { entry in
             guard let path = matches[entry.track.number] else { throw OfflineLibraryError.missingTrack(entry.track.title) }
-            return Entry(track: entry.track, relativePath: path)
+            return Entry(relativePath: path, itemID: entry.itemID, track: entry.track, quality: entry.quality)
         }
         try resolved.validate(in: directory)
         return resolved
@@ -85,12 +134,20 @@ nonisolated struct OfflineManifest: Codable, Sendable {
     }
 
     private func validateStructure(in directory: URL) throws {
-        guard version == Self.currentVersion, !discID.isEmpty, !entries.isEmpty,
-              Set(entries.map { $0.track.number }).count == entries.count,
+        guard version == Self.currentVersion, !source.provider.isEmpty, !source.id.isEmpty,
+              ["album", "playlist", "single"].contains(source.kind), !entries.isEmpty,
+              Set(entries.map(\.itemID)).count == entries.count,
               Set(entries.map(\.relativePath)).count == entries.count,
-              entries.allSatisfy({ $0.track.discID == discID && !$0.track.number.isEmpty && $0.track.localSource == nil }),
+              entries.allSatisfy({ !$0.itemID.isEmpty && $0.track.localSource == nil &&
+                  $0.track.remoteKey == RemoteTrackKey(provider: source.provider, itemID: $0.itemID) }),
               artworkURL == nil || ["https", "http"].contains(artworkURL?.scheme?.lowercased() ?? "") else {
             throw OfflineLibraryError.invalidManifest
+        }
+        if source.provider == "dizzylab" {
+            guard Set(entries.map { $0.track.number }).count == entries.count,
+                  entries.allSatisfy({ $0.track.discID == source.id && !$0.track.number.isEmpty }) else {
+                throw OfflineLibraryError.invalidManifest
+            }
         }
         for entry in entries {
             _ = try OfflinePaths.file(entry.relativePath, inside: directory)
@@ -100,20 +157,18 @@ nonisolated struct OfflineManifest: Codable, Sendable {
     }
 }
 
-nonisolated struct OfflineAlbum: Identifiable, Codable, Sendable {
-    let manifest: OfflineManifest
+nonisolated struct LibraryCollection: Identifiable, Codable, Sendable {
+    let manifest: LibraryManifest
     let directoryURL: URL
-
-    var discID: String { manifest.discID }
-    var id: String { discID }
+    var id: String {
+        let source = manifest.source
+        return source.provider == "dizzylab" && source.kind == "album" ? source.id : "\(source.provider)/\(source.kind)/\(source.id)"
+    }
     var title: String { manifest.title }
-    var labelName: String { manifest.labelName }
     var coverURL: URL? {
         if let path = manifest.coverPath,
            let url = try? OfflinePaths.file(path, inside: directoryURL),
-           (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
-            return url
-        }
+           (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true { return url }
         return manifest.artworkURL
     }
     var tracks: [Track] {
@@ -121,23 +176,16 @@ nonisolated struct OfflineAlbum: Identifiable, Codable, Sendable {
             let track = entry.track
             return Track(discID: track.discID, number: track.number, title: track.title,
                          artists: track.artists, albumTitle: title, coverURL: coverURL,
-                         duration: track.duration)
+                         duration: track.duration, remoteSource: track.remoteSource)
         }
-    }
-    var detail: DiscDetail {
-        let summary = DiscSummary(id: id, title: title, coverURL: coverURL, labelName: labelName, isOwned: true)
-        return DiscDetail(summary: summary, releaseDate: manifest.releaseDate,
-                          description: manifest.description, credits: manifest.credits,
-                          labelDescription: manifest.labelDescription, hasGift: false,
-                          tracks: tracks, streams: [:])
     }
 
     func localFile(for track: Track) -> URL? {
-        guard track.discID == id,
+        guard let key = track.remoteKey, key.provider == manifest.source.provider,
               (try? directoryURL.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false,
-              let entry = manifest.entries.first(where: { $0.track.number == track.number }),
+              let entry = manifest.entries.first(where: { $0.itemID == key.itemID }),
               let url = try? OfflinePaths.file(entry.relativePath, inside: directoryURL),
-              (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { return nil }
+              (try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])).map({ $0.isRegularFile == true && $0.isSymbolicLink != true }) == true else { return nil }
         return url
     }
 }

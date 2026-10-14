@@ -120,7 +120,7 @@ struct OfflineManifestTests {
         #expect(!json.contains("private-signed-stream"))
         #expect(!json.contains(source.path))
         let decoded = try JSONDecoder().decode(OfflineManifest.self, from: manifestData)
-        #expect(decoded.version == 1)
+        #expect(decoded.version == 2)
         #expect(decoded.entries[0].relativePath == "原始目录/01 星空.flac")
     }
 

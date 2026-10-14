@@ -64,10 +64,10 @@ struct NeteaseTests {
         client.cookie = ""
         #expect(throws: NeteaseError.self) { try client.makeRequest("/api/user/playlist", data: [:], authenticated: true) }
     }
-    @Test func routesRemoteStreamsWithoutDizzyOrLocalFallbackAndExpiresCache() async throws {
+    @Test func routesRemoteStreamsAfterLocalLookupAndExpiresCache() async throws {
         var calls = 0
         var now = Date(timeIntervalSince1970: 1000)
-        let resolver = StreamResolver(fetch: { _ in Issue.record("Remote song reached DizzyLab"); return [:] }, now: { now }, localFile: { _ in Issue.record("Remote song reached local matching"); return nil })
+        let resolver = StreamResolver(fetch: { _ in Issue.record("Remote song reached DizzyLab"); return [:] }, now: { now }, localFile: { _ in nil })
         let url = URL(string: "https://example.com/song.mp3")!
         resolver.register("netease", stream: { _ in calls += 1; return .init(url: url, expiresAt: now.addingTimeInterval(600), isPreview: true) }, lyrics: { _ in .parse("[00:01]line") })
         #expect(try await resolver.stream(for: remote()) == url)

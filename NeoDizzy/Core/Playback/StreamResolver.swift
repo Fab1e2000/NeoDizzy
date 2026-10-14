@@ -23,6 +23,7 @@ final class StreamResolver {
         return try await fetch(source.itemID)
     }
     func isPreview(for track: Track?, url: URL) -> Bool {
+        if url.isFileURL { return false }
         if let track, track.remoteSource != nil { return remoteCache[track.id]?.isPreview ?? false }
         return DizzyURL.isPreviewStream(url)
     }
@@ -54,7 +55,7 @@ final class StreamResolver {
         self.localAccess = localAccess
     }
 
-    func localURL(for track: Track) -> URL? { track.remoteSource == nil ? localFile(track) : nil }
+    func localURL(for track: Track) -> URL? { localFile(track) }
     func releaseLocalAccess() { retainedAccess = nil }
 
     /// 专辑页已经拿到的地址，直接放进缓存，播放时不用再请求一次。
@@ -64,6 +65,15 @@ final class StreamResolver {
     }
 
     func stream(for track: Track, preferLocal: Bool = true, retainAccess: Bool = true) async throws -> URL {
+        // 每次换曲目都重新查询：刚下载的曲目立即可播，移走的文件可回退到串流。
+        // 本地地址不放入签名地址缓存，也不受登录/退出登录的缓存清理影响。
+        if (preferLocal || track.localSource != nil || track.remoteSource != nil), let url = localFile(track), url.isFileURL,
+           FileManager.default.isReadableFile(atPath: url.path) {
+            if retainAccess { retainedAccess = localAccess(track) }
+            return url
+        }
+        if track.localSource != nil { throw PlaybackError.localUnavailable }
+        if retainAccess { retainedAccess = nil }
         if let source = track.remoteSource {
             if retainAccess { retainedAccess = nil }
             if let cached = remoteCache[track.id], cached.expiresAt.timeIntervalSince(now()) > Self.refreshMargin { return cached.url }
@@ -75,15 +85,6 @@ final class StreamResolver {
             remoteCache[track.id] = result
             return result.url
         }
-        // 每次换曲目都重新查询：刚下载的曲目立即可播，移走的文件可回退到串流。
-        // 本地地址不放入签名地址缓存，也不受登录/退出登录的缓存清理影响。
-        if (preferLocal || track.localSource != nil), let url = localFile(track), url.isFileURL,
-           FileManager.default.isReadableFile(atPath: url.path) {
-            if retainAccess { retainedAccess = localAccess(track) }
-            return url
-        }
-        if track.localSource != nil { throw PlaybackError.localUnavailable }
-        if retainAccess { retainedAccess = nil }
         if let url = cache[track.discID]?[track.number], isFresh(url) {
             return url
         }

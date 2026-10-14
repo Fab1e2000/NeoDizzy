@@ -4,8 +4,8 @@ import Observation
 @Observable
 @MainActor
 final class OfflineLibraryStore {
-    private(set) var albums: [OfflineAlbum] = [] {
-        didSet { contentRevision += 1 }
+    private(set) var collections: [LibraryCollection] = [] {
+        didSet { contentRevision += 1; rebuildSourceIndex() }
     }
     private(set) var localAlbums: [LocalAlbum] = [] {
         didSet { contentRevision += 1 }
@@ -14,11 +14,11 @@ final class OfflineLibraryStore {
     @ObservationIgnored private var scanAccess: [UUID: OfflineFolderAccess] = [:]
     @ObservationIgnored private let scanner: LocalLibraryScanner
     @ObservationIgnored private var scanTask: Task<Void, Never>?
-    private static let snapshotKey = "localLibrary.indexSnapshot.v1"
+    private static let snapshotKey = "localLibrary.indexSnapshot.v2"
     private struct IndexSnapshot: Codable {
         let downloadBookmark: Data?
         let sources: Data?
-        let albums: [OfflineAlbum]
+        let collections: [LibraryCollection]
         let localAlbums: [LocalAlbum]
     }
     private static let sourcesKey = "localLibrary.scanFolders.v1"
@@ -63,7 +63,7 @@ final class OfflineLibraryStore {
            let snapshot = try? JSONDecoder().decode(IndexSnapshot.self, from: data),
            snapshot.downloadBookmark == defaults.data(forKey: Self.bookmarkKey),
            snapshot.sources == defaults.data(forKey: Self.sourcesKey) {
-            albums = snapshot.albums
+            collections = snapshot.collections
             localAlbums = snapshot.localAlbums
         }
     }
@@ -193,9 +193,8 @@ final class OfflineLibraryStore {
 
     private func performScan(_ folders: [OfflineFolderAccess], scanID: Int, folderID: Int, refreshMetadata: Bool, refreshPaths: Set<String>) async {
         defer { if scanID == scanGeneration { isScanning = false } }
-        var managed: [OfflineAlbum] = []
+        var managed: [LibraryCollection] = []
         var issues = downloadFolderIssue.map { [$0] } ?? []
-        var managedTracks: [String: Track] = [:]
         var directories = Set<String>()
         do {
             for access in folders {
@@ -204,11 +203,6 @@ final class OfflineLibraryStore {
                     let result = try await worker.scan(access)
                     issues += result.issues
                     for album in result.albums {
-                        for entry in album.manifest.entries {
-                            if let file = try? OfflinePaths.file(entry.relativePath, inside: album.directoryURL) {
-                                managedTracks[LocalLibraryScanner.canonical(file)] = album.tracks.first { $0.id == entry.track.id }
-                            }
-                        }
                         if directories.insert(LocalLibraryScanner.canonical(album.directoryURL)).inserted {
                             managed.append(album)
                         }
@@ -217,15 +211,18 @@ final class OfflineLibraryStore {
                 catch {
                     issues.append("\(access.url.lastPathComponent)：\(error.localizedDescription)")
                     // Keep the previous records for inaccessible providers, not deleted files.
-                    managed += albums.filter { contains($0.directoryURL, in: access) }
+                    managed += collections.filter { contains($0.directoryURL, in: access) }
                 }
             }
+            let sourceIndex = makeSourceIndex(managed)
+            let managedTracks = Dictionary(sourceIndex.values.map { (LocalLibraryScanner.canonical($0.fileURL), $0.track) },
+                                           uniquingKeysWith: { first, _ in first })
             let local = try await scanner.scan(folders, excluding: [], refreshMetadata: refreshMetadata, refreshPaths: refreshPaths, managedTracks: managedTracks)
             try Task.checkCancellation()
             guard scanID == scanGeneration, folderID == folderGeneration else { return }
             // Site lookup remains deterministic; duplicate directory aliases were removed above.
-            var ids = Set<String>()
-            albums = managed.filter { ids.insert($0.id).inserted }.sorted {
+            var ids = Set<LibrarySource>()
+            collections = managed.filter { ids.insert($0.manifest.source).inserted }.sorted {
                 $0.title.localizedStandardCompare($1.title) == .orderedAscending
             }
             localAlbums = local.albums
@@ -242,22 +239,13 @@ final class OfflineLibraryStore {
     private func saveIndexSnapshot() {
         let snapshot = IndexSnapshot(downloadBookmark: defaults.data(forKey: Self.bookmarkKey),
                                      sources: defaults.data(forKey: Self.sourcesKey),
-                                     albums: albums, localAlbums: localAlbums)
+                                     collections: collections, localAlbums: localAlbums)
         if let data = try? JSONEncoder().encode(snapshot) {
             defaults.set(data, forKey: Self.snapshotKey)
         }
     }
 
-    func album(id: String) -> OfflineAlbum? {
-        albums.first { $0.id == id }
-    }
-
     func localAlbum(id: String) -> LocalAlbum? { localAlbums.first { $0.id == id || $0.previousIDs.contains(id) } }
-
-    func availableTrackIDs(discID: String) async throws -> Set<String> {
-        guard let album = album(id: discID), let access = allFolders.first(where: { contains(album.directoryURL, in: $0) }) else { return [] }
-        return try await worker.availableTrackIDs(in: album, folder: access)
-    }
 
     private func contains(_ url: URL, in access: OfflineFolderAccess) -> Bool {
         (try? access.url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false &&
@@ -275,26 +263,58 @@ final class OfflineLibraryStore {
         localAlbums.lazy.flatMap(\.entries).first { $0.track.id == track.id }
     }
 
+    private struct SourceFile {
+        let fileURL: URL
+        let directoryURL: URL
+        let track: Track
+    }
+    @ObservationIgnored private var sourceFiles: [RemoteTrackKey: SourceFile] = [:]
+
+    func collection(provider: String, kind: String, id: String) -> LibraryCollection? {
+        collections.first { $0.manifest.source == LibrarySource(provider: provider, kind: kind, id: id) }
+    }
+
+    func localTrackKeys(provider: String, collectionID: String) async throws -> Set<RemoteTrackKey> {
+        var keys = Set<RemoteTrackKey>()
+        for record in collections where record.manifest.source.provider == provider && record.manifest.source.id == collectionID {
+            guard let access = allFolders.first(where: { contains(record.directoryURL, in: $0) }) else { continue }
+            let available = try await worker.availableTrackKeys(in: record, folder: access)
+            keys.formUnion(available)
+        }
+        return keys
+    }
+
+    private func rebuildSourceIndex() { sourceFiles = makeSourceIndex(collections) }
+
+    private func makeSourceIndex(_ records: [LibraryCollection]) -> [RemoteTrackKey: SourceFile] {
+        var index: [RemoteTrackKey: SourceFile] = [:]
+        for record in records {
+            for (entry, track) in zip(record.manifest.entries, record.tracks) {
+                let key = RemoteTrackKey(provider: record.manifest.source.provider, itemID: entry.itemID)
+                guard index[key] == nil, let file = record.localFile(for: entry.track) else { continue }
+                index[key] = SourceFile(fileURL: file, directoryURL: record.directoryURL, track: track)
+            }
+        }
+        return index
+    }
+
     func access(for track: Track) -> OfflineFolderAccess? {
-        guard track.remoteSource == nil else { return nil }
         let url: URL?
-        if track.localSource != nil {
-            url = localEntry(for: track)?.fileURL
-        } else { url = album(id: track.discID)?.directoryURL }
+        if track.localSource != nil { url = localEntry(for: track)?.fileURL }
+        else { url = track.remoteKey.flatMap { sourceFiles[$0]?.directoryURL } }
         guard let url else { return nil }
         return allFolders.first { contains(url, in: $0) }
     }
 
     func localFile(for track: Track) -> URL? {
-        guard track.remoteSource == nil else { return nil }
         guard let access = access(for: track) else { return nil }
-        if track.localSource != nil {
-            guard let entry = localEntry(for: track),
-                  contains(entry.fileURL, in: access),
-                  (try? entry.fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { return nil }
-            return entry.fileURL
-        }
-        return album(id: track.discID)?.localFile(for: track)
+        let url: URL?
+        if track.localSource != nil { url = localEntry(for: track)?.fileURL }
+        else { url = track.remoteKey.flatMap { sourceFiles[$0]?.fileURL } }
+        guard var url, contains(url, in: access) else { return nil }
+        url.removeAllCachedResourceValues()
+        guard (try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])).map({ $0.isRegularFile == true && $0.isSymbolicLink != true }) == true else { return nil }
+        return url
     }
 
     func saveTags(_ draft: AudioTagDocument, snapshot: AudioTagSnapshot, url: URL, access: OfflineFolderAccess) async throws {
@@ -322,46 +342,37 @@ final class OfflineLibraryStore {
                                 uniquingKeysWith: { first, _ in first })
         // Queues opened from a site page still use site IDs. Refresh those from
         // the exact download selected by localFile(for:), never another copy.
-        let siteTracks = albums.flatMap { album in
+        let siteTracks = collections.flatMap { album in
             album.tracks.compactMap { track -> Track? in
                 guard let url = album.localFile(for: track),
-                      var updated = byPath[LocalLibraryScanner.canonical(url)] else { return nil }
-                updated.localSource = nil
-                return updated
+                      let updated = byPath[LocalLibraryScanner.canonical(url)] else { return nil }
+                return Track(discID: track.discID, number: track.number, title: updated.title,
+                             artists: updated.artists, albumTitle: updated.albumTitle, coverURL: updated.coverURL,
+                             duration: updated.duration, remoteSource: track.remoteSource)
             }
         }
         return entries.map(\.track) + siteTracks
     }
 
-    func importAlbum(from extractedURL: URL, detail: DiscDetail) async throws {
+    /// 站点适配层准备提交内容；切换目录和过期扫描的保护集中在这里。
+    func performImport(_ operation: (OfflineLibraryWorker, OfflineFolderAccess) async throws -> LibraryCollection?) async throws {
         guard folderSelectionsInFlight == 0 else { throw OfflineLibraryError.folderChanged }
         guard let folder else { throw OfflineLibraryError.noFolder }
         importsInFlight += 1
         defer { importsInFlight -= 1 }
         do {
-            let committed = try await worker.importAlbum(from: extractedURL, detail: detail, into: folder)
-            // 文件已提交时，取消只能停止后续扫描，不能丢弃实际存在的专辑。
-            // 在下一次挂起之前发布，并使此前开始的扫描无法覆盖新记录。
+            guard let committed = try await operation(worker, folder) else { return }
             scanGeneration += 1
             isScanning = false
             issue = nil
-            albums.removeAll { $0.id == committed.id }
-            albums.append(committed)
-            albums.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+            collections.removeAll { $0.manifest.source == committed.manifest.source }
+            collections.append(committed)
+            collections.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             if !Task.isCancelled { await scan() }
         } catch {
             issue = error.localizedDescription
             throw error
         }
-    }
-
-    func importGift(from extractedURL: URL, detail: DiscDetail) async throws {
-        guard folderSelectionsInFlight == 0 else { throw OfflineLibraryError.folderChanged }
-        guard let folder else { throw OfflineLibraryError.noFolder }
-        importsInFlight += 1
-        defer { importsInFlight -= 1 }
-        try await worker.importGift(from: extractedURL, detail: detail,
-                                    albumDirectory: album(id: detail.id).flatMap { contains($0.directoryURL, in: folder) ? $0.directoryURL : nil }, into: folder)
     }
 
     private func install(_ prepared: PreparedOfflineFolder) {
