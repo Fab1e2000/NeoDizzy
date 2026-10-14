@@ -9,6 +9,7 @@ struct DownloadAlbumView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var options: [DownloadOption] = []
     @State private var isLoading = false
+    @State private var didLoad = false
     @State private var isEnqueuing = false
     @State private var failure: String?
 
@@ -47,8 +48,8 @@ struct DownloadAlbumView: View {
 
     @ViewBuilder
     private var formatSelection: some View {
-        if isLoading {
-            ProgressView("正在获取可下载格式…")
+        if isLoading || !didLoad {
+            ContentSkeleton(layout: .rows, count: 3)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
         } else if let failure {
@@ -103,7 +104,7 @@ struct DownloadAlbumView: View {
         guard !isLoading, options.isEmpty, activeJob == nil else { return }
         isLoading = true
         failure = nil
-        defer { isLoading = false }
+        defer { isLoading = false; didLoad = true }
         do {
             let result = try await DizzyPages.shared.downloadOptions(discID: detail.id, gift: isGift)
             try Task.checkCancellation()

@@ -32,7 +32,7 @@ final class DiscCommunityModel {
         do {
             try await work()
             await refresh()
-            await comments.reload()
+            await comments.reload(keepingItems: true)
             return true
         } catch is CancellationError { return false }
         catch { failure = error.localizedDescription; return false }

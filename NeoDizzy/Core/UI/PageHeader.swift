@@ -1,76 +1,93 @@
 import SwiftUI
 
-/// 控制「我的」弹层。根视图持有并放进环境，各页页头通过它打开。
+/// 全局设置由宿主持有，平台账号弹层由模块自己管理。
 @Observable
-final class MinePresentation {
+final class AppSettingsPresentation {
     var isPresented = false
 }
 
-/// 各主页面共用的页头：左侧大标题，右侧头像玻璃按钮（「我的」的入口）。登录后显示账号头像。
-/// 样式沿用 NeoBili；固定、滚动与下拉补偿行为移植自 MeloX_Modified。
+/// 设置入口在所有模块中一致；只有提供账号能力的模块才显示头像。
 struct PageHeader: View {
     let title: String
-    @Environment(MinePresentation.self) private var mine: MinePresentation?
-    @Environment(AccountStore.self) private var account: AccountStore?
+    @Environment(AppSettingsPresentation.self) private var settings: AppSettingsPresentation?
+    @Environment(ModuleRegistry.self) private var modules: ModuleRegistry?
+    @Environment(ModuleHost.self) private var host: ModuleHost?
 
     var body: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 12) {
             Text(title)
                 .font(.largeTitle.bold())
                 .foregroundStyle(DizzyPalette.text)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 16)
-            Button { mine?.isPresented = true } label: {
-                // 头像是方形的（与社团、用户头像一致），外框用圆角方形而不是圆形。
-                avatar
-                    .frame(width: 40, height: 40)
-                    .clipShape(.rect(cornerRadius: 8))
-                    .padding(2)
-                    .frame(width: 44, height: 44)
-                    .contentShape(.rect(cornerRadius: 10))
-                    .background {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(.clear)
-                            .glassEffect(.clear.interactive(), in: .rect(cornerRadius: 10))
-                    }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("我的")
-            .accessibilityHint("打开个人页面")
+            Spacer(minLength: 8)
+            headerActions
         }
         .padding(.vertical, 8)
     }
 
-    @ViewBuilder
-    private var avatar: some View {
-        if let user = account?.account {
-            AvatarImage(url: user.avatarURL, size: 40)
-        } else {
-            Image(systemName: "person.crop.circle.fill")
-                .resizable()
-                .foregroundStyle(DizzyPalette.mutedText)
-        }
+    private var accountEntry: ModuleAccountEntry? {
+        guard let host else { return nil }
+        return modules?.accountEntry(for: host.selection)
     }
+
+    // MeloX ContentView.primaryToolbar groups trailing actions in one system glass surface.
+    // This custom page header uses the same grouping while keeping account and settings separate.
+    private var headerActions: some View {
+        HStack(spacing: 0) {
+            if let entry = accountEntry, let host {
+                Button { modules?.openAccount(for: host.selection) } label: {
+                    Group {
+                        if let url = entry.avatarURL {
+                            AvatarImage(url: url, size: 28)
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                                .resizable()
+                                .foregroundStyle(DizzyPalette.mutedText)
+                        }
+                    }
+                    .frame(width: 28, height: 28)
+                    .clipShape(.circle)
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
+                }
+                .accessibilityLabel(entry.title)
+            }
+            Button { settings?.isPresented = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.title2)
+                    .foregroundStyle(DizzyPalette.text)
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
+            }
+            .accessibilityLabel("设置")
+            .accessibilityHint("打开应用全局设置")
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, accountEntry == nil ? 0 : 4)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .accessibilityElement(children: .contain)
+    }
+
 }
 
 /// 主页面的骨架：隐藏系统导航栏，页头作为滚动内容的第一行。
 /// 内容放在 LazyVStack 里，分页底栏滚到屏幕上时才触发加载。
 struct MainTabPage<Content: View>: View {
-    let tab: MainTab
+    let title: String
     var onRefresh: (() async -> Void)?
     @ViewBuilder var content: Content
 
     var body: some View {
         let page = ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                ScrollingPageHeaderRow { PageHeader(title: tab.title) }
-                content
+            VStack(alignment: .leading, spacing: 20) {
+                ScrollingPageHeaderRow { PageHeader(title: title) }
+                LazyVStack(alignment: .leading, spacing: 20) { content }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
-        .pageHeaderPlacement { PageHeader(title: tab.title) }
+        .pageHeaderPlacement { PageHeader(title: title) }
         .dizzyPageBackground()
 
         if let onRefresh {
@@ -90,12 +107,11 @@ enum TitleBarSettings {
 
 struct ScrollingPageHeaderRow<Header: View>: View {
     @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
-    @Environment(\.pageHeaderPull) private var pull
     @ViewBuilder var header: Header
 
     var body: some View {
         if !pinsTitleBar {
-            header.offset(y: -(pull?.distance ?? 0))
+            header
                 .padding(.bottom, 5)
         }
     }
@@ -107,19 +123,9 @@ extension View {
     }
 }
 
-@MainActor @Observable
-final class PageHeaderPull {
-    var distance: CGFloat = 0
-}
-
-extension EnvironmentValues {
-    @Entry var pageHeaderPull: PageHeaderPull? = nil
-}
-
 private struct PageHeaderPlacement<Header: View>: ViewModifier {
     let header: Header
     @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
-    @State private var pull = PageHeaderPull()
     /// 窗口自身的顶部安全区（状态栏、灵动岛），不含导航栏。
     @State private var windowTopInset: CGFloat = 0
 
@@ -146,11 +152,6 @@ private struct PageHeaderPlacement<Header: View>: ViewModifier {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .scrollEdgeEffectStyle(.soft, for: .top)
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                max(0, -(geometry.contentOffset.y + geometry.contentInsets.top))
-            } action: { _, distance in
-                pull.distance = distance
-            }
-            .environment(\.pageHeaderPull, pull)
+
     }
 }

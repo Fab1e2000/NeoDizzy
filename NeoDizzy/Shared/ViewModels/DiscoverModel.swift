@@ -38,13 +38,13 @@ final class DiscoverModel {
         }
     )
     /// 首页 HTML 里的限时优惠和 pack，一次请求同时拿到。
-    private(set) var showcase = Loadable { try await DizzyPages.shared.home() }
+    let showcase = Loadable { try await DizzyPages.shared.home() }
 
+    /// Refresh in place so the scroll view and its header keep their geometry while awaiting the server.
     func refresh() async {
         if let category = section.category {
-            await lists[category]?.reload()
+            await lists[category]?.reload(keepingItems: true)
         } else {
-            showcase = Loadable { try await DizzyPages.shared.home() }
             await showcase.load()
         }
     }

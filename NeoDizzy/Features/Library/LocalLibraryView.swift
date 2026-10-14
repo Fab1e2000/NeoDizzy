@@ -1,9 +1,7 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct LocalLibraryView: View {
     @Environment(OfflineLibraryStore.self) private var library
-    @State private var isPickingFiles = false
 
     private struct AlbumItem: Identifiable {
         let id: String
@@ -22,24 +20,17 @@ struct LocalLibraryView: View {
     }
 
     var body: some View {
-        MainTabPage(tab: .localLibrary, onRefresh: { await library.scan() }) {
-            HStack(spacing: 12) {
-                Button("导入音乐", systemImage: "square.and.arrow.down") { isPickingFiles = true }
-                    .buttonStyle(.bordered)
-                    .disabled(library.isImporting)
-                if library.isImporting { ProgressView().accessibilityLabel("正在导入") }
+        MainTabPage(title: String(localized: "本地库")) {
+            if items.isEmpty && (library.isImporting || library.isScanning) {
+                ContentSkeleton(layout: .grid)
             }
-            if let message = library.importMessage {
-                Text(message).font(.caption).foregroundStyle(DizzyPalette.mutedText)
-            }
-            if library.isScanning && items.isEmpty { LoadingView().accessibilityLabel("正在扫描本地音乐") }
             if let issue = library.issue {
                 Label(issue, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(DizzyPalette.accent)
             }
-            if items.isEmpty && !library.isScanning {
+            if items.isEmpty && !library.isScanning && !library.isImporting {
                 ContentUnavailableView("还没有本地专辑", systemImage: "music.note.list",
-                                       description: Text("点「导入音乐」，或在「文件」App 中把音乐放进「我的 iPhone › NeoDizzy」。下载的专辑也会显示在这里。"))
+                                       description: Text("从右上角「设置 › 音乐文件夹」导入音乐，或在「文件」App 中把音乐放进「我的 iPhone › NeoDizzy」。下载的专辑也会显示在这里。"))
             } else if !items.isEmpty {
                 LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                     ForEach(items) { album in
@@ -60,7 +51,6 @@ struct LocalLibraryView: View {
                 }
             }
         }
-        .musicImporter(isPresented: $isPickingFiles, library: library)
     }
 }
 

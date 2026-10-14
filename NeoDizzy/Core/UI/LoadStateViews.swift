@@ -32,20 +32,101 @@ struct LoadFailureView: View {
     }
 }
 
-/// 首次加载时的转圈。稍等片刻才出现，加载很快时（例如推入页面的转场中）不会闪一下。
-struct LoadingView: View {
-    @State private var isVisible = false
+/// Content placeholders are immediate and static; progress indicators are reserved for operations.
+enum ContentSkeletonLayout {
+    case grid, rows, songs, comments, article, lyrics, profile, pack
+}
+
+struct ContentSkeleton: View {
+    var layout: ContentSkeletonLayout = .grid
+    var count = 4
 
     var body: some View {
-        ProgressView()
-            .controlSize(.large)
-            .opacity(isVisible ? 1 : 0)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 80)
-            .task {
-                try? await Task.sleep(for: .milliseconds(400))
-                withAnimation(.easeIn(duration: 0.2)) { isVisible = true }
+        Group {
+            switch layout {
+            case .grid:
+                LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
+                    ForEach(0..<count, id: \.self) { _ in card }
+                }
+            case .rows:
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(0..<count, id: \.self) { _ in row }
+                }
+            case .songs:
+                VStack(spacing: 0) {
+                    ForEach(0..<count, id: \.self) { _ in
+                        HStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 3).fill(.gray.opacity(0.18)).frame(width: 18, height: 18)
+                            Text("歌曲名称正在载入").font(.body).redacted(reason: .placeholder)
+                            Spacer(minLength: 12)
+                            Capsule().fill(.gray.opacity(0.18)).frame(width: 22, height: 6)
+                                .frame(width: 42, height: 44)
+                        }.padding(.leading, 20).padding(.trailing, 8).padding(.vertical, 11)
+                    }
+                }
+            case .comments:
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(0..<count, id: \.self) { _ in
+                        VStack(alignment: .leading, spacing: 12) {
+                            row
+                            lines
+                        }
+                    }
+                }
+            case .article:
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("文章标题与内容").font(.title2.bold()).redacted(reason: .placeholder)
+                    row
+                    ForEach(0..<count, id: \.self) { _ in lines }
+                }
+            case .lyrics:
+                VStack(alignment: .leading, spacing: 28) {
+                    ForEach(0..<count, id: \.self) { _ in
+                        Text("等待音乐里的故事").font(.system(size: 36, weight: .bold))
+                            .redacted(reason: .placeholder)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            case .profile:
+                VStack(alignment: .leading, spacing: 24) {
+                    row
+                    lines
+                    ContentSkeleton(layout: .grid)
+                }
+            case .pack:
+                VStack(spacing: 24) {
+                    card.frame(maxWidth: 260)
+                    RoundedRectangle(cornerRadius: 12).fill(.gray.opacity(0.18)).frame(height: 44)
+                    ContentSkeleton(layout: .grid)
+                }.frame(maxWidth: .infinity)
             }
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("正在加载内容")
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 10).fill(.gray.opacity(0.18)).aspectRatio(1, contentMode: .fit)
+            Text("音乐与故事\n等待与你相遇").font(.subheadline.weight(.semibold))
+                .lineLimit(2).redacted(reason: .placeholder)
+            Text("创作者与作品信息").font(.caption).redacted(reason: .placeholder)
+        }
+    }
+    private var row: some View {
+        HStack(alignment: .top, spacing: 14) {
+            RoundedRectangle(cornerRadius: 12).fill(.gray.opacity(0.18)).frame(width: 56, height: 56)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("名称与标题").font(.headline)
+                Text("内容简介与相关信息").font(.caption)
+            }.redacted(reason: .placeholder)
+            Spacer(minLength: 0)
+        }
+    }
+    private var lines: some View {
+        Text("这里是尚未载入的内容占位。\n页面内容将在加载完成后显示。\n保留文字内容的排版空间。")
+            .font(.body).lineSpacing(6).redacted(reason: .placeholder)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -54,6 +135,7 @@ struct LoadingView: View {
 /// 必须放在 Lazy 容器里，否则一创建就会触发加载。
 struct PaginationFooter<Item: Identifiable & Sendable>: View {
     let list: PagedList<Item>
+    var skeleton: ContentSkeletonLayout = .grid
 
     var body: some View {
         Group {
@@ -69,7 +151,7 @@ struct PaginationFooter<Item: Identifiable & Sendable>: View {
                     .buttonStyle(.bordered)
                 }
             } else {
-                ProgressView()
+                ContentSkeleton(layout: skeleton, count: 2)
                     .task(id: list.loadedPages) {
                         // 页码变化后继续触发，整页都是重复条目时也能翻到下一页。
                         // 先等一会儿：离开屏幕的底栏会在发请求前被取消，内容不满一屏时再接着加载。
@@ -87,6 +169,7 @@ struct PaginationFooter<Item: Identifiable & Sendable>: View {
 /// 分页列表的外壳：首次加载、失败、空列表，内容之后接分页底栏。
 struct PagedContent<Item: Identifiable & Sendable, Content: View>: View {
     let list: PagedList<Item>
+    var skeleton: ContentSkeletonLayout = .grid
     var webURL: URL?
     var emptyMessage: LocalizedStringKey = "这里还没有内容。"
     @ViewBuilder let content: ([Item]) -> Content
@@ -102,13 +185,13 @@ struct PagedContent<Item: Identifiable & Sendable, Content: View>: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
             } else {
-                LoadingView()
+                ContentSkeleton(layout: skeleton)
                     .task { await list.loadMore() }
             }
         } else {
             content(list.items)
             if list.hasMore || list.failure != nil {
-                PaginationFooter(list: list)
+                PaginationFooter(list: list, skeleton: skeleton)
             }
         }
     }
@@ -118,6 +201,8 @@ struct PagedContent<Item: Identifiable & Sendable, Content: View>: View {
 /// 页面底色才能盖住整个屏幕，转场时不会露出一块矩形。
 struct LoadableContent<Value, Content: View>: View {
     let state: Loadable<Value>
+    var skeleton: ContentSkeletonLayout = .grid
+    var skeletonIsPage = false
     var webURL: URL?
     @ViewBuilder let content: (Value) -> Content
 
@@ -128,7 +213,11 @@ struct LoadableContent<Value, Content: View>: View {
             } else if let failure = state.failure {
                 LoadFailureView(message: failure, webURL: webURL) { await state.load() }
             } else {
-                LoadingView()
+                if skeletonIsPage {
+                    ScrollView { ContentSkeleton(layout: skeleton).padding(20) }
+                } else {
+                    ContentSkeleton(layout: skeleton)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

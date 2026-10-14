@@ -46,9 +46,9 @@ final class NowPlayingSession: NSObject {
         #endif
     }
 
-    init(player: AVPlayer) {
+    init(player: AVPlayer, standbyPlayer: AVPlayer? = nil) {
         #if os(iOS)
-        playbackSession = MPNowPlayingSession(players: [player])
+        playbackSession = MPNowPlayingSession(players: [player] + (standbyPlayer.map { [$0] } ?? []))
         playbackSession.automaticallyPublishesNowPlayingInfo = false
         super.init()
         playbackSession.delegate = self

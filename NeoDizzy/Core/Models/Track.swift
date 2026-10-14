@@ -15,13 +15,21 @@ nonisolated struct Track: Codable, Hashable, Identifiable, Sendable {
     /// 取不到时为空。
     var duration: TimeInterval?
 
-    /// nil is a site track, including snapshots written before local-library support.
+    /// 本地导入曲目；旧快照缺少该字段时自动恢复为 nil.
     var localSource: LocalTrackSource? = nil
 
-    var id: String { localSource.map { "local/\($0.trackID)" } ?? "\(discID)/\(number)" }
+    /// 新网络来源显式命名空间；两种来源均为空时兼容原有 DizzyLab 队列。
+    var remoteSource: RemoteTrackSource? = nil
+
+    var id: String { remoteSource.map { "remote/\($0.providerID)/\($0.itemID)" } ?? localSource.map { "local/\($0.trackID)" } ?? "\(discID)/\(number)" }
 }
 
 nonisolated struct LocalTrackSource: Codable, Hashable, Sendable {
     let albumID: String
     let trackID: String
+}
+
+nonisolated struct RemoteTrackSource: Codable, Hashable, Sendable {
+    let providerID: String
+    let itemID: String
 }

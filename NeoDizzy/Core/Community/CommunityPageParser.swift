@@ -15,8 +15,10 @@ nonisolated enum CommunityPageParser {
         let delete = try doc.select("[onclick*=deletemycomment]").first()
         let textBox = try doc.select("#comment_txt_box").first()
         let myText = delete == nil ? nil : HTML.multilineText(try doc.select("#commitbox p").first())
+        let hasLoginLink = try !doc.select("a[href*=\"/albums/login\"]").isEmpty()
         return DiscCommunityContext(userID: user, csrf: try? csrf(html), myComment: myText,
-                                    commentLimit: 140, canComment: textBox != nil)
+                                    commentLimit: 140, canComment: textBox != nil,
+                                    requiresLogin: user == nil && textBox == nil && delete == nil && hasLoginLink)
     }
     struct Follow: Sendable {
         let isFollowing: Bool

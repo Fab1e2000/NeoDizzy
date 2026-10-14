@@ -1,5 +1,5 @@
 // 移植自 MeloX（GPLv3）Core/Playback/Queue/PlaybackQueue.swift：
-// 曲目类型换成 Track，去掉用不到的插播和拖动排序。
+// 曲目类型换成 Track，保留播放顺序及待播放队列拖动排序，省略插播。
 
 import Foundation
 
@@ -141,6 +141,58 @@ nonisolated struct PlaybackQueue: Sendable {
     }
 
     /// 当前曲目排在随机顺序的第一位，其余打乱。
+    mutating func moveUpcomingSongs(
+        fromOffsets source: IndexSet,
+        toOffset destination: Int,
+        wraps: Bool
+    ) {
+        if isShuffled {
+            var positions = Array(
+                shuffledOrder.indices.dropFirst(
+                    min(shuffledPosition + 1, shuffledOrder.count)
+                )
+            )
+            if wraps, shuffledPosition > 0 {
+                positions.append(
+                    contentsOf: shuffledOrder.indices.prefix(
+                        shuffledPosition
+                    )
+                )
+            }
+            let upcomingOrder = moved(
+                positions.map { shuffledOrder[$0] },
+                fromOffsets: source,
+                toOffset: destination
+            )
+            for (position, songIndex) in zip(
+                positions,
+                upcomingOrder
+            ) {
+                shuffledOrder[position] = songIndex
+            }
+            return
+        }
+
+        var positions = Array(
+            tracks.indices.dropFirst(
+                min(currentIndex + 1, tracks.count)
+            )
+        )
+        if wraps, currentIndex > 0 {
+            positions.append(
+                contentsOf: tracks.indices.prefix(currentIndex)
+            )
+        }
+        let upcomingSongs = moved(
+            positions.map { tracks[$0] },
+            fromOffsets: source,
+            toOffset: destination
+        )
+        for (position, song) in zip(positions, upcomingSongs) {
+            tracks[position] = song
+        }
+    }
+
     private mutating func rebuildShuffleOrder() {
         guard tracks.indices.contains(currentIndex) else {
             shuffledOrder = []
@@ -162,5 +214,31 @@ nonisolated struct PlaybackQueue: Sendable {
 
     private func isValidShuffleOrder(_ order: [Int]) -> Bool {
         order.count == tracks.count && Set(order) == Set(tracks.indices)
+    }
+    private func moved<Element>(
+        _ elements: [Element],
+        fromOffsets source: IndexSet,
+        toOffset destination: Int
+    ) -> [Element] {
+        let validSource = source
+            .filter(elements.indices.contains)
+            .sorted()
+        guard !validSource.isEmpty else { return elements }
+
+        var result = elements
+        let movingElements = validSource.map { elements[$0] }
+        for index in validSource.reversed() {
+            result.remove(at: index)
+        }
+
+        let removedBeforeDestination = validSource.filter {
+            $0 < destination
+        }.count
+        let insertionIndex = min(
+            max(destination - removedBeforeDestination, 0),
+            result.count
+        )
+        result.insert(contentsOf: movingElements, at: insertionIndex)
+        return result
     }
 }

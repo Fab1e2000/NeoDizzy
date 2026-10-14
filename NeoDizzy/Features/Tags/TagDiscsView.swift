@@ -20,7 +20,7 @@ struct TagDiscsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
         }
-        .refreshable { await discs.reload() }
+        .refreshable { await discs.reload(keepingItems: true) }
         .dizzyPageBackground()
         .safeAreaPadding(.top, 5)
         .navigationTitle("#\(tag)")

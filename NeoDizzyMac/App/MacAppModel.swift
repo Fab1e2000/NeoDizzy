@@ -120,6 +120,7 @@ final class MacAppModel {
     var currentAlbumRoute: AppRoute? {
         guard let track = player.currentTrack else { return nil }
         if let local = track.localSource { return .localAlbum(id: local.albumID) }
+        guard track.remoteSource == nil else { return nil }
         return track.discID.isEmpty ? nil : .disc(id: track.discID)
     }
 

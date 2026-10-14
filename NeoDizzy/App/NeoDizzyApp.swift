@@ -7,7 +7,7 @@ struct NeoDizzyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(services: appDelegate.services)
+            RootView(services: appDelegate.services, modules: appDelegate.modules, settings: appDelegate.moduleSettings)
         }
     }
 }
@@ -15,6 +15,8 @@ struct NeoDizzyApp: App {
 /// 系统在后台下载完成后唤醒 App，把事件交回同一个后台会话。
 final class NeoDizzyAppDelegate: NSObject, UIApplicationDelegate {
     let services = AppServices()
+    lazy var modules = AppComposition.modules(services: services)
+    lazy var moduleSettings = AppComposition.settings(modules: modules.descriptors)
 
     func application(
         _ application: UIApplication,

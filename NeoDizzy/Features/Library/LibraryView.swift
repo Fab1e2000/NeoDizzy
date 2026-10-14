@@ -5,11 +5,12 @@ struct PurchasedLibraryView: View {
     @Environment(AccountStore.self) private var account
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(PurchaseStore.self) private var payments
-    @State private var model = LibraryModel()
+    @Environment(DizzyLabContentCache.self) private var contentCache
+    private var model: LibraryModel { contentCache.library }
     @State private var purchaseSheet: PurchaseSheet?
 
     var body: some View {
-        MainTabPage(tab: .purchased, onRefresh: { await model.purchases?.reload() }) {
+        DizzyLabPage(section: .purchased, onRefresh: { await model.purchases?.reload(keepingItems: true) }) {
             if let pending = payments.current {
                 Button {
                     purchaseSheet = PurchaseSheet(summary: DiscSummary(id: pending.attempt.discID, title: pending.title, coverURL: nil))
@@ -33,9 +34,6 @@ struct PurchasedLibraryView: View {
         }
         .onChange(of: account.account?.userID, initial: true) { _, userID in
             model.update(userID: userID)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .dizzyPurchaseDidComplete)) { _ in
-            Task { await model.purchases?.reload() }
         }
         .sheet(item: $purchaseSheet) { sheet in PurchaseView(summary: sheet.summary) }
     }

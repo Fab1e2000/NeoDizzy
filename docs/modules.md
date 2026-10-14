@@ -1,0 +1,110 @@
+# iOS 模块与插槽
+
+## 边界
+
+`AppComposition` 是内置模块的装配入口。`RootView`、`ModuleRegistry`、`ModuleHost` 和 `ModuleSettings` 是宿主插槽，不导入具体模块页面，也不匹配平台 ID。所有模块共享现有播放器和视觉组件。
+
+- `AppModule` 提供模块描述、首页、路由目的页、可选账号入口、环境/生命周期包装和外部 URL 处理。
+- `ModuleRegistry` 验证非空、唯一的模块 ID，按 ID 分发页面，不按注册顺序试探路由。未知或缺失模块显示不可用页面。
+- `ModuleHost` 管理选中的模块与每个插槽自己的导航路径。
+- `ModuleSettings` 根据注入的描述保存顺序、显示状态和启动模块，不含 DizzyLab 的特例。旧版标签页的迁移位于装配层。
+- `AppRoute` 只携带模块 ID、可哈希的目的地和显示标题；`DizzyLabRoute` 与 `LocalLibraryRoute` 各自定义目的地类型。旧链接通过模块文件中的工厂方法兼容。
+
+`DizzyLabModule` 提供首页、平台路由和独立账号页。全局齿轮只打开应用设置；模块通过可选 `accountEntry`、`openAccount()` 与 `dismissAccount()` 提供和管理头像入口。没有账号能力的模块不显示头像。本地音乐导入、文件夹管理和扫描收在全局设置的「音乐文件夹」页面，本地库内容区只呈现音乐与加载状态。其环境包装负责登录、支付回调后的页面呈现、前后台订单核验和账号变化。`DizzyLabServices` 持有账号、购买、下载与浏览历史；后台恢复仍由应用服务装配层启动，不依赖打开某个标签页。
+
+## 接入另一个模块
+
+1. 分配不会随显示名称改变的 `ModuleID`，定义自己的 `Hashable` 路由载荷。
+2. 实现 `AppModule`，通过 `destination(for:)` 校验载荷类型并返回目的页。
+3. 在 `AppComposition` 注册模块及所需服务。插槽和设置页面不需要新增 switch 分支。
+4. 有登录或平台回调时，由模块自己的 `install(in:)` 包装环境与生命周期，`handleURL` 只接受自身 URL。通过 `ModuleHost` 请求切换页面。
+5. 系统后台恢复属于服务生命周期；不要把它绑在首页的 `onAppear` 上。
+
+`AnyView` 仅用在模块与插槽之间的类型擦除边界，模块内部仍使用普通 SwiftUI 视图。
+
+## 当前范围
+
+这是同一应用 target 内的模块接口与注册机制，不是动态加载二进制插件，也尚未拆成独立 Swift Package。DizzyLab 与网易云音乐分别提供网络服务、账号和页面；共享播放器通过来源注册解析播放地址与歌词。
+
+「隐藏模块」保持原有含义：隐藏标签入口，不删除账号、本地文件或正在播放的队列，不中断已提交的下载及支付核验。已隐藏模块的支付返回仍由该模块核验；没有注册的模块则没有 UI 路由或 URL 处理器。
+
+macOS 保持现有侧栏结构，并兼容新的路由载荷；此次插槽 UI 改造适用于 iOS。
+
+## 网易云音乐
+
+`NeteaseModule` 按同一插槽接口注册，支持隐藏、排序和设为启动页面。首页沿用 DizzyLab 的页头、双列入口与封面网格；提供推荐歌单、新碟、歌曲/专辑/歌单搜索、排行榜、每日推荐、私人 FM 和我的歌单。歌单曲目每批加载 100 首，其余分页内容每批 30 项；私人 FM 首页卡片直接进入播放器；每批歌曲按顺序播放，余量不足时预取下一组并在歌曲结束后续播。
+
+协议参考 [MeloX 的原生网络实现](https://github.com/youshen2/MeloX/blob/1fe5fbab3f554e8529c4847fc54281a472b7b61a/MeloX/Core/Networking/NeteaseDirectClient.swift) 和同版本 NeteaseAPI、NeteaseAPI+Home、NeteaseLoginView（GPL-3.0）。采用 eapi AES-ECB 封装与官方网页登录，无需部署第三方 API 服务。登录页使用独立临时 WebKit 数据存储，用户完成官网登录后点“完成”，验证账号并把 MUSIC_U / __csrf 存入独立钥匙串条目。请求不使用全局 Cookie 容器。
+
+`Track.remoteSource` 保存 providerID/itemID，队列 ID 使用 remote/provider/item 命名空间；旧队列字段缺省时仍按 DizzyLab 解析。`StreamResolver.register` 接收来源的播放地址和歌词解析器，缓存依据过期时间、曲目和来源会话变化失效；未知来源不能回退到 DizzyLab。无权限歌曲显示不可播放，试听按服务端 freeTrialInfo 标记。网易云账号切换不会清除 DizzyLab 缓存，反之亦然。
+
+本轮接入的是 iOS 模块界面；macOS 保持原有导航。会员歌曲、每日推荐、私人 FM、个人歌单及收藏写操作需要用户自行登录验证；未加入网易云音频下载或额外音源替换。
+
+个人主页切换内容分段时保留用户资料，返回已加载分段时不重新请求。社区网页会话与音频 API token 分开判断；缺少用户导航标记时以同一会话的首页核验身份，不把解析缺失直接当作退出登录。账号页内部请求登录时由该弹层就地呈现登录页。滚动标题随系统下拉运动，不再用逐帧反向 offset 补偿。
+
+跨模块视觉组件以 DizzyLab 为基准复用：DiscoverSearchBar、DiscoveryCategoryPicker、ModuleShortcutCard、DiscCard，以及 AlbumDetailScrollView / AlbumHero / AlbumPlaybackActions / AlbumTrackRow。网易云专辑、歌单、每日推荐使用同一专辑式布局，私人 FM 直接进入播放器；搜索歌曲也复用曲目行。平台只提供文案、数据、路由和操作，不独立复制控件样式。曲目行支持独立显示序号，歌曲来源 ID 不参与 UI 编号。
+
+## 内容与封面预热
+
+两个网络模块均在模块生命周期内保留页面模型，进入首页后按需预热入口首屏，不做定时轮询或整库抓取。封面预热每个列表最多前 12 张，模块内工作队列每批最多 3 张；共享 AlbumArtworkPreload 同时准备详情封面、背景色、常用网格和头像的解码规格。
+
+网易云列表数据提前为详情页提供标题和封面；歌单先显示头部，再补齐曲目，服务端已返回完整首批曲目时不重复请求。并发进入同一页面复用在途任务，账号切换丢弃页面缓存和预热任务。DizzyLab 的首页、社团、关注、已购数据由模块持有，专辑详情复用模型（最多保留 40 个）及列表封面；账号或购买状态变化时废弃详情缓存。随便听听入口本身无远程封面，取歌仍由用户的播放操作触发。
+
+DizzyLab 的随便听听卡片也直接获取歌曲并展开播放器，不再经过介绍页面。两个入口共用防重复点击、取消和失败重试交互。FM 缓冲队列随账号变更清理；切换到普通专辑时，旧的续曲请求不能覆盖当前播放。
+
+## 发现播放预缓冲
+
+私人 FM 与随便听听共用 PlayerStore 的单曲预取槽。当前曲目完成地址解析并交给播放器后，获取下一首及其播放地址，以静音 AVPlayer 在 readyToPlay 后执行 preroll；预缓冲项目建议前向缓冲 8 秒，实际数据量由 AVFoundation 决定。点击下一首复用同一在途任务及已预缓冲的播放器（两个固定播放器共用系统媒体会话，切换时重绑进度观察），不重复取歌或取流。未准备好时等待，失败保留当前曲目并允许重试，不承诺弱网下零延迟。此机制针对下一首，首次进入卡片仍需要取得首曲。
+
+每次只保留一首预缓冲音频，不下载整组 FM，不做定时请求。返回上一首、启动新播放会话、切换普通专辑或账号变更时废弃旧预取。签名地址接近过期或预缓冲项目失败时回退到正常解析；DizzyLab 购买后废弃预取以免继续使用试听资源。FM 原有自动续播、DizzyLab 原有曲终停播行为不变。
+
+## 网易云发现与账号资料库扩展
+
+参考 MeloX `1fe5fbab3f554e8529c4847fc54281a472b7b61a` 的 `NeteaseAPI.swift`、`NeteaseAPI+Home.swift`、`NeteaseAPI+AlbumSubscriptions.swift`、`NeteaseDirectClient.swift` 和首页资源模型（GPL-3.0）。复用其官方服务端路径、EAPI 参数、WEAPI AES-CBC/RSA 封装、首页资源映射及空响应兼容路径；不依赖代理 API 服务器。WEAPI 只转发本模块的 MUSIC_U/__csrf，并使用本地随机设备标识。
+
+### 已连接的功能与入口
+
+| 功能 | 入口 | 原始服务端接口 |
+| --- | --- | --- |
+| 喜欢 / 取消喜欢 | 播放器心形按钮、曲目菜单 | `/api/radio/like` |
+| 喜欢状态 / 我喜欢的音乐 | 我的歌单 → 我喜欢的音乐 | `/api/song/like/get` + 分页 `/api/v3/song/detail` |
+| 收藏 / 取消收藏歌单 | 歌单右上角 | `/api/playlist/subscribe`、`/api/playlist/unsubscribe` |
+| 加入自建歌单 | 播放器、曲目菜单 → 加入歌单 | `/api/v1/playlist/manipulate/tracks` |
+| 收藏 / 取消收藏专辑 | 专辑右上角 | `/api/album/detail/dynamic`、`/api/album/sub`、`/api/album/unsub` |
+| 收藏专辑 | 我的歌单 → 收藏专辑 | `/api/album/sublist` |
+| 最近播放 | 我的歌单 → 最近播放 | `/api/play-record/song/list` |
+| 个性化首页 | 首页固定展示精选，已登录时 | `/api/homepage/block/page` |
+| 新歌推荐 | 保留接口，首页不展示 | `/api/personalized/newsong` |
+| 新歌速递 / 地区筛选 | 保留接口与路由，首页无独立入口 | `/api/v1/discovery/new/songs` |
+| 精品歌单 | 首页 → 精品 | `/api/playlist/highquality/list`，lasttime 游标分页 |
+| 分类歌单 | 保留接口与路由，首页无独立入口 | `/api/playlist/list` |
+| 热门歌手 | 保留接口，首页不展示 | `/api/toplist/artist` |
+| 歌手热门歌曲 / 专辑 | 歌手卡片、歌曲菜单 | `/api/v1/artist/{id}`、`/api/artist/albums/{id}` |
+| 歌手搜索 | 搜索 → 歌手 | 现有 `/api/search/get`，type=100 |
+| 相似歌曲 | 播放器、曲目菜单 | `/api/v1/discovery/simiSong` |
+| 新碟地区筛选 | 首页 → 新碟 | 现有 `/api/album/new`，area 参数 |
+
+### 状态、性能及边界
+
+- `NeteaseLibrary` 是账号级的单一状态源。所有写入成功后才更新 UI，按对象合并重复点击；喜欢列表、我的歌单和专辑分别保留版本，旧读请求不能覆盖新写入。账号变化同时使网络响应及资料库任务失效。
+- 我创建的歌单不能取消收藏；“加入歌单”只列出当前账号创建且非“我喜欢的音乐”的歌单。接口明确返回 512 时才执行 MeloX 的双 ID 兼容重试；超时、空响应等不确定写入不自动重试。
+- 共用 `AppModule.songActions` 插槽提供播放器按钮，播放器不直接持有网易云收藏状态。普通歌曲列表继续复用 `AlbumTrackRow`，额外菜单由模块注入；所有歌曲集合继续沿用 DizzyLab 专辑布局。
+- 首页固定展示精选，移除首页分类选择器及热门歌手、新歌推荐、猜你喜欢分区；搜索结果保留类型选择。首页分区独立加载，保留旧内容，失败局部重试。只将已支持的歌单、歌曲资源映射为原生入口，不执行服务端任意 action 字符串。图片预热沿用每列表首批 12 张、每批 3 张的队列。
+- 我喜欢的音乐每页 100 首；分类歌单、新碟、歌手专辑每页 30 条；精品歌单使用 lasttime 游标并去重。个人歌单按 MeloX 取最多 2000 条元数据，避免错误的分页空响应覆盖有效首批。
+- 最近播放读取网易云账号的服务端记录，未增加本应用播放上报。尚未覆盖播客、云盘上传、消息、一起听、识曲等独立子系统；不把接口声明数量当成功能验收。
+
+### 验证记录
+
+新增及相关测试共 27 项通过，覆盖真实加密请求体、写入失败、重复提交、账号隔离、旧读取竞态、喜欢列表分页、精品游标及首页资源映射。公开只读实测：分类歌单、精品歌单、新歌推荐、新歌速递、相似歌曲返回 code=200；热门歌手连接在当前运行环境返回 curl 56 / HTTP 400，未取得有效数据。收藏与喜欢使用隔离 HTTP 桩验证，未操作用户真实账号；登录后的服务端写入、设备上的布局和触感待用户验收。未进行模拟器点击操作。
+
+### 网易云收藏操作校验与 405 排查
+
+用户确认此前的“官方 App”是 MeloX 发行版，并非网易云官方客户端。下载目录安装包标识为 `moye.MeloX`，版本 `2.0 (9110201)`。不能据此认定网易云官方客户端也失败，或将问题归因于账号限制。
+
+MeloX 已有同类报告：https://github.com/youshen2/MeloX/issues/16 。api-enhanced 也记录了 v2/v3 校验方式不稳定：https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/issues/270 。这些报告证明问题值得复现，不证明具体根因。
+
+官网当前 core 脚本 `core_c7686f506f6f2607bb7f6cea1951f039.js` 中 `playlist_fav-add` 只提交 id，统一请求层补 csrf_token，并将 /api/ 改为 /weapi/、方法改为 POST。基于这个直接来源，当前候选实现把歌单收藏/取消收藏切换为 WEAPI，不再请求 Watchman token，也不在失败后切换协议或重试。其他接口保持原状。
+
+此前的 Watchman 提供器仍可供显式 requiresCheckToken 请求使用，但“获得非空 token”不证明业务接口接受该 token。HTTP 状态与业务码分开显示，405 或空响应不提交本地收藏状态。
+
+回归测试使用隔离 HTTP 桩；真实收藏成功必须在手机操作后读回“我的歌单”确认。当前 WEAPI 方案属于待设备验证的候选修复，不应以测试通过代替服务端成功，也尚未对上游宣称修复完成。

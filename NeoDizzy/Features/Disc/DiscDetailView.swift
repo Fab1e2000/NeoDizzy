@@ -6,22 +6,47 @@ struct DiscDetailView: View {
     @Environment(OfflineLibraryStore.self) private var offline
     @State private var model: DiscDetailModel
 
-    init(id: String) {
-        _model = State(initialValue: DiscDetailModel(id: id))
+    let initialArtworkURL: URL?
+
+    init(id: String, cachedModel: DiscDetailModel? = nil, initialArtworkURL: URL? = nil) {
+        self.initialArtworkURL = initialArtworkURL
+        _model = State(initialValue: cachedModel ?? DiscDetailModel(id: id))
     }
 
     private var historySummary: DiscSummary? {
         offline.album(id: model.id)?.detail.summary ?? model.detail.value?.summary
     }
 
+    private var displayedArtworkURL: URL? {
+        offline.album(id: model.id)?.coverURL ?? model.detail.value?.summary.coverURL ?? initialArtworkURL
+    }
+
     var body: some View {
-        Group {
+        // Keep background state alive when loading content is replaced by album details.
+        AlbumDetailScrollView(artworkURL: displayedArtworkURL) {
             if let album = offline.album(id: model.id) {
                 // 已扫描到的专辑立即显示，不发起详情或试听时长请求。
                 DiscDetailContent(detail: album.detail, tracks: album.tracks, artworkURL: album.coverURL)
             } else {
-                LoadableContent(state: model.detail, webURL: DizzyURL.disc(model.id)) { detail in
-                    DiscDetailContent(detail: detail, tracks: model.tracks(of: detail))
+                Group {
+                    if let detail = model.detail.value {
+                        DiscDetailContent(detail: detail, tracks: model.tracks(of: detail))
+                    } else {
+                        if let failure = model.detail.failure {
+                            LoadFailureView(message: failure, webURL: DizzyURL.disc(model.id)) { await model.detail.load() }
+                        } else {
+                            VStack(spacing: 0) {
+                                AlbumHero(artworkURL: displayedArtworkURL, title: "专辑名称", metadata: "歌曲数量", reservesTitleSpace: true, metadataIsPlaceholder: true, titleIsPlaceholder: true) {
+                                    Text("创作者").redacted(reason: .placeholder)
+                                } actions: {
+                                    AlbumPlaybackActions(isEmpty: true) { _ in }
+                                }
+
+                                ContentSkeleton(layout: .songs, count: 6)
+                            }
+                        }
+                        Color.clear.frame(height: 0).task { await model.detail.loadIfNeeded() }
+                    }
                 }
                 .task { await model.loadDurations() }
                 .task(id: model.detail.value?.id) {
@@ -88,29 +113,27 @@ private struct DiscDetailContent: View {
     }
 
     var body: some View {
-        AlbumDetailScrollView(artworkURL: artworkURL ?? summary.coverURL) {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                header
-                if !detail.description.isEmpty || !detail.credits.isEmpty {
-                    DiscNotesExcerpt(detail: detail)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
-                }
-                DiscStoreCard(detail: detail, isPreviewOnly: isPreviewOnly, hasMissingLocalFiles: hasMissingLocalFiles) {
-                    purchaseSheet = PurchaseSheet(summary: summary)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-                trackList
-                trackFooter
-                VStack(alignment: .leading, spacing: 32) {
-                    if !summary.tags.isEmpty { tags }
-                    DiscCommunityView(discID: detail.id)
-                }
-                .padding(.top, 28)
+        LazyVStack(alignment: .leading, spacing: 0) {
+            header
+            if !detail.description.isEmpty || !detail.credits.isEmpty {
+                DiscNotesExcerpt(detail: detail)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
             }
-            .padding(.bottom, 32)
+            DiscStoreCard(detail: detail, isPreviewOnly: isPreviewOnly, hasMissingLocalFiles: hasMissingLocalFiles) {
+                purchaseSheet = PurchaseSheet(summary: summary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+            trackList
+            trackFooter
+            VStack(alignment: .leading, spacing: 32) {
+                if !summary.tags.isEmpty { tags }
+                DiscCommunityView(discID: detail.id)
+            }
+            .padding(.top, 28)
         }
+        .padding(.bottom, 32)
         .task(id: LocalAvailabilityRequest(discID: detail.id, revision: offline.contentRevision)) {
             checkedLocalTrackIDs = nil
             do {
@@ -134,10 +157,9 @@ private struct DiscDetailContent: View {
                   metadata: ([detail.releaseDate, summary.isHiRes ? "Hi-Res" : nil]
                     .compactMap { $0 }).joined(separator: " · ")) {
             if let label = summary.labelName {
-                // 与 Apple Music 的艺人名一样用主题色，表示可以点进社团页。
                 NavigationLink(value: AppRoute.label(name: label)) { Text(label) }
                     .buttonStyle(.plain)
-                    .foregroundStyle(DizzyPalette.accent)
+                    .foregroundStyle(.primary)
             }
         } actions: {
             AlbumPlaybackActions(isEmpty: tracks.isEmpty, isPreview: isPreviewOnly) { shuffled in
@@ -215,6 +237,7 @@ private struct DiscStoreCard: View {
     let purchase: () -> Void
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(DownloadStore.self) private var downloads
+    @Environment(\.colorScheme) private var colorScheme
     @State private var downloadSheet: DownloadSheet?
 
     private var summary: DiscSummary { detail.summary }
@@ -317,8 +340,8 @@ private struct DiscStoreCard: View {
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
-            .tint(DizzyPalette.accent)
-            .foregroundStyle(DizzyPalette.onAccent)
+            .tint(.primary)
+            .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
             .fontWeight(.semibold)
             .accessibilityLabel("购买 / 支持创作者")
         } else if activeJob == nil {

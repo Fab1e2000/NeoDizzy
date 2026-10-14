@@ -49,6 +49,45 @@ struct PagedListTests {
         #expect(list.items.map(\.id) == [1])
     }
 
+    @Test func refreshKeepsContentUntilReplacementArrives() async {
+        let counter = FetchCounter()
+        var inspectRefresh: (() -> Void)?
+        let list = PagedList<Item> { page in
+            counter.count += 1
+            if counter.count == 3 { inspectRefresh?() }
+            return Page(items: [Item(id: counter.count * 10 + page)], hasMore: true)
+        }
+        await list.loadMore()
+        await list.loadMore()
+        inspectRefresh = {
+            #expect(list.items.map(\.id) == [11, 22])
+            #expect(list.loadedPages == 2)
+            #expect(list.isLoading)
+        }
+        await list.reload(keepingItems: true)
+        #expect(list.items.map(\.id) == [31])
+        #expect(list.loadedPages == 1)
+        await list.loadMore()
+        #expect(list.items.map(\.id) == [31, 42])
+    }
+
+    @Test func failedRefreshRetainsContentAndRetriesFirstPage() async {
+        let counter = FetchCounter()
+        let list = PagedList<Item> { page in
+            counter.count += 1
+            if counter.count == 2 { throw DizzyError.network("离线") }
+            return Page(items: [Item(id: counter.count * 10 + page)], hasMore: false)
+        }
+        await list.loadMore()
+        await list.reload(keepingItems: true)
+        #expect(list.items.map(\.id) == [11])
+        #expect(list.failure != nil)
+        #expect(!list.isLoading)
+        await list.loadMore()
+        #expect(list.items.map(\.id) == [31])
+        #expect(list.failure == nil)
+    }
+
     @Test func reloadDropsOldResults() async {
         let counter = FetchCounter()
         let list = PagedList<Item> { page in

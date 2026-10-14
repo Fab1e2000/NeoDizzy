@@ -266,7 +266,8 @@ final class OfflineLibraryStore {
     }
 
     func localAlbum(for track: Track) -> LocalAlbum? {
-        localAlbums.first { $0.entries.contains { $0.track.id == track.id } }
+        guard track.remoteSource == nil else { return nil }
+        return localAlbums.first { $0.entries.contains { $0.track.id == track.id } }
     }
 
     private func localEntry(for track: Track) -> LocalAlbum.Entry? {
@@ -275,6 +276,7 @@ final class OfflineLibraryStore {
     }
 
     func access(for track: Track) -> OfflineFolderAccess? {
+        guard track.remoteSource == nil else { return nil }
         let url: URL?
         if track.localSource != nil {
             url = localEntry(for: track)?.fileURL
@@ -284,6 +286,7 @@ final class OfflineLibraryStore {
     }
 
     func localFile(for track: Track) -> URL? {
+        guard track.remoteSource == nil else { return nil }
         guard let access = access(for: track) else { return nil }
         if track.localSource != nil {
             guard let entry = localEntry(for: track),

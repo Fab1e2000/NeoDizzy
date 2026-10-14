@@ -11,7 +11,7 @@ struct LabelDetailView: View {
     }
 
     var body: some View {
-        LoadableContent(state: page, webURL: DizzyURL.label(name)) { label in
+        LoadableContent(state: page, skeleton: .profile, skeletonIsPage: true, webURL: DizzyURL.label(name)) { label in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     header(label)

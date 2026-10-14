@@ -1,0 +1,52 @@
+--- a/MeloX/Core/Networking/NeteaseAPI.swift
++++ b/MeloX/Core/Networking/NeteaseAPI.swift
+@@ -946,16 +946,11 @@
+     }
+ 
+     func setPlaylistSubscribed(id: Int, isSubscribed: Bool) async throws {
+-        var data: [String: Any] = ["id": id]
+-        if isSubscribed {
+-            data["checkToken"] = NeteaseDirectClient.checkToken
+-        }
+         let path = isSubscribed ? "/api/playlist/subscribe" : "/api/playlist/unsubscribe"
+-        let response: APIStatusResponse = try await client.eapi(
++        let response: APIStatusResponse = try await client.weapi(
+             path,
+-            data: data,
+-            requiresCheckToken: true,
+-            authenticated: true
++            data: ["id": id],
++            retryEmptyResponse: false
+         )
+         try validate(responseCode: response.code, message: response.message)
+     }
+--- a/MeloX/Core/Networking/NeteaseDirectClient.swift
++++ b/MeloX/Core/Networking/NeteaseDirectClient.swift
+@@ -56,14 +56,16 @@
+ 
+     func weapi<Response: Decodable>(
+         _ uri: String,
+-        data: [String: Any] = [:]
++        data: [String: Any] = [:],
++        retryEmptyResponse: Bool = true
+     ) async throws -> Response {
+         let path = uri.replacingOccurrences(of: "/api/", with: "/weapi/")
+         guard let url = URL(string: "https://music.163.com\(path)") else {
+             throw APIError.requestEncoding
+         }
+ 
+-        for attempt in 0..<3 {
++        let attempts = retryEmptyResponse ? 3 : 1
++        for attempt in 0..<attempts {
+             var requestData = data
+             requestData["csrf_token"] = csrfToken
+             let json = try jsonString(requestData)
+@@ -83,7 +85,7 @@
+                     cookieHeaderOverride: processedWeapiCookieHeader(for: uri)
+                 )
+             } catch APIError.emptyResponse(let statusCode) {
+-                guard attempt < 2 else {
++                guard attempt + 1 < attempts else {
+                     throw APIError.emptyResponse(statusCode: statusCode)
+                 }
+                 try await Task.sleep(for: .milliseconds(180 * (attempt + 1)))

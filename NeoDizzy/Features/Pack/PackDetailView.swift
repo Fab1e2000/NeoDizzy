@@ -11,7 +11,7 @@ struct PackDetailView: View {
     }
 
     var body: some View {
-        LoadableContent(state: pack, webURL: DizzyURL.pack(id)) { pack in
+        LoadableContent(state: pack, skeleton: .pack, skeletonIsPage: true, webURL: DizzyURL.pack(id)) { pack in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     header(pack)

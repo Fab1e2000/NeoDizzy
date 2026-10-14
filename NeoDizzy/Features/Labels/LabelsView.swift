@@ -1,11 +1,12 @@
 import SwiftUI
 
 struct LabelsView: View {
-    @State private var labels = PagedList { page in try await DizzyAPI.shared.labels(page: page) }
+    @Environment(DizzyLabContentCache.self) private var contentCache
+    private var labels: PagedList<LabelSummary> { contentCache.labels }
 
     var body: some View {
-        MainTabPage(tab: .labels, onRefresh: { await labels.reload() }) {
-            PagedContent(list: labels, webURL: DizzyURL.page("/label/")) { labels in
+        DizzyLabPage(section: .labels, onRefresh: { await labels.reload(keepingItems: true) }) {
+            PagedContent(list: labels, skeleton: .rows, webURL: DizzyURL.page("/label/")) { labels in
                 ForEach(labels) { label in
                     NavigationLink(value: AppRoute.label(name: label.name)) {
                         LabelRow(label: label)

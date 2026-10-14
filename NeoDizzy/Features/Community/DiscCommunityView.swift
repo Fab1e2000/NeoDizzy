@@ -30,7 +30,7 @@ private struct DiscCommunityPreview: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text("社区").font(.title3.bold()).foregroundStyle(.primary)
                     Spacer()
-                    Text("查看全部").font(.subheadline).foregroundStyle(DizzyPalette.accent)
+                    Text("查看全部").font(.subheadline).foregroundStyle(.tint)
                     Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                 }
                 .contentShape(.rect)
@@ -64,7 +64,7 @@ private struct DiscCommunityPreview: View {
         if comments.isEmpty && myComment == nil {
             Group {
                 if model.comments.isLoading || !model.loaded {
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 80)
+                    ContentSkeleton(layout: .comments, count: 1)
                 } else if model.comments.failure == nil {
                     Text("还没有短评，来写第一条吧。")
                         .font(.subheadline)
@@ -171,7 +171,7 @@ private struct DiscLikeSummary: View {
     }
 
     private func toggle() {
-        guard let id = account.account?.userID, !account.isSessionExpired else {
+        guard let id = account.account?.userID, model.context?.requiresLogin != true else {
             account.isLoginPresented = true
             return
         }
@@ -193,18 +193,21 @@ private struct DiscCommentComposeButton: View {
             }
             .font(.subheadline.weight(.semibold))
             .disabled(model.busy)
-        } else if !account.isLoggedIn || account.isSessionExpired || (model.loaded && model.context?.userID == nil) {
+        } else if !account.isLoggedIn || model.context?.requiresLogin == true {
             Button { account.isLoginPresented = true } label: {
                 Label("登录后点赞和撰写短评", systemImage: "person.crop.circle")
             }
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(DizzyPalette.accent)
+            .foregroundStyle(.tint)
+        } else if model.loaded && model.context?.userID == nil {
+            Button("重新核验社区登录状态") { Task { await model.refresh() } }
+                .font(.subheadline.weight(.semibold))
         } else if model.context?.canComment == true {
             Button { isComposing = true } label: {
                 Label("撰写短评", systemImage: "square.and.pencil")
             }
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(DizzyPalette.accent)
+            .foregroundStyle(.tint)
         }
     }
 }
@@ -368,8 +371,8 @@ private struct DiscCommunityList: View {
         }
         .refreshable {
             await model.refresh()
-            await model.comments.reload()
-            await model.reviews.reload()
+            await model.comments.reload(keepingItems: true)
+            await model.reviews.reload(keepingItems: true)
         }
         .task { await model.refresh() }
         .discCommentComposer(model: model, isComposing: $isComposing, isConfirmingDelete: $isConfirmingDelete)
@@ -387,7 +390,7 @@ private struct DiscCommunityList: View {
                     }
             }
             .listRowBackground(DizzyPalette.surface)
-        } else if !account.isLoggedIn || account.isSessionExpired {
+        } else if !account.isLoggedIn || model.context?.requiresLogin == true {
             SwiftUI.Section {
                 Button("登录后点赞和撰写短评") { account.isLoginPresented = true }
             }
@@ -462,11 +465,11 @@ private struct PagedListFooter<Item: Identifiable & Sendable>: View {
                     Button("重试") { Task { await list.loadMore() } }
                 }
             } else if list.isLoading {
-                ProgressView().frame(maxWidth: .infinity)
+                ContentSkeleton(layout: .comments, count: 2)
             } else if list.isEmpty {
                 Text(emptyMessage).font(.subheadline).foregroundStyle(.secondary)
             } else if list.hasMore {
-                ProgressView().frame(maxWidth: .infinity)
+                ContentSkeleton(layout: .comments, count: 2)
                     .task { await list.loadMore() }
             }
         }

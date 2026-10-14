@@ -1,12 +1,41 @@
 import Foundation
 
-/// 播放地址带时间签名，约一小时后过期（见 `DizzyURL.streamExpiry`），所以只在即将播放时获取。
-/// 同一张专辑的地址一次请求全部拿到，按专辑缓存。
+nonisolated struct RemotePlaybackSource {
+    let url: URL
+    let expiresAt: Date
+    let isPreview: Bool
+}
+
+/// 本地文件、DizzyLab 专辑地址和注册来源的逐曲播放地址分别解析与缓存。
 final class StreamResolver {
+    private var remoteProviders: [String: (String) async throws -> RemotePlaybackSource] = [:]
+    private var lyricProviders: [String: (String) async throws -> LocalLyrics] = [:]
+    private var remoteCache: [String: RemotePlaybackSource] = [:]
+    private var revisions: [String: Int] = [:]
+
+    func register(_ provider: String, stream: @escaping (String) async throws -> RemotePlaybackSource,
+                  lyrics: @escaping (String) async throws -> LocalLyrics) {
+        remoteProviders[provider] = stream
+        lyricProviders[provider] = lyrics
+    }
+    func lyrics(for track: Track) async throws -> LocalLyrics? {
+        guard let source = track.remoteSource, let fetch = lyricProviders[source.providerID] else { return nil }
+        return try await fetch(source.itemID)
+    }
+    func isPreview(for track: Track?, url: URL) -> Bool {
+        if let track, track.remoteSource != nil { return remoteCache[track.id]?.isPreview ?? false }
+        return DizzyURL.isPreviewStream(url)
+    }
+    func invalidate(for track: Track) {
+        if track.remoteSource != nil { remoteCache[track.id] = nil }
+        else { invalidate(discID: track.discID) }
+    }
+
     /// 距离过期不到这么久就重新获取，避免播到一半地址失效。
     static let refreshMargin: TimeInterval = 120
 
     private var cache: [String: [String: URL]] = [:]
+    private var dizzyRevision = 0
     private let fetch: (String) async throws -> [String: URL]
     private let now: () -> Date
     private var retainedAccess: OfflineFolderAccess?
@@ -25,7 +54,7 @@ final class StreamResolver {
         self.localAccess = localAccess
     }
 
-    func localURL(for track: Track) -> URL? { localFile(track) }
+    func localURL(for track: Track) -> URL? { track.remoteSource == nil ? localFile(track) : nil }
     func releaseLocalAccess() { retainedAccess = nil }
 
     /// 专辑页已经拿到的地址，直接放进缓存，播放时不用再请求一次。
@@ -34,20 +63,34 @@ final class StreamResolver {
         cache[discID] = streams
     }
 
-    func stream(for track: Track, preferLocal: Bool = true) async throws -> URL {
+    func stream(for track: Track, preferLocal: Bool = true, retainAccess: Bool = true) async throws -> URL {
+        if let source = track.remoteSource {
+            if retainAccess { retainedAccess = nil }
+            if let cached = remoteCache[track.id], cached.expiresAt.timeIntervalSince(now()) > Self.refreshMargin { return cached.url }
+            guard let provider = remoteProviders[source.providerID] else { throw PlaybackError.unavailable }
+            let generation = revisions[source.providerID, default: 0]
+            let result = try await provider(source.itemID)
+            try Task.checkCancellation()
+            guard generation == revisions[source.providerID, default: 0] else { throw CancellationError() }
+            remoteCache[track.id] = result
+            return result.url
+        }
         // 每次换曲目都重新查询：刚下载的曲目立即可播，移走的文件可回退到串流。
         // 本地地址不放入签名地址缓存，也不受登录/退出登录的缓存清理影响。
         if (preferLocal || track.localSource != nil), let url = localFile(track), url.isFileURL,
            FileManager.default.isReadableFile(atPath: url.path) {
-            retainedAccess = localAccess(track)
+            if retainAccess { retainedAccess = localAccess(track) }
             return url
         }
         if track.localSource != nil { throw PlaybackError.localUnavailable }
-        retainedAccess = nil
+        if retainAccess { retainedAccess = nil }
         if let url = cache[track.discID]?[track.number], isFresh(url) {
             return url
         }
+        let revision = dizzyRevision
         let streams = try await fetch(track.discID)
+        try Task.checkCancellation()
+        guard revision == dizzyRevision else { throw CancellationError() }
         cache[track.discID] = streams
         guard let url = streams[track.number] else {
             throw PlaybackError.unavailable
@@ -57,12 +100,30 @@ final class StreamResolver {
 
     /// 播放出错（多半是地址过期返回 403）后丢掉这张专辑的地址，下次重新获取。
     func invalidate(discID: String) {
+        dizzyRevision += 1
         cache[discID] = nil
     }
 
     /// 登录或退出登录后，同一张专辑的地址可能从试听变成完整版（或反过来），全部重新获取。
     func removeAll() {
-        cache.removeAll()
+        for provider in remoteProviders.keys { invalidateRemote(provider) }
+        remoteCache.removeAll()
+        clearDizzyLabCache()
+    }
+
+    func invalidateRemote(_ providerID: String) {
+        revisions[providerID, default: 0] += 1
+        remoteCache = remoteCache.filter { !$0.key.hasPrefix("remote/\(providerID)/") }
+    }
+
+    func clearDizzyLabCache() { dizzyRevision += 1; cache.removeAll() }
+
+    func isFresh(_ url: URL, for track: Track) -> Bool {
+        if track.remoteSource != nil {
+            guard let source = remoteCache[track.id], source.url == url else { return false }
+            return source.expiresAt.timeIntervalSince(now()) > Self.refreshMargin
+        }
+        return isFresh(url)
     }
 
     private func isFresh(_ url: URL) -> Bool {

@@ -7,7 +7,17 @@ nonisolated struct DizzyCommunity: Sendable {
     private var sessionID: String? { client.credentials.snapshot.cookies.first { $0.name == "sessionid" }?.value }
     private func discPath(_ id: String) -> String { "/d/\(DizzyURL.pathSegment(id))/" }
     func context(_ discID: String) async throws -> DiscCommunityContext {
-        try CommunityPageParser.discContext(await client.html(path: discPath(discID), cachePolicy: .reloadIgnoringLocalCacheData))
+        let session = sessionID
+        let context = try CommunityPageParser.discContext(await client.html(path: discPath(discID), cachePolicy: .reloadIgnoringLocalCacheData))
+        guard session == sessionID else { throw DizzyError.sessionExpired }
+        // Some album templates omit the account dropdown. Confirm the viewer on the
+        // same authenticated home page used by login, without guessing from comment authors.
+        guard context.userID == nil, !context.requiresLogin, client.credentials.hasCookie(named: "sessionid") else { return context }
+        let home = try await client.html(path: "/", cachePolicy: .reloadIgnoringLocalCacheData)
+        guard session == sessionID else { throw DizzyError.sessionExpired }
+        guard let viewer = try LoggedInHomeParser.parse(home) else { return context }
+        return DiscCommunityContext(userID: viewer.userID, csrf: context.csrf, myComment: context.myComment,
+                                    commentLimit: context.commentLimit, canComment: context.canComment)
     }
     func likes(_ discID: String) async throws -> DiscLikes {
         try await client.json(DiscLikes.self, path: "/albums/getthisdisclikes/", query: [.init(name: "discid", value: discID)], cachePolicy: .reloadIgnoringLocalCacheData)

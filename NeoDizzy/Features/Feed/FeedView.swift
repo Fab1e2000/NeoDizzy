@@ -3,12 +3,13 @@ import Combine
 
 struct FeedView: View {
     @Environment(AccountStore.self) private var account
-    @State private var model = FeedModel()
+    @Environment(DizzyLabContentCache.self) private var contentCache
+    private var model: FeedModel { contentCache.feed }
 
     var body: some View {
-        MainTabPage(tab: .feed, onRefresh: { await model.groups?.reload() }) {
+        DizzyLabPage(section: .feed, onRefresh: { await model.groups?.reload(keepingItems: true) }) {
             if account.isLoggedIn, !account.isSessionExpired, let groups = model.groups {
-                PagedContent(list: groups, webURL: DizzyURL.page("/feed/"), emptyMessage: "关注的社团还没有发布新作。") { groups in
+                PagedContent(list: groups, skeleton: .rows, webURL: DizzyURL.page("/feed/"), emptyMessage: "关注的社团还没有发布新作。") { groups in
                     ForEach(groups) { group in
                         FeedGroupSection(group: group)
                     }
@@ -18,14 +19,14 @@ struct FeedView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .dizzyFollowingDidChange)) { _ in
-            Task { await model.groups?.reload() }
+            Task { await model.groups?.reload(keepingItems: true) }
         }
         .onChange(of: account.account?.userID, initial: true) { _, userID in
             model.update(userID: userID)
         }
         .onChange(of: account.isSessionExpired) { _, isExpired in
             // 重新登录后 token 换了，重新加载。
-            if !isExpired { Task { await model.groups?.reload() } }
+            if !isExpired { Task { await model.groups?.reload(keepingItems: true) } }
         }
     }
 }

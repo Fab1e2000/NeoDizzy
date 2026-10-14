@@ -33,7 +33,7 @@ struct ShuffleView: View {
     }
 
     var body: some View {
-        MainTabPage(tab: .shuffle) {
+        DizzyLabPage(section: .shuffle) {
             VStack(spacing: 28) {
                 recordArtwork
                     .padding(.top, 24)

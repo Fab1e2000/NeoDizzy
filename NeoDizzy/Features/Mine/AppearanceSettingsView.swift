@@ -44,7 +44,7 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("专辑页")
             } footer: {
-                Text("专辑页的背景直接取自封面边缘的颜色，上面叠一层黑色（深色封面）或白色（浅色封面）。数值越大，封面颜色越淡。")
+                Text("专辑和歌单背景由封面平均色、模糊封面与明暗渐变组成。此设置调整渐变遮罩的强度，数值越大，背景越接近黑色或白色。")
             }
             .listRowBackground(DizzyPalette.surface)
 

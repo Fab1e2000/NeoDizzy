@@ -1,68 +1,155 @@
 // Layout adapted from MeloX (GPLv3), StandardMusicCollectionDetailHero.
 import Nuke
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import SwiftUI
 
 struct AlbumHero<Subtitle: View, Actions: View>: View {
     let artworkURL: URL?
     let title: String
     let metadata: String
+    var reservesTitleSpace = false
+    var metadataIsPlaceholder = false
+    var titleIsPlaceholder = false
     @ViewBuilder let subtitle: () -> Subtitle
     @ViewBuilder let actions: () -> Actions
 
     var body: some View {
         VStack(spacing: 0) {
-            ArtworkImage(url: artworkURL, cornerRadius: 12, decodeSize: AlbumArtworkPreload.heroSize)
+            AlbumHeroArtwork(url: artworkURL)
                 .containerRelativeFrame(.horizontal) { width, _ in min(width * 0.68, 300) }
                 .shadow(color: .black.opacity(0.18), radius: 18, y: 10)
             Text(title)
-                .font(.title2.bold()).multilineTextAlignment(.center).lineLimit(2)
+                .redacted(reason: titleIsPlaceholder ? .placeholder : [])
+                .accessibilityHidden(titleIsPlaceholder)
+                .font(.title2.bold()).multilineTextAlignment(.center).lineLimit(2, reservesSpace: reservesTitleSpace)
                 .padding(.top, 24).padding(.horizontal, 24)
             subtitle().font(.title3).lineLimit(1).padding(.top, 8)
             Text(metadata).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).padding(.top, 7)
+                .redacted(reason: metadataIsPlaceholder ? .placeholder : [])
+                .accessibilityHidden(metadataIsPlaceholder)
+                .multilineTextAlignment(.center).lineLimit(1).padding(.top, 7)
             actions().padding(.top, 17)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 24).padding(.bottom, 22)
+        .padding(.top, 26).padding(.bottom, 22)
     }
 }
 
-/// 两个等宽的按钮，底色和文字都用主题色。按钮在页面内容里，不用玻璃材质：
-/// 玻璃留给浮在内容上方的导航栏和标签栏。其他操作（网页、分享、批量编辑）放在导航栏里。
-struct AlbumPlaybackActions: View {
+/// Detail artwork must be available on the first render, before LazyImage's onAppear.
+/// Keep the previous image during URL changes and isolate it from backdrop animations.
+private struct AlbumHeroArtwork: View {
+    let url: URL?
+    @State private var container: ImageContainer?
+
+    init(url: URL?) {
+        self.url = url
+        _container = State(initialValue: url.flatMap {
+            ImagePipeline.shared.cache[AlbumArtworkPreload.heroRequest(for: $0)]
+        })
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            Group {
+                if let container {
+                    platformImage(container)
+                        .resizable().scaledToFill()
+                } else {
+                    DizzyPalette.artworkPlaceholder
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(.rect(cornerRadius: 12))
+        .accessibilityHidden(true)
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
+        .task(id: url) {
+            guard let url else { return }
+            let request = AlbumArtworkPreload.heroRequest(for: url)
+            if let cached = ImagePipeline.shared.cache[request], !cached.isPreview {
+                container = cached
+                return
+            }
+            guard let image = try? await ImagePipeline.shared.image(for: request),
+                  !Task.isCancelled else { return }
+            container = ImageContainer(image: image)
+        }
+    }
+
+    private func platformImage(_ container: ImageContainer) -> Image {
+        #if canImport(UIKit)
+        Image(uiImage: container.image)
+        #else
+        Image(nsImage: container.image)
+        #endif
+    }
+}
+
+// Adapted from MeloX MusicCollectionPrimaryActions (GPL-3.0).
+struct AlbumPlaybackActions<Accessory: View>: View {
     let isEmpty: Bool
     var isPreview = false
     let play: (Bool) -> Void
+    @ViewBuilder var accessory: () -> Accessory
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button { play(false) } label: {
-                Label(isPreview ? "试听" : "播放", systemImage: "play.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            Button { play(true) } label: {
-                Label(isPreview ? "随机试听" : "随机播放", systemImage: "shuffle")
-                    .frame(maxWidth: .infinity)
+        GlassEffectContainer(spacing: 14) {
+            HStack(spacing: 14) {
+                Button { play(true) } label: {
+                    Image(systemName: "shuffle")
+                        .font(.title2.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .controlSize(.large)
+                .disabled(isEmpty)
+                .accessibilityLabel(isPreview ? "随机试听" : "随机播放")
+
+                Button { play(false) } label: {
+                    Label(isPreview ? "试听" : "播放", systemImage: "play.fill")
+                        .font(.title3.bold())
+                        .frame(minWidth: 116)
+                }
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .tint(colorScheme == .dark ? Color.white : .black)
+                .foregroundStyle(colorScheme == .dark ? Color.black : .white)
+                .disabled(isEmpty)
+
+                accessory()
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .controlSize(.large)
             }
         }
-        .font(.headline)
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
-        .controlSize(.large)
-        .tint(DizzyPalette.accent)
-        .disabled(isEmpty)
+    }
+}
+
+extension AlbumPlaybackActions where Accessory == EmptyView {
+    init(isEmpty: Bool, isPreview: Bool = false, play: @escaping (Bool) -> Void) {
+        self.isEmpty = isEmpty
+        self.isPreview = isPreview
+        self.play = play
+        self.accessory = { EmptyView() }
     }
 }
 
 // Adapted from MeloX AlbumDetailView / AlbumDetailContent / MusicCollectionArtworkBackdrop
 // and ArtworkAccentColorProvider (GPL-3.0).
-/// 专辑页：背景直接用封面边缘的主色，不改写；再叠一层可调的黑或白遮罩。
-/// 与 Apple Music 相同，页面深浅跟着背景色走：深色背景配白字，浅色背景配黑字。
+/// 与 MeloX 一致：平均取色调成深浅底色，叠加离线模糊封面和渐变。
 struct AlbumDetailScrollView<Content: View>: View {
     let artworkURL: URL?
     @ViewBuilder var content: Content
-    @State private var backdrop: AlbumBackdrop?
+    @State private var appearance: AlbumBackdropModel
     @Environment(\.colorScheme) private var systemColorScheme
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
@@ -70,9 +157,10 @@ struct AlbumDetailScrollView<Content: View>: View {
         self.artworkURL = artworkURL
         self.content = content()
         // 从缓存里取到时第一帧就是封面色，推入页面不闪底色。
-        _backdrop = State(initialValue: artworkURL.flatMap { AlbumBackdropCache.shared.backdrop(for: $0) })
+        _appearance = State(initialValue: AlbumBackdropModel(url: artworkURL))
     }
 
+    private var backdrop: AlbumBackdrop? { appearance.backdrop }
     private var colorScheme: ColorScheme { backdrop?.colorScheme ?? systemColorScheme }
 
     var body: some View {
@@ -82,15 +170,36 @@ struct AlbumDetailScrollView<Content: View>: View {
                 .scrollIndicators(.hidden)
         }
         .environment(\.colorScheme, colorScheme)
+        // 与 MeloX 的专辑操作一致：控件随页面明暗配色，不继承全局主题色。
+        .tint(.primary)
         // 表单的底色由系统按 App 外观决定，弹出的内容要换回这个外观，见 restoringAppColorScheme()。
         .environment(\.appColorScheme, systemColorScheme)
         .toolbarColorScheme(backdrop?.colorScheme, for: .navigationBar, .tabBar)
         .task(id: artworkURL) {
-            guard let artworkURL else { return }
-            let loaded = await AlbumBackdropProvider.shared.backdrop(for: artworkURL)
-            guard !Task.isCancelled, let loaded, loaded != backdrop else { return }
-            withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.18)) { backdrop = loaded }
+            await appearance.load(artworkURL, reduceMotion: accessibilityReduceMotion)
         }
+    }
+}
+
+/// Keep background state and async loading independent of the generic content tree.
+/// Cache misses retain the displayed image, and cancellation prevents stale publication.
+@Observable
+private final class AlbumBackdropModel {
+    private(set) var backdrop: AlbumBackdrop?
+
+    init(url: URL?) {
+        backdrop = url.flatMap { AlbumBackdropCache.shared.backdrop(for: $0) }
+    }
+
+    func load(_ url: URL?, reduceMotion: Bool) async {
+        guard let url, !Task.isCancelled else { return }
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(350))
+        let loaded = await AlbumBackdropProvider.shared.backdrop(for: url)
+        guard !Task.isCancelled, let loaded,
+              backdrop?.alreadyDisplays(loaded) != true else { return }
+        do { try await Task.sleep(until: deadline, clock: .continuous) } catch { return }
+        guard !Task.isCancelled else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { backdrop = loaded }
     }
 }
 
@@ -116,96 +225,77 @@ private struct RestoreAppColorScheme: ViewModifier {
 
 private struct AlbumArtworkBackground: View {
     let backdrop: AlbumBackdrop?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ZStack {
-            if let backdrop {
-                Color(red: backdrop.edgeRGB.x, green: backdrop.edgeRGB.y, blue: backdrop.edgeRGB.z)
-                // 深色背景叠一层黑，浅色背景叠一层白，浓度在「外观与主题」里调，默认 5%。
-                (backdrop.prefersDarkAppearance ? Color.black : Color.white)
-                    .opacity(Double(AppearanceSettings.shared.albumDimming) / 100)
-            } else {
-                DizzyPalette.background
+        GeometryReader { proxy in
+            ZStack {
+                if let backdrop {
+                    Color(red: backdrop.backgroundRGB.x, green: backdrop.backgroundRGB.y, blue: backdrop.backgroundRGB.z)
+                    if let image = backdrop.blurredImage {
+                        Image(decorative: image, scale: 1)
+                            .resizable().scaledToFill()
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                            .opacity(0.22)
+                            .transition(.opacity)
+                    }
+                } else {
+                    Color(white: colorScheme == .dark ? 0.16 : 0.88)
+                }
+                LinearGradient(colors: overlayColors, startPoint: .top, endPoint: .bottom)
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }
+
+    private var overlayColors: [Color] {
+        let dark = backdrop?.prefersDarkAppearance ?? (colorScheme == .dark)
+        let color: Color = dark ? .black : .white
+        // Keep the user's adjustment; the default reproduces MeloX's gradient exactly.
+        let adjustment = Double(AppearanceSettings.shared.albumDimming - AppearanceSettings.defaultAlbumDimming) / 100
+        return (dark ? [0.08, 0.24, 0.40] : [0.06, 0.16, 0.30]).map {
+            color.opacity(min(max($0 + adjustment, 0), 1))
+        }
+    }
 }
 
-/// 封面取色结果：边缘主色，以及它配白字还是黑字。
-nonisolated struct AlbumBackdrop: Equatable, Sendable {
-    let edgeRGB: SIMD3<Double>
+// Pass an immutable reference across async boundaries instead of an over-aligned
+// SIMD value payload, which corrupts task teardown in the optimized lifecycle test.
+nonisolated final class AlbumBackdrop: Equatable, Sendable {
+    let averageRGB: SIMD3<Double>
+    let blurredImage: CGImage?
 
-    /// 按对比度在白字、黑字之间选：白字更清楚就用深色外观。与主题色上文字颜色的算法相同。
-    var prefersDarkAppearance: Bool { Self.relativeLuminance(edgeRGB) <= 0.179 }
+    init(averageRGB: SIMD3<Double>, blurredImage: CGImage? = nil) {
+        self.averageRGB = averageRGB
+        self.blurredImage = blurredImage
+    }
+
+    // MeloX uses weighted sRGB here, without converting to linear-light values.
+    var prefersDarkAppearance: Bool {
+        averageRGB.x * 0.2126 + averageRGB.y * 0.7152 + averageRGB.z * 0.0722 < 0.52
+    }
     var colorScheme: ColorScheme { prefersDarkAppearance ? .dark : .light }
-
-    /// WCAG 相对亮度：先把 sRGB 换回线性值再加权。
-    static func relativeLuminance(_ color: SIMD3<Double>) -> Double {
-        func linear(_ value: Double) -> Double {
-            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * linear(color.x) + 0.7152 * linear(color.y) + 0.0722 * linear(color.z)
-    }
-
-    /// 取封面外圈像素里占比最多的颜色。颜色按每通道 8 档分组，组和相邻的组一起计数，
-    /// 渐变或噪点不会被拆散；外圈颜色太杂、最多的一组不到四分之一时，改取整张封面的主色。
-    /// `pixels` 是 RGBA8，透明像素不计。
-    static func edgeColor(pixels: [UInt8], width: Int, height: Int) -> SIMD3<Double> {
-        let band = max(2, Int((Double(min(width, height)) * 0.08).rounded()))
-        let edge = dominantColor(pixels: pixels, width: width, height: height) { x, y in
-            x < band || y < band || x >= width - band || y >= height - band
-        }
-        if let edge, edge.share >= 0.25 { return edge.color }
-        return dominantColor(pixels: pixels, width: width, height: height) { _, _ in true }?.color
-            ?? edge?.color ?? SIMD3(repeating: 0.16)
-    }
-
-    private static func dominantColor(pixels: [UInt8], width: Int, height: Int,
-                                      include: (Int, Int) -> Bool) -> (color: SIMD3<Double>, share: Double)? {
-        var counts = [Double](repeating: 0, count: 512)
-        var sums = [SIMD3<Double>](repeating: .zero, count: 512)
-        var total = 0.0
-        for y in 0..<height {
-            for x in 0..<width where include(x, y) {
-                let index = (y * width + x) * 4
-                guard pixels[index + 3] >= 128 else { continue }
-                let color = unpremultiplied(pixels, at: index)
-                let bin = SIMD3<Int>((color * 7.999).rounded(.down))
-                let key = bin.x << 6 | bin.y << 3 | bin.z
-                counts[key] += 1
-                sums[key] += color
-                total += 1
-            }
-        }
-        guard total > 0 else { return nil }
-        var best: (count: Double, sum: SIMD3<Double>) = (0, .zero)
-        for key in 0..<512 where counts[key] > 0 {
-            var count = 0.0, sum = SIMD3<Double>.zero
-            let r = key >> 6, g = key >> 3 & 7, b = key & 7
-            for nr in max(0, r - 1)...min(7, r + 1) {
-                for ng in max(0, g - 1)...min(7, g + 1) {
-                    for nb in max(0, b - 1)...min(7, b + 1) {
-                        let neighbor = nr << 6 | ng << 3 | nb
-                        count += counts[neighbor]
-                        sum += sums[neighbor]
-                    }
-                }
-            }
-            if count > best.count { best = (count, sum) }
-        }
-        return (best.sum / best.count, best.count / total)
-    }
-
-    private static func unpremultiplied(_ pixels: [UInt8], at index: Int) -> SIMD3<Double> {
-        let alpha = Double(pixels[index + 3])
-        let color = SIMD3(Double(pixels[index]), Double(pixels[index + 1]), Double(pixels[index + 2])) / alpha
+    var backgroundRGB: SIMD3<Double> {
+        let color = prefersDarkAppearance
+            ? averageRGB * 0.38 + SIMD3<Double>(repeating: 0.055) * 0.62
+            : averageRGB * 0.30 + SIMD3<Double>(repeating: 0.94) * 0.70
         return color.clamped(lowerBound: .zero, upperBound: .one)
     }
+    static func == (lhs: AlbumBackdrop, rhs: AlbumBackdrop) -> Bool {
+        lhs.averageRGB == rhs.averageRGB && lhs.blurredImage === rhs.blurredImage
+    }
+
+    /// Like MeloX, skip a second transition when the palette and backdrop are already present.
+    /// Re-decoding the same cover can produce a different CGImage instance.
+    func alreadyDisplays(_ other: AlbumBackdrop) -> Bool {
+        averageRGB == other.averageRGB && (blurredImage != nil || other.blurredImage == nil)
+    }
 }
 
-/// 缩到 160 像素、居中裁成正方形后取边缘主色，结果按封面地址缓存。
+/// Prepare color and blur off the main actor; navigation reuses the same cached assets.
 private actor AlbumBackdropProvider {
     static let shared = AlbumBackdropProvider()
     private let context = CIContext(options: [.cacheIntermediates: false])
@@ -214,21 +304,29 @@ private actor AlbumBackdropProvider {
     func backdrop(for url: URL) async -> AlbumBackdrop? {
         if let cached = AlbumBackdropCache.shared.backdrop(for: url) { return cached }
         var request = ImageRequest(url: url)
-        request.thumbnail = .init(size: CGSize(width: 160, height: 160), unit: .pixels, contentMode: .aspectFill)
+        request.thumbnail = .init(size: CGSize(width: 160, height: 160), unit: .pixels, contentMode: .aspectFit)
         guard let loaded = try? await ImagePipeline.shared.image(for: request),
               let source = CIImage(image: loaded), !Task.isCancelled else { return nil }
         if let cached = AlbumBackdropCache.shared.backdrop(for: url) { return cached }
         let extent = source.extent.integral
         guard !extent.isEmpty, !extent.isInfinite else { return nil }
-        // 缩略图只按短边缩放，不是正方形的封面会比 160 宽或高。页面上的封面是居中裁成正方形的，
-        // 取色也只看这个正方形，否则会取到被裁掉的那一截。
-        let side = min(extent.width, extent.height)
-        let square = CGRect(x: extent.midX - side / 2, y: extent.midY - side / 2, width: side, height: side).integral
-        let width = Int(square.width), height = Int(square.height)
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        context.render(source, toBitmap: &pixels, rowBytes: width * 4, bounds: square,
-                       format: .RGBA8, colorSpace: colorSpace)
-        let backdrop = AlbumBackdrop(edgeRGB: AlbumBackdrop.edgeColor(pixels: pixels, width: width, height: height))
+        let average = CIFilter.areaAverage()
+        average.inputImage = source
+        average.extent = extent
+        guard let output = average.outputImage else { return nil }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        context.render(output, toBitmap: &pixel, rowBytes: 4,
+                       bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: colorSpace)
+        let blur = CIFilter.gaussianBlur()
+        blur.inputImage = source.clampedToExtent()
+        blur.radius = 18
+        let blurred = blur.outputImage.flatMap {
+            context.createCGImage($0.cropped(to: extent), from: extent, format: .RGBA8, colorSpace: colorSpace)
+        }
+        let backdrop = AlbumBackdrop(
+            averageRGB: SIMD3(Double(pixel[0]), Double(pixel[1]), Double(pixel[2])) / 255,
+            blurredImage: blurred
+        )
         AlbumBackdropCache.shared.insert(backdrop, for: url)
         return backdrop
     }
@@ -236,10 +334,20 @@ private actor AlbumBackdropProvider {
 
 // Adapted from upstream MeloX Features/Playlist/PlaylistTrackList.swift (GPL-3.0).
 // Album rows use this layout rather than MeloX's general-purpose TrackRowView.
+struct AlbumRowAction: Identifiable {
+    let id: String
+    let title: String
+    let systemImage: String
+    var disabled = false
+    let perform: () -> Void
+}
+
 struct AlbumTrackRow: View {
     let track: Track
+    var displayNumber: String? = nil
     var isPreview = false
     var editTags: (() -> Void)?
+    var additionalActions: [AlbumRowAction] = []
     let play: () -> Void
     @Environment(PlayerStore.self) private var player
 
@@ -257,6 +365,9 @@ struct AlbumTrackRow: View {
                 }
                 if let editTags {
                     Button("编辑音乐标签", systemImage: "pencil", action: editTags)
+                }
+                ForEach(additionalActions) { action in
+                    Button(action.title, systemImage: action.systemImage, action: action.perform).disabled(action.disabled)
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -316,7 +427,7 @@ struct AlbumTrackRow: View {
             .frame(width: 32, height: 32)
             .frame(width: 40)
         } else {
-            Text(track.number)
+            Text(displayNumber ?? track.number)
                 .font(.title3)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
@@ -337,26 +448,84 @@ private nonisolated final class AlbumBackdropCache: @unchecked Sendable {
     static let shared = AlbumBackdropCache()
     private final class Box { let backdrop: AlbumBackdrop; init(_ backdrop: AlbumBackdrop) { self.backdrop = backdrop } }
     private let cache = NSCache<NSURL, Box>()
-    private init() { cache.countLimit = 500 }
+    private init() { cache.countLimit = 80; cache.totalCostLimit = 12 * 1_024 * 1_024 }
     func backdrop(for url: URL) -> AlbumBackdrop? { cache.object(forKey: url as NSURL)?.backdrop }
-    func insert(_ backdrop: AlbumBackdrop, for url: URL) { cache.setObject(Box(backdrop), forKey: url as NSURL) }
+    func insert(_ backdrop: AlbumBackdrop, for url: URL) {
+        let cost = backdrop.blurredImage.map { $0.bytesPerRow * $0.height } ?? 0
+        cache.setObject(Box(backdrop), forKey: url as NSURL, cost: cost)
+    }
 }
 
 enum AlbumArtworkPreload {
     // Match the detail hero request so Nuke reuses the decoded image, not just file data.
     static let heroSize = CGSize(width: 300, height: 300)
+
+    static func heroRequest(for url: URL) -> ImageRequest {
+        var request = ImageRequest(url: url)
+        request.thumbnail = .init(size: heroSize, contentMode: .aspectFill)
+        return request
+    }
+}
+
+extension AlbumArtworkPreload {
+    static func prepare(_ url: URL) async {
+        async let backdrop = AlbumBackdropProvider.shared.backdrop(for: url)
+        var request = heroRequest(for: url)
+        request.priority = .low
+        _ = try? await ImagePipeline.shared.image(for: request)
+        _ = await backdrop
+        guard !Task.isCancelled else { return }
+        // Match ArtworkImage's common phone-grid and avatar decode buckets too.
+        request.thumbnail = .init(size: CGSize(width: 256, height: 256), contentMode: .aspectFill)
+        _ = try? await ImagePipeline.shared.image(for: request)
+        guard !Task.isCancelled else { return }
+        request.thumbnail = .init(size: CGSize(width: 128, height: 128), contentMode: .aspectFit)
+        _ = try? await ImagePipeline.shared.image(for: request)
+    }
+
+    /// Only warm the first screen; visible cards continue prefetching as the user scrolls.
+    static func prepareFirstScreen(_ urls: [URL]) async {
+        let urls = Array(Set(urls.prefix(12)))
+        await withTaskGroup(of: Void.self) { group in
+            var iterator = urls.makeIterator()
+            for _ in 0..<3 {
+                if let url = iterator.next() { group.addTask { await prepare(url) } }
+            }
+            for await _ in group {
+                guard !Task.isCancelled else { group.cancelAll(); return }
+                if let url = iterator.next() { group.addTask { await prepare(url) } }
+            }
+        }
+    }
 }
 
 extension View {
     func prefetchAlbumArtwork(url: URL?) -> some View {
         task(id: url) {
             guard let url else { return }
-            async let backdrop = AlbumBackdropProvider.shared.backdrop(for: url)
-            var request = ImageRequest(url: url)
-            request.thumbnail = .init(size: AlbumArtworkPreload.heroSize, contentMode: .aspectFill)
-            request.priority = .low
-            _ = try? await ImagePipeline.shared.image(for: request)
-            _ = await backdrop
+            await AlbumArtworkPreload.prepare(url)
         }
+    }
+}
+
+// Adapted from MeloX ExpandablePlaylistDescription (GPL-3.0).
+struct AlbumDescriptionExcerpt: View {
+    let text: String
+    @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { expanded.toggle() }
+        } label: {
+            Text("\(text)  \(Text(expanded ? "收起" : "更多").bold())")
+                .font(.body).foregroundStyle(.secondary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(expanded ? nil : 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(expanded ? "收起简介" : "展开简介")
+        .accessibilityValue(text)
     }
 }

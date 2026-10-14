@@ -20,7 +20,7 @@ struct PurchaseView: View {
                     } else if let pending = purchases.current {
                         paymentStatus(pending)
                     } else if model.isLoading {
-                        ProgressView("正在读取最新价格…")
+                        ContentSkeleton(layout: .rows, count: 2)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
                     } else if let offer = model.offer {
