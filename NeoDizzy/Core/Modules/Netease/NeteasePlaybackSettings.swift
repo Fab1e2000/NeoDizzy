@@ -38,6 +38,9 @@ nonisolated enum NeteaseQuality: String, CaseIterable, Identifiable, Codable, Se
     var cellular: NeteaseQuality {
         didSet { defaults.set(cellular.rawValue, forKey: "netease.quality.cellular"); if oldValue != cellular && isCellular { changed?() } }
     }
+    var download: NeteaseQuality {
+        didSet { defaults.set(download.rawValue, forKey: "netease.quality.download") }
+    }
     private(set) var isCellular = false
     var selected: NeteaseQuality { isCellular ? cellular : wifi }
     @ObservationIgnored var changed: (() -> Void)?
@@ -46,6 +49,7 @@ nonisolated enum NeteaseQuality: String, CaseIterable, Identifiable, Codable, Se
 
     init(defaults: UserDefaults = .standard, monitorsNetwork: Bool = true) {
         self.defaults = defaults
+        download = NeteaseQuality(rawValue: defaults.string(forKey: "netease.quality.download") ?? "") ?? .lossless
         wifi = NeteaseQuality(rawValue: defaults.string(forKey: "netease.quality.wifi") ?? "") ?? .high
         cellular = NeteaseQuality(rawValue: defaults.string(forKey: "netease.quality.cellular") ?? "") ?? .high
         monitor = monitorsNetwork ? NWPathMonitor() : nil

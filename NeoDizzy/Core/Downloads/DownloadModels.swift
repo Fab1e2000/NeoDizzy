@@ -19,10 +19,11 @@ nonisolated struct DownloadOption: Identifiable, Hashable, Sendable {
 }
 
 nonisolated enum DownloadFailure: LocalizedError {
-    case ambiguousEncoding, folderMissing, unavailable, invalidResponse, unsafeArchive, archiveTooLarge, damagedArchive, interrupted
+    case songUnavailable, ambiguousEncoding, folderMissing, unavailable, invalidResponse, unsafeArchive, archiveTooLarge, damagedArchive, interrupted
 
     var errorDescription: String? {
         switch self {
+        case .songUnavailable: "需要 VIP 或已下架"
         case .ambiguousEncoding: "无法确定 ZIP 文件名编码，请在电脑解压后导入音乐库"
         case .folderMissing: "请先在音乐库选择保存文件夹"
         case .unavailable: "下载链接不可用，请确认已登录并已购买此专辑"

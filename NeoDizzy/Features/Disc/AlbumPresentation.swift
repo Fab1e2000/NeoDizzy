@@ -95,6 +95,7 @@ private struct AlbumHeroArtwork: View {
 struct AlbumPlaybackActions<Accessory: View>: View {
     let isEmpty: Bool
     var isPreview = false
+    var isDownloaded = false
     let play: (Bool) -> Void
     @ViewBuilder var accessory: () -> Accessory
     @Environment(\.colorScheme) private var colorScheme
@@ -346,6 +347,7 @@ struct AlbumTrackRow: View {
     let track: Track
     var displayNumber: String? = nil
     var isPreview = false
+    var isDownloaded = false
     var editTags: (() -> Void)?
     var additionalActions: [AlbumRowAction] = []
     let play: () -> Void
@@ -356,6 +358,7 @@ struct AlbumTrackRow: View {
     var body: some View {
         HStack(spacing: 4) {
             playbackButton
+            if isDownloaded { Image(systemName: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary).accessibilityLabel("已下载") }
             if isPreview {
                 Text("试听").font(.caption2).foregroundStyle(.secondary)
             }

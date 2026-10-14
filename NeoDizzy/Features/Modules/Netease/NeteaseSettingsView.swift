@@ -20,6 +20,13 @@ struct NeteaseSettingsView: View {
                 } footer: {
                     Text("高音质是否可用取决于账号权益和歌曲音源，不可用时自动尝试较低音质。更改当前网络的音质后，将保留播放进度重新加载音源。")
                 }
+                Section {
+                    Picker("下载音质", selection: $settings.download) {
+                        ForEach(NeteaseQuality.allCases) { Text($0.title).tag($0) }
+                    }
+                } header: { Text("下载音质") } footer: {
+                    Text("歌曲没有所选音质时，自动下载较低音质。VIP 歌曲需要账号有对应权益，只有试听片段的歌曲不会下载。")
+                }
                 Section("账号") {
                     if let profile = store.profile {
                         LabeledContent("昵称", value: profile.nickname)

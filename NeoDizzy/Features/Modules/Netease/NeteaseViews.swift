@@ -167,6 +167,12 @@ struct NeteaseCollectionView: View {
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            if supportsFavorite, let sourceID, model.hasLoaded {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NeteaseDownloadButton(kind: model.playlist == nil ? "album" : "playlist", id: sourceID,
+                                          title: model.title, coverURL: artwork)
+                }
+            }
             if case .newSongs = route { ToolbarItem(placement: .topBarTrailing) { regionMenu } }
             if case .newAlbums = route { ToolbarItem(placement: .topBarTrailing) { regionMenu } }
             if route == .radio && !needsLogin {
@@ -262,17 +268,30 @@ struct NeteaseSongRows: View {
     @Environment(PlayerStore.self) private var player
     @Environment(NeteaseStore.self) private var store
     @Environment(\.openRoute) private var openRoute
+    @Environment(DownloadStore.self) private var downloads
+    @Environment(OfflineLibraryStore.self) private var library
+    @State private var downloadedKeys: Set<RemoteTrackKey> = []
+    @State private var showsDownloads = false
     @State private var addingSong: NeteaseSong?
     @State private var error: String?
     var body: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                AlbumTrackRow(track: song.track, displayNumber: String(index + 1), additionalActions: actions(song)) {
+                AlbumTrackRow(track: song.track, displayNumber: String(index + 1), isDownloaded: song.track.remoteKey.map(downloadedKeys.contains) == true, additionalActions: actions(song)) {
                     player.play(songs.map(\.track), startAt: index, sourceID: sourceID)
                 }
             }
         }
         .task(id: store.revision) { if store.profile != nil && !songs.isEmpty { try? await store.library.loadLikes() } }
+        .task(id: "\(library.contentRevision)/\(songs.map(\.id))") {
+            var keys = Set<RemoteTrackKey>()
+            for id in Set(songs.compactMap { $0.album?.id }) {
+                if let available = try? await library.localTrackKeys(provider: "netease", collectionID: String(id)) { keys.formUnion(available) }
+            }
+            guard !Task.isCancelled else { return }
+            downloadedKeys = keys
+        }
+        .sheet(isPresented: $showsDownloads) { DownloadQueueSheet() }
         .sheet(item: $addingSong) { song in NeteasePlaylistPicker(songID: song.id) }
         .alert("操作失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("好", role: .cancel) { error = nil }
@@ -295,6 +314,14 @@ struct NeteaseSongRows: View {
             },
             .init(id: "similar", title: "相似歌曲", systemImage: "music.note.list") { openRoute(.netease(.similar(song.id))) }
         ]
+        let downloaded = song.track.remoteKey.map(downloadedKeys.contains) == true
+        actions.append(.init(id: "download", title: downloaded ? "已下载" : "下载", systemImage: downloaded ? "checkmark.circle" : "arrow.down.circle", disabled: downloaded) {
+            Task {
+                await downloads.enqueueNetease(kind: "single", id: song.id, title: song.name, coverURL: song.album?.artworkURL,
+                                               quality: store.playbackSettings.download)
+                showsDownloads = true
+            }
+        })
         for artist in song.artists where artist.id > 0 {
             actions.append(.init(id: "artist/\(artist.id)", title: "歌手：\(artist.name)", systemImage: "person") { openRoute(.netease(.artist(artist.id))) })
         }

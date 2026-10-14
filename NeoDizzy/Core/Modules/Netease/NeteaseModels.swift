@@ -42,10 +42,12 @@ nonisolated struct NeteaseSong: Decodable, Identifiable, Hashable, Sendable {
     let artists: [NeteaseArtist]
     let album: NeteaseAlbum?
     let duration: Double?
+    var trackNumber: Int? = nil
+    var discNumber: String? = nil
     init(id: Int, name: String, artists: [NeteaseArtist], album: NeteaseAlbum?, duration: Double? = nil) {
         self.id = id; self.name = name; self.artists = artists; self.album = album; self.duration = duration
     }
-    enum CodingKeys: String, CodingKey { case id, name, artists, ar, album, al, duration, dt }
+    enum CodingKeys: String, CodingKey { case id, name, artists, ar, album, al, duration, dt, no, cd }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(Int.self, forKey: .id)
@@ -53,6 +55,8 @@ nonisolated struct NeteaseSong: Decodable, Identifiable, Hashable, Sendable {
         artists = try c.decodeIfPresent([NeteaseArtist].self, forKey: .ar) ?? c.decodeIfPresent([NeteaseArtist].self, forKey: .artists) ?? []
         album = try c.decodeIfPresent(NeteaseAlbum.self, forKey: .al) ?? c.decodeIfPresent(NeteaseAlbum.self, forKey: .album)
         duration = try c.decodeIfPresent(Double.self, forKey: .dt) ?? c.decodeIfPresent(Double.self, forKey: .duration)
+        trackNumber = try c.decodeIfPresent(Int.self, forKey: .no)
+        discNumber = (try? c.decode(String.self, forKey: .cd)) ?? (try? c.decode(Int.self, forKey: .cd)).map(String.init)
     }
     var track: Track {
         Track(discID: String(album?.id ?? 0), number: String(id), title: name,
