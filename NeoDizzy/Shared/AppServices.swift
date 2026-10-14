@@ -23,6 +23,11 @@ final class AppServices {
         dizzyLab = DizzyLabServices(library: library)
         netease = NeteaseStore()
         neteaseDownloads = NeteaseDownloadProvider(api: netease.api, library: library)
+        neteaseDownloads.playlistCompleted = { [weak library] title, id, tracks in
+            guard let library else { return }
+            try await library.savePlaylist(title: title, tracks: tracks,
+                                           source: LibrarySource(provider: "netease", kind: "playlist", id: id))
+        }
         dizzyLab.downloads.register(neteaseDownloads)
         let resolver = StreamResolver(localFile: { [weak library] track in
             library?.localFile(for: track)

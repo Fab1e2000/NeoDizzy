@@ -51,7 +51,7 @@ nonisolated struct DownloadJob: Identifiable, Codable, Sendable {
     var failureMessage: String?
 
     var isActive: Bool { state.isActive }
-    var canRetry: Bool { state == .failed || state == .cancelled }
+    var canRetry: Bool { state == .failed || state == .cancelled || (state == .completed && transfers.contains { $0.state == .failed }) }
     var statusText: String {
         switch state {
         case .queued: "等待下载"

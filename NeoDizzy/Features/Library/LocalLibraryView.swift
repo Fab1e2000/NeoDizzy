@@ -2,6 +2,8 @@ import SwiftUI
 
 struct LocalLibraryView: View {
     @Environment(OfflineLibraryStore.self) private var library
+    @State private var showsPlaylists = false
+    @State private var showsDownloads = false
 
     private struct AlbumItem: Identifiable {
         let id: String
@@ -21,6 +23,15 @@ struct LocalLibraryView: View {
 
     var body: some View {
         MainTabPage(title: String(localized: "本地库")) {
+            Picker("本地库", selection: $showsPlaylists) {
+                Text("专辑").tag(false)
+                Text("歌单").tag(true)
+            }.pickerStyle(.segmented)
+            Button("下载队列", systemImage: "arrow.down.circle") { showsDownloads = true }
+                .font(.subheadline)
+            if showsPlaylists {
+                LocalPlaylistsView()
+            } else {
             if items.isEmpty && (library.isImporting || library.isScanning) {
                 ContentSkeleton(layout: .grid)
             }
@@ -37,6 +48,12 @@ struct LocalLibraryView: View {
                         NavigationLink(value: album.route) {
                             VStack(alignment: .leading, spacing: 6) {
                                 ArtworkImage(url: album.coverURL)
+                                    .overlay(alignment: .bottomTrailing) {
+                                        if let local = library.localAlbum(id: String(album.id.dropFirst(6))), let label = library.sourceLabel(for: local) {
+                                            Text(label).font(.caption2.weight(.semibold)).padding(5)
+                                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6)).padding(6)
+                                        }
+                                    }
                                 Text(album.title).font(.subheadline.weight(.semibold)).lineLimit(2)
                                 Text(album.artist).font(.caption).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
                                 Text("\(album.count) 首").font(.caption).foregroundStyle(DizzyPalette.mutedText)
@@ -50,13 +67,16 @@ struct LocalLibraryView: View {
                     }
                 }
             }
+            }
         }
+        .sheet(isPresented: $showsDownloads) { DownloadQueueSheet() }
     }
 }
 
 struct LocalAlbumDetailView: View {
     let id: String
     @State private var editing: AudioTagEditTarget?
+    @State private var playlistTrack: Track?
     @State private var batchAlbum: LocalAlbum?
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
@@ -84,7 +104,7 @@ struct LocalAlbumDetailView: View {
                             ForEach(entries, id: \.track.id) { entry in
                                 AlbumTrackRow(track: entry.track, editTags: {
                                     editing = AudioTagEditTarget(track: entry.track, url: entry.fileURL)
-                                }) {
+                                }, additionalActions: [AlbumRowAction(id: "playlist", title: "加入歌单", systemImage: "text.badge.plus", perform: { playlistTrack = entry.track })]) {
                                     if let index = album.tracks.firstIndex(where: { $0.id == entry.track.id }) {
                                         player.play(album.tracks, startAt: index)
                                     }
@@ -101,6 +121,7 @@ struct LocalAlbumDetailView: View {
             }
         }
         .dizzyPageBackground()
+        .sheet(item: $playlistTrack) { LocalPlaylistPicker(track: $0) }
         .sheet(item: $editing) { AudioTagEditorSheet(target: $0) }
         .sheet(item: $batchAlbum) { BatchAudioTagEditorSheet(album: $0) }
         .safeAreaPadding(.top, 5)

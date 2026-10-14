@@ -131,16 +131,11 @@ import Observation
                         try Task.checkCancellation()
                         try await library.commit(staging: staging, folderName: prepared.folderName, provenance: prepared.provenance)
                         updateTransfer(id, file.id) { $0.state = .completed }
-                        // 提交成功后保留结果，即使取消恰好在提交时到达。
-                        if current.transfers.count == 1 { update(id) { $0.state = .completed; $0.progress = 1 } }
+                        // 文件已落盘，但歌单等收尾操作完成前，任务仍保持可恢复状态。
                     } catch is CancellationError { throw CancellationError() }
                     catch { updateTransfer(id, file.id) { $0.state = .failed; $0.failure = DownloadTransport.message(for: error) } }
                     try? FileManager.default.removeItem(at: transport.archiveURL(file.id))
                     save()
-                    if current.transfers.count == 1, jobs.first(where: { $0.id == id })?.state == .completed {
-                        try await provider.completed(current.requestData, transfers: jobs.first(where: { $0.id == id })?.transfers ?? current.transfers)
-                        return
-                    }
                 } else if let file = current.transfers.first(where: { $0.state == .queued }) {
                     do {
                         guard let source = try await provider.source(file) else {

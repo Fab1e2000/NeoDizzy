@@ -5,6 +5,7 @@ import CryptoKit
 actor LocalLibraryScanner {
     struct Result: Sendable {
         var albums: [LocalAlbum]
+        var playlists: [LocalPlaylist] = []
         var issues: [String]
     }
     private struct CachedFile: Codable {
@@ -173,7 +174,30 @@ actor LocalLibraryScanner {
         try Task.checkCancellation()
         cache = index
         try JSONEncoder().encode(index).write(to: cacheURL.appendingPathComponent("index.json"), options: .atomic)
-        return Result(albums: albums.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }, issues: issues)
+        var playlists: [LocalPlaylist] = []
+        let tracks = Dictionary(albums.flatMap(\.entries).map { (Self.canonical($0.fileURL), $0.track) }, uniquingKeysWith: { first, _ in first })
+        var seenPlaylists = Set<String>()
+        for folder in folders {
+            try Task.checkCancellation()
+            var coordinationError: NSError?
+            NSFileCoordinator().coordinate(readingItemAt: folder.url, options: [], error: &coordinationError) { root in
+                do {
+                    let directory = try LocalPlaylistFile.checked("Playlists", root: root)
+                    guard FileManager.default.fileExists(atPath: directory.path) else { return }
+                    let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                    for file in files.sorted(by: { $0.path < $1.path }) where file.pathExtension.lowercased() == "m3u8" {
+                        guard seenPlaylists.insert(Self.canonical(file)).inserted else { continue }
+                        do {
+                            let (playlist, failures) = try LocalPlaylistFile.read(file, root: root, tracks: tracks)
+                            playlists.append(playlist)
+                            issues += failures
+                        } catch { issues.append("\(file.lastPathComponent)：\(error.localizedDescription)") }
+                    }
+                } catch { issues.append("Playlists：\(error.localizedDescription)") }
+            }
+            if let coordinationError { issues.append(coordinationError.localizedDescription) }
+        }
+        return Result(albums: albums.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }, playlists: playlists, issues: issues)
     }
 
     nonisolated static func canonical(_ url: URL) -> String { url.standardizedFileURL.resolvingSymlinksInPath().path }
@@ -204,7 +228,7 @@ actor LocalLibraryScanner {
                     try Task.checkCancellation()
                     do {
                         let values = try file.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
-                        if values.isSymbolicLink == true || file.lastPathComponent == "__MACOSX" {
+                        if values.isSymbolicLink == true || file.lastPathComponent == "__MACOSX" || file.lastPathComponent == "Playlists" {
                             enumerator.skipDescendants(); continue
                         }
                         if values.isRegularFile == true, AudioFileMatcher.extensions.contains(file.pathExtension.lowercased()) {

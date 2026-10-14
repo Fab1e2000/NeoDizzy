@@ -7,6 +7,7 @@ final class OfflineLibraryStore {
     private(set) var collections: [LibraryCollection] = [] {
         didSet { contentRevision += 1; rebuildSourceIndex() }
     }
+    private(set) var localPlaylists: [LocalPlaylist] = []
     private(set) var localAlbums: [LocalAlbum] = [] {
         didSet { contentRevision += 1 }
     }
@@ -228,6 +229,7 @@ final class OfflineLibraryStore {
                 $0.title.localizedStandardCompare($1.title) == .orderedAscending
             }
             localAlbums = local.albums
+            localPlaylists = local.playlists
             saveIndexSnapshot()
             issues += local.issues
             issue = issues.isEmpty ? nil : issues.prefix(5).joined(separator: "\n")
