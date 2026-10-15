@@ -15,6 +15,10 @@ nonisolated struct NeteaseDownloadMetadata: Codable {
     var actualQuality: String?
     var type: String?
     var bitrate: Int?
+    var playlistID: String? = nil
+    var playlistTitle: String? = nil
+    var playlistPosition: Int? = nil
+    var playlistArtworkURL: URL? = nil
 }
 
 final class NeteaseDownloadProvider: DownloadProvider {
@@ -28,6 +32,7 @@ final class NeteaseDownloadProvider: DownloadProvider {
     func plan(_ data: Data) async throws -> [DownloadTransfer] {
         let envelope = try JSONDecoder().decode(DownloadRequest.self, from: data)
         let request = try JSONDecoder().decode(NeteaseDownloadRequest.self, from: envelope.payload)
+        var playlistArtworkURL = envelope.coverURL
         var songs: [NeteaseSong]
         var albumSongs: [Int: [NeteaseSong]] = [:]
         var albumArtists: [Int: String] = [:]
@@ -39,6 +44,7 @@ final class NeteaseDownloadProvider: DownloadProvider {
             albumArtists[request.id] = result.0.artist?.name
         case "playlist":
             let playlist = try await api.playlist(request.id)
+            playlistArtworkURL = playlist.artworkURL ?? envelope.coverURL
             let ids = playlist.trackIds?.map(\.id) ?? playlist.tracks?.map(\.id) ?? []
             songs = []
             for start in stride(from: 0, to: ids.count, by: 100) {
@@ -53,7 +59,7 @@ final class NeteaseDownloadProvider: DownloadProvider {
         guard !songs.isEmpty else { throw DownloadFailure.songUnavailable }
         var result: [DownloadTransfer] = []
         var seen = Set<Int>()
-        for song in songs where seen.insert(song.id).inserted {
+        for (position, song) in songs.enumerated() where seen.insert(song.id).inserted {
             try Task.checkCancellation()
             if let album = song.album, albumSongs[album.id] == nil {
                 do {
@@ -64,17 +70,29 @@ final class NeteaseDownloadProvider: DownloadProvider {
                 catch { albumSongs[album.id] = [] }
             }
             let number = max(1, song.trackNumber ?? albumSongs[song.album?.id ?? 0]?.firstIndex(where: { $0.id == song.id }).map { $0 + 1 } ?? 1)
-            let metadata = NeteaseDownloadMetadata(track: song.track,
+            var metadata = NeteaseDownloadMetadata(track: song.track,
                 albumArtist: albumArtists[song.album?.id ?? 0] ?? song.album?.artist?.name ?? song.track.artists, trackNumber: number,
                 discNumber: max(1, Int(song.discNumber ?? "1") ?? 1), quality: request.quality)
-            let state: DownloadTransfer.State = library.localFile(for: song.track) == nil ? .queued : .completed
+            if request.kind == "playlist" {
+                metadata.playlistID = String(request.id)
+                metadata.playlistTitle = envelope.title
+                metadata.playlistPosition = position + 1
+                metadata.playlistArtworkURL = playlistArtworkURL
+            }
+            let state: DownloadTransfer.State = localFile(for: metadata) == nil ? .queued : .completed
             result.append(DownloadTransfer(id: UUID(), metadata: try JSONEncoder().encode(metadata), state: state))
         }
         return result
     }
+    private func localFile(for metadata: NeteaseDownloadMetadata) -> URL? {
+        if let playlistID = metadata.playlistID {
+            return library.collection(provider: id, kind: "playlist", id: playlistID)?.localFile(for: metadata.track)
+        }
+        return library.collection(provider: id, kind: "album", id: metadata.track.discID)?.localFile(for: metadata.track)
+    }
     func source(_ transfer: DownloadTransfer) async throws -> DownloadSource? {
         var metadata = try JSONDecoder().decode(NeteaseDownloadMetadata.self, from: transfer.metadata)
-        if library.localFile(for: metadata.track) != nil { return nil }
+        if localFile(for: metadata) != nil { return nil }
         guard let songID = (metadata.track.remoteSource?.itemID).flatMap(Int.init),
               let albumID = Int(metadata.track.discID), albumID > 0 else { throw DownloadFailure.songUnavailable }
         let source = try await api.downloadSource(songID, quality: metadata.quality)
@@ -83,13 +101,17 @@ final class NeteaseDownloadProvider: DownloadProvider {
     }
     func finalize(_ file: URL, metadata data: Data, staging: URL) async throws -> PreparedDownload {
         let metadata = try JSONDecoder().decode(NeteaseDownloadMetadata.self, from: data)
-        guard let type = metadata.type, AudioFileMatcher.extensions.contains(type), let level = metadata.actualQuality,
+        guard let declaredType = metadata.type, let level = metadata.actualQuality,
               let songID = (metadata.track.remoteSource?.itemID).flatMap(Int.init) else { throw DownloadFailure.songUnavailable }
+        let audio = try await NeteaseDownloadedAudio.prepare(file, declaredType: declaredType.lowercased(), staging: staging)
+        defer { try? FileManager.default.removeItem(at: audio) }
+        try Task.checkCancellation()
+        let type = audio.pathExtension
         let title = OfflinePaths.directoryName(metadata.track.title, fallback: String(songID))
-        let filename = String(format: "%02d", metadata.trackNumber) + " " + title + "." + type
+        let filename = String(format: "%02d", metadata.playlistPosition ?? metadata.trackNumber) + " " + title + (metadata.playlistID == nil ? "" : " [\(songID)]") + "." + type
         let path = filename
         let destination = try OfflinePaths.file(path, inside: staging)
-        try FileManager.default.copyItem(at: file, to: destination)
+        try FileManager.default.moveItem(at: audio, to: destination)
         let access = OfflineFolderAccess(url: staging)
         let snapshot = try await AudioTagEditor.shared.read(destination, access: access)
         var tags = snapshot.document
@@ -113,12 +135,15 @@ final class NeteaseDownloadProvider: DownloadProvider {
         let track = Track(discID: metadata.track.discID, number: String(metadata.trackNumber), title: metadata.track.title,
                           artists: metadata.track.artists, albumTitle: metadata.track.albumTitle, coverURL: metadata.track.coverURL,
                           duration: metadata.track.duration, remoteSource: metadata.track.remoteSource)
-        let manifest = LibraryManifest(source: LibrarySource(provider: id, kind: "album", id: track.discID),
-            title: track.albumTitle, artist: metadata.albumArtist, artworkURL: track.coverURL,
+        let kind = metadata.playlistID == nil ? "album" : "playlist"
+        let collectionID = metadata.playlistID ?? track.discID
+        let collectionTitle = metadata.playlistTitle ?? track.albumTitle
+        let manifest = LibraryManifest(source: LibrarySource(provider: id, kind: kind, id: collectionID),
+            title: collectionTitle, artist: metadata.albumArtist, artworkURL: metadata.playlistID == nil ? track.coverURL : metadata.playlistArtworkURL,
             entries: [.init(relativePath: path, itemID: String(songID), track: track, quality: level)])
-        let name = OfflinePaths.directoryName("\(metadata.albumArtist) - \(track.albumTitle)", fallback: track.discID)
+        let name = (metadata.playlistID == nil ? "" : "歌单/") + OfflinePaths.directoryName(collectionTitle, fallback: collectionID)
         let folderName: String
-        if let existing = library.collection(provider: id, kind: "album", id: track.discID), let root = library.downloadRoot,
+        if let existing = library.collection(provider: id, kind: kind, id: collectionID), let root = library.downloadRoot,
            let relative = try? OfflinePaths.relativePath(of: existing.directoryURL, inside: root) { folderName = relative }
         else { folderName = name }
         return PreparedDownload(folderName: folderName, provenance: .collection(manifest, merge: true, preserving: [], placeholderMarker: nil))
@@ -126,7 +151,8 @@ final class NeteaseDownloadProvider: DownloadProvider {
     func completed(_ data: Data, transfers: [DownloadTransfer]) async throws {
         let envelope = try JSONDecoder().decode(DownloadRequest.self, from: data)
         let request = try JSONDecoder().decode(NeteaseDownloadRequest.self, from: envelope.payload)
-        if request.kind == "playlist", let playlistCompleted {
+        if request.kind == "playlist", let playlistCompleted,
+           !transfers.contains(where: { (try? JSONDecoder().decode(NeteaseDownloadMetadata.self, from: $0.metadata).playlistID) != nil }) {
             let tracks = try transfers.filter { $0.state == .completed }.map { try JSONDecoder().decode(NeteaseDownloadMetadata.self, from: $0.metadata).track }
             try await playlistCompleted(envelope.title, String(request.id), tracks)
         }

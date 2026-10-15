@@ -41,7 +41,7 @@ extension NeteaseAPI {
                           let text = source.url, var url = URLComponents(string: text),
                           ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil,
                           url.user == nil, url.password == nil,
-                          let type = source.type?.lowercased(), AudioFileMatcher.extensions.contains(type),
+                          let type = source.type?.lowercased(), (type == "ncm" || AudioFileMatcher.extensions.contains(type)),
                           let level = source.level, !level.isEmpty else { continue }
                     url.scheme = "https"
                     guard let secureURL = url.url else { continue }

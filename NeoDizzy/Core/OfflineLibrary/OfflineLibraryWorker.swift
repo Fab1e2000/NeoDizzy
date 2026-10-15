@@ -56,8 +56,15 @@ actor OfflineLibraryWorker {
     }
 
     func scan(_ folder: OfflineFolderAccess) throws -> OfflineScanResult {
-        try coordinatedRead(folder.url) { root in
+        let result = try coordinatedRead(folder.url) { root in
             try Self.scanDirectory(root)
+        }
+        guard result.albums.contains(where: Self.hasLegacyNeteaseName) else { return result }
+        return try coordinatedWrite(folder.url) { root in
+            if try Self.migrateNeteaseAlbumNames(result.albums, in: root) {
+                return try Self.scanDirectory(root)
+            }
+            return result
         }
     }
 
@@ -148,11 +155,12 @@ actor OfflineLibraryWorker {
                 let directory = url.deletingLastPathComponent()
                 do {
                     try manifest.validate(in: directory)
-                } catch OfflineLibraryError.missingTrack(let title) {
+                } catch OfflineLibraryError.missingTrack {
                     let paths = try extractedFiles(in: directory).filter {
                         AudioFileMatcher.extensions.contains(URL(fileURLWithPath: $0).pathExtension.lowercased())
                     }
-                    guard !paths.isEmpty else { throw OfflineLibraryError.missingTrack(title) }
+                    // An empty album left by a previous deletion is not a broken download.
+                    guard !paths.isEmpty else { continue }
                     do {
                         manifest = try manifest.resolvingRenamedFiles(relativePaths: paths, in: directory)
                     } catch OfflineLibraryError.missingTrack {

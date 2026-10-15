@@ -11,6 +11,13 @@ final class OfflineLibraryStore {
     private(set) var localAlbums: [LocalAlbum] = [] {
         didSet { contentRevision += 1 }
     }
+    /// Keep playlist audio indexed for playback, but out of the album page.
+    var visibleAlbums: [LocalAlbum] {
+        let directories = Set(collections.filter { $0.manifest.source.kind == "playlist" }.map { LocalLibraryScanner.canonical($0.directoryURL) })
+        return localAlbums.filter { album in
+            !album.entries.contains { directories.contains(LocalLibraryScanner.canonical($0.fileURL.deletingLastPathComponent())) }
+        }
+    }
     private(set) var scanFolders: [LibraryFolder] = []
     @ObservationIgnored private var scanAccess: [UUID: OfflineFolderAccess] = [:]
     @ObservationIgnored private let scanner: LocalLibraryScanner
@@ -229,7 +236,34 @@ final class OfflineLibraryStore {
                 $0.title.localizedStandardCompare($1.title) == .orderedAscending
             }
             localAlbums = local.albums
-            localPlaylists = local.playlists
+            var playlists = local.playlists
+            let tracksByPath = Dictionary(local.albums.flatMap(\.entries).map { (LocalLibraryScanner.canonical($0.fileURL), $0.track) }, uniquingKeysWith: { first, _ in first })
+            let pathsByTrackID = Dictionary(local.albums.flatMap(\.entries).map { ($0.track.id, LocalLibraryScanner.canonical($0.fileURL)) }, uniquingKeysWith: { first, _ in first })
+            let keysByPath = Dictionary(managed.flatMap { record in
+                record.manifest.entries.compactMap { entry -> (String, RemoteTrackKey)? in
+                    guard let file = try? OfflinePaths.file(entry.relativePath, inside: record.directoryURL) else { return nil }
+                    return (LocalLibraryScanner.canonical(file), RemoteTrackKey(provider: record.manifest.source.provider, itemID: entry.itemID))
+                }
+            }, uniquingKeysWith: { first, _ in first })
+            for record in managed where record.manifest.source.kind == "playlist" {
+                let previous = playlists.first { $0.source == record.manifest.source }
+                playlists.removeAll { $0.source == record.manifest.source }
+                let tracks = record.manifest.entries.sorted { $0.relativePath.localizedStandardCompare($1.relativePath) == .orderedAscending }.compactMap { entry -> Track? in
+                    guard let file = try? OfflinePaths.file(entry.relativePath, inside: record.directoryURL) else { return nil }
+                    return tracksByPath[LocalLibraryScanner.canonical(file)]
+                }
+                // Prefer the playlist's own audio over old references to album copies.
+                // Keep separately added local songs without duplicating downloaded entries.
+                let keys = Set(record.manifest.entries.map { RemoteTrackKey(provider: record.manifest.source.provider, itemID: $0.itemID) })
+                let trackIDs = Set(tracks.map(\.id))
+                let added = (previous?.tracks ?? []).filter { track in
+                    guard !trackIDs.contains(track.id) else { return false }
+                    if let path = pathsByTrackID[track.id], let key = keysByPath[path], keys.contains(key) { return false }
+                    return true
+                }
+                playlists.append(LocalPlaylist(fileURL: previous?.fileURL ?? record.directoryURL.appendingPathComponent(LibraryManifest.filename), title: record.title, tracks: tracks + added, source: record.manifest.source, artworkURL: record.coverURL))
+            }
+            localPlaylists = playlists.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             saveIndexSnapshot()
             issues += local.issues
             issue = issues.isEmpty ? nil : issues.prefix(5).joined(separator: "\n")

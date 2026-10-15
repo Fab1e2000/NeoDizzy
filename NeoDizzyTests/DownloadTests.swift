@@ -275,7 +275,7 @@ struct DownloadProgressThrottleTests {
         let start = ContinuousClock.now
         let emitted3 = throttle.shouldEmit(id: first, written: 1, expected: -1, now: start)
         #expect(emitted3)
-        let emitted4 = !throttle.shouldEmit(id: first, written: 2, expected: -1, now: start.advanced(by: .seconds(1)))
+        let emitted4 = throttle.shouldEmit(id: first, written: 2, expected: -1, now: start.advanced(by: .milliseconds(250)))
         #expect(emitted4)
         let emitted5 = throttle.shouldEmit(id: second, written: 1, expected: 100, now: start)
         #expect(emitted5)

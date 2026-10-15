@@ -6,9 +6,17 @@ final class AppSettingsPresentation {
     var isPresented = false
 }
 
+/// A page-owned action grouped with the shared header controls.
+struct PageHeaderAction {
+    let title: String
+    let systemImage: String
+    let perform: () -> Void
+}
+
 /// 设置入口在所有模块中一致；只有提供账号能力的模块才显示头像。
 struct PageHeader: View {
     let title: String
+    var action: PageHeaderAction? = nil
     @Environment(AppSettingsPresentation.self) private var settings: AppSettingsPresentation?
     @Environment(ModuleRegistry.self) private var modules: ModuleRegistry?
     @Environment(ModuleHost.self) private var host: ModuleHost?
@@ -35,6 +43,16 @@ struct PageHeader: View {
     // This custom page header uses the same grouping while keeping account and settings separate.
     private var headerActions: some View {
         HStack(spacing: 0) {
+            if let action {
+                Button(action: action.perform) {
+                    Image(systemName: action.systemImage)
+                        .font(.title2)
+                        .foregroundStyle(DizzyPalette.text)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.rect)
+                }
+                .accessibilityLabel(action.title)
+            }
             if let entry = accountEntry, let host {
                 Button { modules?.openAccount(for: host.selection) } label: {
                     Group {
@@ -64,7 +82,7 @@ struct PageHeader: View {
             .accessibilityHint("打开应用全局设置")
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, accountEntry == nil ? 0 : 4)
+        .padding(.horizontal, accountEntry == nil && action == nil ? 0 : 4)
         .glassEffect(.regular.interactive(), in: .capsule)
         .accessibilityElement(children: .contain)
     }
@@ -76,18 +94,19 @@ struct PageHeader: View {
 struct MainTabPage<Content: View>: View {
     let title: String
     var onRefresh: (() async -> Void)?
+    var headerAction: PageHeaderAction? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         let page = ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                ScrollingPageHeaderRow { PageHeader(title: title) }
+                ScrollingPageHeaderRow { PageHeader(title: title, action: headerAction) }
                 LazyVStack(alignment: .leading, spacing: 20) { content }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
-        .pageHeaderPlacement { PageHeader(title: title) }
+        .pageHeaderPlacement { PageHeader(title: title, action: headerAction) }
         .dizzyPageBackground()
 
         if let onRefresh {
@@ -126,14 +145,26 @@ extension View {
 private struct PageHeaderPlacement<Header: View>: ViewModifier {
     let header: Header
     @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
-    /// 窗口自身的顶部安全区（状态栏、灵动岛），不含导航栏。
-    @State private var windowTopInset: CGFloat = 0
-
     func body(content: Content) -> some View {
         content
             .safeAreaBar(edge: .top, spacing: 0) {
                 if pinsTitleBar { header.padding(.horizontal, 20).padding(.bottom, 5) }
             }
+            .contentPageNavigationBar()
+    }
+}
+
+extension View {
+    /// Share the root navigation-bar transition without changing a page's header layout.
+    func contentPageNavigationBar() -> some View { modifier(ContentPageNavigationBar()) }
+}
+
+private struct ContentPageNavigationBar: ViewModifier {
+    /// 窗口自身的顶部安全区（状态栏、灵动岛），不含导航栏。
+    @State private var windowTopInset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
             // 页头画在内容里，不需要导航栏让出的空间：忽略整个顶部安全区，只把状态栏的高度加回来，
             // 页头位置与隐藏导航栏时相同。（负的 safeAreaPadding 不会生效。）
             .safeAreaPadding(.top, windowTopInset)

@@ -121,7 +121,9 @@ struct NeteaseCollectionView: View {
                                 player.play(tracks, startAt: shuffled ? Int.random(in: tracks.indices) : 0, sourceID: sourceID)
                                 if player.isShuffled != shuffled { player.toggleShuffle() }
                             }) {
-                                if supportsFavorite {
+                                if route == .liked {
+                                    NeteaseHeartModeButton()
+                                } else if supportsFavorite {
                                     NeteaseCollectionFavorite(playlist: model.playlist, album: model.album)
                                 }
                             }.padding(.horizontal, 20)
@@ -133,9 +135,6 @@ struct NeteaseCollectionView: View {
                         if !model.detailDescription.isEmpty {
                             AlbumDescriptionExcerpt(text: model.detailDescription)
                                 .padding(.horizontal, 20).padding(.bottom, 20)
-                        }
-                        if route == .liked {
-                            NeteaseHeartModeButton().padding(.horizontal, 20).padding(.bottom, 16)
                         }
                         NeteaseSongRows(songs: model.songs, sourceID: sourceID)
                         if !model.songs.isEmpty {

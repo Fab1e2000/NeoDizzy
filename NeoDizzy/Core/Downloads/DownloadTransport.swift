@@ -24,7 +24,6 @@ nonisolated struct DownloadProgressThrottle {
             let finished = expected > 0 && written >= expected
             let becameDeterminate = expected > 0 && previous.expected <= 0
             if !finished && !becameDeterminate {
-                if expected <= 0 && previous.expected <= 0 { return false }
                 if previous.time.duration(to: now) < interval { return false }
             }
         }
@@ -57,7 +56,7 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
         configuration.urlCredentialStorage = nil
         configuration.sessionSendsLaunchEvents = true
         configuration.isDiscretionary = false
-        configuration.httpMaximumConnectionsPerHost = 2
+        configuration.httpMaximumConnectionsPerHost = 6
         configuration.timeoutIntervalForRequest = 60
         configuration.timeoutIntervalForResource = 24 * 60 * 60
         let queue = OperationQueue()

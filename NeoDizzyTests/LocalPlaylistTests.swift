@@ -24,7 +24,7 @@ struct LocalPlaylistTests {
         let (playlist, issues) = try LocalPlaylistFile.read(file, root: root, tracks: [LocalLibraryScanner.canonical(audio): track])
         #expect(playlist.tracks.map(\.id) == [track.id])
         #expect(playlist.source == source)
-        #expect(issues.count == 4)
+        #expect(issues.count == 3)
         // 歌单目录中的音频不成为专辑，也不能借内部符号链接绕过校验。
         try Data("extra".utf8).write(to: root.appendingPathComponent("Playlists/hidden.mp3"))
         try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("Alias"), withDestinationURL: root.appendingPathComponent("Album"))
@@ -34,7 +34,69 @@ struct LocalPlaylistTests {
         #expect(result.albums.count == 1)
         #expect(result.albums.first?.tracks.count == 1)
         #expect(result.playlists.first?.tracks.count == 1)
-        #expect(result.issues.count == 4)
+        #expect(result.issues.count == 3)
+    }
+
+    @Test @MainActor func deletesAlbumAudioAndRefreshesLibraryWithoutRemovingOtherFiles() async throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cover = root.appendingPathComponent("Album/cover.jpg")
+        try Data("cover".utf8).write(to: cover)
+        let nested = root.appendingPathComponent("Album/Nested")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let other = nested.appendingPathComponent("other.mp3")
+        try Data("other".utf8).write(to: other)
+        let suite = "AlbumDeletion.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { _ in AudioMetadata(title: "歌曲") })
+        let library = OfflineLibraryStore(defaults: defaults, scanner: scanner, libraryRoot: root)
+        await library.restore()
+        let album = try #require(library.localAlbums.first { $0.entries.contains { $0.fileURL.lastPathComponent == "song.mp3" } })
+        try await library.deleteAlbum(album)
+        #expect(library.localAlbum(id: album.id) == nil)
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Album/song.mp3").path))
+        #expect(FileManager.default.fileExists(atPath: cover.path))
+        #expect(FileManager.default.fileExists(atPath: other.path))
+        #expect(library.localAlbums.count == 1)
+    }
+
+    @Test @MainActor func batchDeletionRemovesOnlySelectedAlbums() async throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for name in ["Second", "Keep"] {
+            let directory = root.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data("audio".utf8).write(to: directory.appendingPathComponent("song.mp3"))
+        }
+        let suite = "BatchDeletion.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { _ in AudioMetadata(title: "歌曲") })
+        let library = OfflineLibraryStore(defaults: defaults, scanner: scanner, libraryRoot: root)
+        await library.restore()
+        #expect(library.localAlbums.count == 3)
+        let selected = library.localAlbums.filter { $0.entries.first?.fileURL.deletingLastPathComponent().lastPathComponent != "Keep" }
+        try await library.deleteAlbums(ids: Set(selected.map(\.id)))
+        #expect(library.localAlbums.count == 1)
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("Keep/song.mp3").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Album/song.mp3").path))
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Second/song.mp3").path))
+    }
+
+    @Test func albumDeletionRejectsUnsafeTargetsBeforeDeletingAnyFiles() async throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let song = root.appendingPathComponent("Album/song.mp3")
+        let alias = root.appendingPathComponent("alias.mp3")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: song)
+        let worker = OfflineLibraryWorker()
+        for invalid in [alias, root.appendingPathComponent("Album"), root.deletingLastPathComponent().appendingPathComponent("outside.mp3")] {
+            await #expect(throws: (any Error).self) {
+                try await worker.deleteAlbumFiles([song, invalid], access: OfflineFolderAccess(url: root))
+            }
+            #expect(FileManager.default.fileExists(atPath: song.path))
+        }
     }
 
     @Test @MainActor func createAppendDeleteNeverChangesAudioAndSourcePlaylistUpdatesInPlace() async throws {

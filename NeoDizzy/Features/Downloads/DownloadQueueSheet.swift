@@ -7,6 +7,7 @@ struct DownloadQueueSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView { DownloadQueueSection(jobs: downloads.jobs).padding(20) }
+                .dizzyPageBackground()
                 .navigationTitle("下载")
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
         }

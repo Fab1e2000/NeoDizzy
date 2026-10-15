@@ -12,6 +12,7 @@ final class LocalLibraryModule: AppModule {
         guard route.moduleID == descriptor.id, let destination = route.destination.base as? LocalLibraryRoute else { return nil }
         switch destination {
         case .album(let id): return AnyView(LocalAlbumDetailView(id: id))
+        case .playlist(let id): return AnyView(LocalPlaylistDetailView(id: id))
         }
     }
     func handleURL(_ url: URL, host: ModuleHost) -> Bool {

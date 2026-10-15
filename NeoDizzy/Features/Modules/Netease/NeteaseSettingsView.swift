@@ -57,15 +57,15 @@ struct NeteaseHeartModeButton: View {
             if player.isHeartMode { player.disableHeartMode() }
             else { starting = true }
         } label: {
-            HStack {
-                Label(player.isHeartMode ? "退出心动模式" : "心动模式", systemImage: "heart.circle.fill")
-                Spacer()
+            Group {
                 if starting { ProgressView() }
+                else { Image(systemName: player.isHeartMode ? "heart.fill" : "heart") }
             }
-            .padding(.vertical, 10)
-            .contentShape(.rect)
+            .font(.title2.weight(.semibold))
+            .frame(width: 30, height: 30)
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel(player.isHeartMode ? "退出心动模式" : "心动模式")
+        .accessibilityValue(player.isHeartMode ? "已开启" : "未开启")
         .disabled(starting)
         .task(id: starting) {
             guard starting else { return }

@@ -5,8 +5,30 @@ import Observation
 @MainActor
 final class DownloadProgress {
     var fraction: Double?
+    var receivedBytes: Int64 = 0
+    var expectedBytes: Int64 = 0
+    var bytesPerSecond: Double = 0
+    var updatedAt: Date = .distantPast
+    @ObservationIgnored private var sample: (time: ContinuousClock.Instant, bytes: Int64)?
 
     init(fraction: Double?) { self.fraction = fraction }
+
+    func update(received: Int64, expected: Int64, now: ContinuousClock.Instant = .now) {
+        if let sample {
+            let elapsed = sample.time.duration(to: now).components
+            let seconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+            if seconds > 0 { bytesPerSecond = Double(max(0, received - sample.bytes)) / seconds }
+        }
+        sample = (now, received)
+        receivedBytes = received
+        expectedBytes = expected
+        fraction = expected > 0 ? min(1, Double(received) / Double(expected)) : nil
+        updatedAt = .now
+    }
+
+    func speed(at date: Date) -> Double { date.timeIntervalSince(updatedAt) < 2 ? bytesPerSecond : 0 }
+    func finish() { bytesPerSecond = 0; sample = nil }
+
 }
 
 /// A menu choice, not a cached authorization: enqueue and retry always fetch a new page.
@@ -53,7 +75,9 @@ nonisolated struct DownloadJob: Identifiable, Codable, Sendable {
     var isActive: Bool { state.isActive }
     var canRetry: Bool { state == .failed || state == .cancelled || (state == .completed && transfers.contains { $0.state == .failed }) }
     var statusText: String {
-        switch state {
+        if isActive, transfers.contains(where: { $0.state == .downloading }),
+           transfers.contains(where: { $0.state == .processing }) { return "正在下载与处理音频" }
+        return switch state {
         case .queued: "等待下载"
         case .preparing: "正在获取下载链接"
         case .downloading: "正在下载"

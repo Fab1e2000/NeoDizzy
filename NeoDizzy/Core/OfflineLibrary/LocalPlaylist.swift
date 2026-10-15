@@ -6,6 +6,8 @@ nonisolated struct LocalPlaylist: Identifiable, Sendable {
     let title: String
     let tracks: [Track]
     let source: LibrarySource?
+    var artworkURL: URL? = nil
+    var coverURL: URL? { artworkURL ?? tracks.first?.coverURL }
 }
 
 /// 歌单只保存引用；所有路径先按根目录归一化，再沿途拒绝符号链接。
@@ -62,7 +64,9 @@ nonisolated enum LocalPlaylistFile {
             guard !line.isEmpty, !line.hasPrefix("#") else { continue }
             do {
                 let audio = try resolve(line, root: root)
-                guard let track = tracks[LocalLibraryScanner.canonical(audio)], FileManager.default.fileExists(atPath: audio.path) else {
+                // Deleted local audio is no longer a playlist item, not a persistent library warning.
+                guard FileManager.default.fileExists(atPath: audio.path) else { continue }
+                guard let track = tracks[LocalLibraryScanner.canonical(audio)] else {
                     throw OfflineLibraryError.unsafePath(line)
                 }
                 entries.append(track)
@@ -109,7 +113,7 @@ extension OfflineLibraryStore {
         }
         let previous = existing ?? source.flatMap { value in localPlaylists.first { $0.source == value } }
         try await performImport { worker, access in
-            try await worker.writePlaylist(title: title, entries: entries, source: source ?? previous?.source, existing: previous?.fileURL, access: access)
+            try await worker.writePlaylist(title: title, entries: entries, source: source ?? previous?.source, existing: previous?.fileURL.pathExtension == "m3u8" ? previous?.fileURL : nil, access: access)
             return nil
         }
         await scan(refreshMetadata: false)
@@ -121,6 +125,13 @@ extension OfflineLibraryStore {
     }
 
     func deletePlaylist(_ playlist: LocalPlaylist) async throws {
+        if let source = playlist.source,
+           let record = collection(provider: source.provider, kind: source.kind, id: source.id) {
+            let directory = LocalLibraryScanner.canonical(record.directoryURL)
+            let ids = Set(localAlbums.filter { $0.entries.contains { LocalLibraryScanner.canonical($0.fileURL.deletingLastPathComponent()) == directory } }.map(\.id))
+            try await deleteAlbums(ids: ids)
+        }
+        guard playlist.fileURL.pathExtension == "m3u8" else { return }
         try await performImport { worker, access in
             try await worker.deletePlaylist(playlist.fileURL, access: access)
             return nil

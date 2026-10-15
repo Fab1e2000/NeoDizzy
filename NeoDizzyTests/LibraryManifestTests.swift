@@ -9,6 +9,56 @@ struct LibraryManifestTests {
               remoteSource: provider == "dizzylab" ? nil : RemoteTrackSource(providerID: provider, itemID: "123"))
     }
 
+    @Test func explicitDeletionRemovesManifestAndPlaylistReferences() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let album = root.appendingPathComponent("Album")
+        try FileManager.default.createDirectory(at: album, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let audio = album.appendingPathComponent("01.wav")
+        try Data("audio".utf8).write(to: audio)
+        let song = track("netease")
+        let manifest = LibraryManifest(source: LibrarySource(provider: "netease", kind: "album", id: "album"),
+            title: "专辑", artist: "歌手", entries: [.init(relativePath: "01.wav", itemID: "123", track: song, quality: "lossless")])
+        let file = album.appendingPathComponent(LibraryManifest.filename)
+        try JSONEncoder().encode(manifest).write(to: file)
+        try LocalPlaylistFile.write(title: "歌单", entries: [(song, audio)], source: nil, existing: nil, root: root)
+        let worker = OfflineLibraryWorker()
+        try await worker.deleteAlbumFiles([audio], access: OfflineFolderAccess(url: root), manifests: [file])
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        #expect(try OfflineLibraryWorker.scanDirectory(root).issues.isEmpty)
+        let playlist = root.appendingPathComponent("Playlists/歌单.m3u8")
+        let result = try LocalPlaylistFile.read(playlist, root: root, tracks: [:])
+        #expect(result.0.tracks.isEmpty)
+        #expect(result.1.isEmpty)
+        #expect(!(try String(contentsOf: playlist, encoding: .utf8)).contains("01.wav"))
+        // Old versions left the manifest behind. A later scan must recover without warning.
+        try JSONEncoder().encode(manifest).write(to: file)
+        let restored = try OfflineLibraryWorker.scanDirectory(root)
+        #expect(restored.albums.isEmpty)
+        #expect(restored.issues.isEmpty)
+    }
+
+    @Test func partialDeletionPreservesRemainingManifestEntry() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = track("netease")
+        let second = Track(discID: "album", number: "2", title: "保留曲目", artists: "歌手", albumTitle: "专辑", coverURL: nil,
+                           remoteSource: RemoteTrackSource(providerID: "netease", itemID: "456"))
+        for path in ["01.wav", "02.wav"] { try Data("audio".utf8).write(to: root.appendingPathComponent(path)) }
+        let manifest = LibraryManifest(source: LibrarySource(provider: "netease", kind: "album", id: "album"),
+            title: "专辑", artist: "歌手", entries: [
+                .init(relativePath: "01.wav", itemID: "123", track: first, quality: "lossless"),
+                .init(relativePath: "02.wav", itemID: "456", track: second, quality: "lossless")])
+        let file = root.appendingPathComponent(LibraryManifest.filename)
+        try JSONEncoder().encode(manifest).write(to: file)
+        try await OfflineLibraryWorker().deleteAlbumFiles([root.appendingPathComponent("01.wav")], access: OfflineFolderAccess(url: root), manifests: [file])
+        let result = try OfflineLibraryWorker.scanDirectory(root)
+        #expect(result.issues.isEmpty)
+        #expect(result.albums.first?.manifest.entries.map(\.itemID) == ["456"])
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("02.wav").path))
+    }
+
     @Test func legacyReadDoesNotRewriteFiles() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

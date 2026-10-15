@@ -1,7 +1,7 @@
 import Foundation
 
 nonisolated struct DownloadTransfer: Codable, Sendable, Identifiable {
-    enum State: String, Codable, Sendable { case queued, downloading, downloaded, completed, failed }
+    enum State: String, Codable, Sendable { case queued, downloading, downloaded, processing, completed, failed }
     let id: UUID
     var metadata: Data
     var state: State = .queued

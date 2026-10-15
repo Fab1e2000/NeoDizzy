@@ -4,11 +4,13 @@ import SwiftUI
 struct AppSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ModuleSettings.self) private var tabs
+    @Environment(DownloadStore.self) private var downloads
     @Environment(ModuleRegistry.self) private var modules
     @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
 
     var body: some View {
         @Bindable var tabs = tabs
+        @Bindable var downloads = downloads
         NavigationStack {
             List {
                 Section("外观") {
@@ -46,6 +48,19 @@ struct AppSettingsView: View {
                     NavigationLink { MusicFolderView() } label: {
                         Label("音乐文件夹", systemImage: "folder")
                     }
+                }
+                .listRowBackground(DizzyPalette.surface)
+
+                Section {
+                    Picker("并行下载数量", selection: $downloads.concurrentDownloadCount) {
+                        ForEach(Array(DownloadStore.concurrentDownloadRange), id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
+                    }
+                } header: {
+                    Text("下载")
+                } footer: {
+                    Text("下载与音频处理同时进行。调低数量后，已开始的下载会继续，后续按新数量调度。")
                 }
                 .listRowBackground(DizzyPalette.surface)
 
