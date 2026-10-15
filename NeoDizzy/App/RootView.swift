@@ -30,6 +30,7 @@ struct RootView: View {
             .environment(nowPlaying)
             .environment(player)
             .environment(offlineLibrary)
+            .environment(services.savedLibrary)
             .environment(themeIcon)
             .environment(\.openRoute, OpenRouteAction { route in
                 settingsPresentation.isPresented = false

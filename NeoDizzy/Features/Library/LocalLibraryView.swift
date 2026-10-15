@@ -1,40 +1,45 @@
 import SwiftUI
 
+/// 资料库首页：本地文件和手动加入的在线歌曲、专辑、歌单放在一起，按来源筛选。
 struct LocalLibraryView: View {
     @Environment(OfflineLibraryStore.self) private var library
+    @Environment(SavedLibraryStore.self) private var saved
     @Environment(DownloadStore.self) private var downloads
     @State private var showsDownloads = false
     @State private var query = ""
-    @State private var recent: [RecentLibraryItem] = []
+    @State private var filter = LibraryOriginFilter.all
+    @State private var localRecent: [RecentLibraryItem] = []
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         MainTabPage(
-            title: "本地库",
-            search: PageSearch(text: $query, prompt: "搜索本地歌曲、专辑、歌手") { },
+            title: "资料库",
+            search: PageSearch(text: $query, prompt: "搜索资料库") { },
             onRefresh: { await library.scan() },
             headerAction: PageHeaderAction(title: "下载队列", systemImage: "arrow.down.circle",
                                            badge: downloads.jobs.filter(\.isActive).count) { showsDownloads = true }
         ) {
             if trimmedQuery.isEmpty {
-                LocalLibraryCategoryList()
-                if let issue = library.issue {
+                LibraryOriginPicker(selection: $filter)
+                LibraryCategoryList(filter: filter)
+                if let issue = library.issue, filter.includes(.local) {
                     Label(issue, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(DizzyPalette.accent)
                 }
+                let recent = recentItems
                 if recent.isEmpty && (library.isImporting || library.isScanning) {
                     ContentSkeleton(layout: .grid)
                 } else if recent.isEmpty {
-                    ContentUnavailableView("还没有本地专辑", systemImage: "music.note.list",
-                        description: Text("从「设置 › 音乐文件夹」导入音乐，下载的专辑也会显示在这里。"))
+                    ContentUnavailableView("资料库还是空的", systemImage: "music.note.list",
+                        description: Text("导入音乐，或在网易云、DizzyLab 的歌曲和专辑菜单里选「加入资料库」。"))
                 } else {
                     Text("最近添加").font(.title2.bold()).accessibilityAddTraits(.isHeader)
                     LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                        ForEach(recent) { RecentLibraryCard(item: $0) }
+                        ForEach(recent) { LibraryShelfCard(item: $0, showsOrigin: filter == .all) }
                     }
                 }
             } else {
-                LocalLibrarySearchResults(query: trimmedQuery)
+                LibrarySearchResults(query: trimmedQuery)
             }
         }
         .scrollDismissesKeyboard(.interactively)
@@ -42,26 +47,50 @@ struct LocalLibraryView: View {
         .task(id: library.contentRevision) {
             let result = await RecentLibraryItem.prepare(albums: library.visibleAlbums, playlists: library.localPlaylists)
             guard !Task.isCancelled else { return }
-            recent = result
+            localRecent = result
         }
+    }
+
+    private var recentItems: [LibraryShelfItem] {
+        let local = filter.includes(.local) ? localRecent.map(\.collection) : []
+        let online = saved.items.filter { $0.kind != .song }.compactMap(LibraryShelfItem.init(saved:))
+            .filter { filter.includes($0.origin) }
+        return Array((local + online).sorted { $0.addedAt > $1.addedAt }.prefix(RecentLibraryItem.limit))
     }
 }
 
-/// 本地库的分类入口，与系统「音乐」的资料库列表一致。
-private struct LocalLibraryCategoryList: View {
-    @Environment(OfflineLibraryStore.self) private var library
+/// 来源筛选：全部 · 本地 · 网易云 · DizzyLab。
+struct LibraryOriginPicker: View {
+    @Binding var selection: LibraryOriginFilter
 
     var body: some View {
+        DiscoveryCategoryPicker(selection: $selection, options: LibraryOriginFilter.choices.map { ($0, $0.label) })
+    }
+}
+
+/// 资料库的分类入口，与系统「音乐」的资料库列表一致；数量跟随来源筛选。
+private struct LibraryCategoryList: View {
+    let filter: LibraryOriginFilter
+    @Environment(OfflineLibraryStore.self) private var library
+    @Environment(SavedLibraryStore.self) private var saved
+
+    var body: some View {
+        let contents = LibraryContents(library: library, saved: saved)
+        let songs = contents.songs(filter)
         VStack(spacing: 0) {
-            row("歌单", systemImage: "music.note.list", count: library.localPlaylists.count, route: .localPlaylists)
+            row("歌单", systemImage: "music.note.list", count: contents.playlists(filter).count, route: .libraryPlaylists(filter))
             Divider().padding(.leading, 42)
-            row("专辑", systemImage: "square.stack", count: library.visibleAlbums.count, route: .localAlbums)
+            row("专辑", systemImage: "square.stack", count: contents.albums(filter).count, route: .libraryAlbums(filter))
             Divider().padding(.leading, 42)
-            row("歌曲", systemImage: "music.note", count: library.visibleAlbums.reduce(0) { $0 + $1.entries.count }, route: .localSongs)
+            row("歌曲", systemImage: "music.note", count: songs.count, route: .librarySongs(filter))
             Divider().padding(.leading, 42)
-            NavigationLink { MusicFolderView() } label: { label("音乐文件夹", systemImage: "folder", count: nil) }
-                .buttonStyle(.plain)
+            row("歌手", systemImage: "music.microphone", count: LibraryContents.artists(in: songs).count, route: .libraryArtists(filter))
             Divider().padding(.leading, 42)
+            if filter.includes(.local) {
+                NavigationLink { MusicFolderView() } label: { label("音乐文件夹", systemImage: "folder", count: nil) }
+                    .buttonStyle(.plain)
+                Divider().padding(.leading, 42)
+            }
         }
     }
 
@@ -87,6 +116,157 @@ private struct LocalLibraryCategoryList: View {
         }
         .frame(minHeight: 50)
         .contentShape(.rect)
+    }
+}
+
+/// 一首资料库歌曲：本地文件，或手动加入的在线歌曲。
+struct LibrarySong: Identifiable {
+    let track: Track
+    let origin: LibraryOrigin
+    /// 在线歌曲在资料库索引里的 ID，用来移除。
+    let savedID: String?
+    var id: String { track.id }
+}
+
+/// 一张专辑或一个歌单，本地的或手动加入的在线条目。
+struct LibraryShelfItem: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let coverURL: URL?
+    let origin: LibraryOrigin
+    let route: AppRoute
+    let addedAt: Date
+    let savedID: String?
+
+    init(id: String, title: String, subtitle: String, coverURL: URL?, origin: LibraryOrigin, route: AppRoute,
+         addedAt: Date, savedID: String? = nil) {
+        self.id = id; self.title = title; self.subtitle = subtitle; self.coverURL = coverURL
+        self.origin = origin; self.route = route; self.addedAt = addedAt; self.savedID = savedID
+    }
+
+    /// 在线专辑与歌单打开各自平台的页面。
+    init?(saved item: SavedLibraryItem) {
+        guard let origin = LibraryOrigin(providerID: item.providerID) else { return nil }
+        let route: AppRoute
+        switch (origin, item.kind) {
+        case (.netease, .album): guard let id = Int(item.itemID) else { return nil }; route = .netease(.album(id))
+        case (.netease, .playlist): guard let id = Int(item.itemID) else { return nil }; route = .netease(.playlist(id))
+        case (.dizzylab, .album): route = .disc(id: item.itemID)
+        default: return nil
+        }
+        let kind = item.kind == .album ? String(localized: "专辑") : String(localized: "歌单")
+        self.init(id: item.id, title: item.title, subtitle: "\(item.subtitle) · \(kind)", coverURL: item.coverURL,
+                  origin: origin, route: route, addedAt: item.addedAt, savedID: item.id)
+    }
+}
+
+/// 把本地库和资料库索引合成一份内容，按来源筛选。
+@MainActor
+struct LibraryContents {
+    let library: OfflineLibraryStore
+    let saved: SavedLibraryStore
+
+    func songs(_ filter: LibraryOriginFilter) -> [LibrarySong] {
+        var songs: [LibrarySong] = []
+        if filter.includes(.local) {
+            songs += library.visibleAlbums.flatMap(\.tracks).map { LibrarySong(track: $0, origin: .local, savedID: nil) }
+        }
+        for item in saved.items(of: .song) {
+            guard let track = item.track, let origin = LibraryOrigin(providerID: item.providerID), filter.includes(origin) else { continue }
+            songs.append(LibrarySong(track: track, origin: origin, savedID: item.id))
+        }
+        return songs.sorted { $0.track.title.localizedStandardCompare($1.track.title) == .orderedAscending }
+    }
+
+    func albums(_ filter: LibraryOriginFilter) -> [LibraryShelfItem] {
+        let local = filter.includes(.local) ? library.visibleAlbums.map { album in
+            LibraryShelfItem(id: album.id, title: album.title, subtitle: album.artist, coverURL: album.coverURL,
+                              origin: .local, route: .localAlbum(id: album.id), addedAt: .distantPast)
+        } : []
+        return local + online(.album, filter)
+    }
+
+    func playlists(_ filter: LibraryOriginFilter) -> [LibraryShelfItem] {
+        let local = filter.includes(.local) ? library.localPlaylists.map { playlist in
+            LibraryShelfItem(id: playlist.id, title: playlist.title, subtitle: "\(playlist.tracks.count) 首", coverURL: playlist.coverURL,
+                              origin: .local, route: .localPlaylist(id: playlist.id), addedAt: .distantPast)
+        } : []
+        return local + online(.playlist, filter)
+    }
+
+    func online(_ kind: SavedLibraryItem.Kind, _ filter: LibraryOriginFilter) -> [LibraryShelfItem] {
+        saved.items(of: kind).compactMap(LibraryShelfItem.init(saved:)).filter { filter.includes($0.origin) }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// 歌手名与歌曲数，按名称排序。多人署名按逗号、斜杠和顿号拆开。
+    static func artists(in songs: [LibrarySong]) -> [(name: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for song in songs {
+            for name in artistNames(song.track) { counts[name, default: 0] += 1 }
+        }
+        return counts.map { ($0.key, $0.value) }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    static func artistNames(_ track: Track) -> [String] {
+        let names = track.artists.split(whereSeparator: { ",，/、".contains($0) })
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return names.isEmpty ? [String(localized: "未知歌手")] : names
+    }
+}
+
+/// 封面角落或歌曲副标题前的来源标记。
+struct LibraryOriginBadge: View {
+    let origin: LibraryOrigin
+    var onArtwork = false
+
+    var body: some View {
+        Text(origin.label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(onArtwork ? Color.white : DizzyPalette.mutedText)
+            .padding(.horizontal, onArtwork ? 7 : 5)
+            .padding(.vertical, onArtwork ? 3 : 1)
+            .background {
+                if onArtwork {
+                    Capsule().fill(.black.opacity(0.6))
+                } else {
+                    RoundedRectangle(cornerRadius: 4).strokeBorder(DizzyPalette.mutedText.opacity(0.6), lineWidth: 1)
+                }
+            }
+            .accessibilityLabel("来源：\(origin.label)")
+    }
+}
+
+/// 专辑或歌单卡片；在线条目长按可从资料库移除。
+struct LibraryShelfCard: View {
+    let item: LibraryShelfItem
+    var showsOrigin = true
+    @Environment(SavedLibraryStore.self) private var saved
+
+    var body: some View {
+        let link = NavigationLink(value: item.route) {
+            VStack(alignment: .leading, spacing: 6) {
+                ArtworkImage(url: item.coverURL)
+                    .overlay(alignment: .bottomLeading) {
+                        if showsOrigin { LibraryOriginBadge(origin: item.origin, onArtwork: true).padding(7) }
+                    }
+                Text(item.title).font(.subheadline.weight(.semibold)).foregroundStyle(DizzyPalette.text).lineLimit(1)
+                Text(item.subtitle).font(.caption).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
+            }
+            .multilineTextAlignment(.leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .prefetchAlbumArtwork(url: item.coverURL)
+
+        if let savedID = item.savedID {
+            link.contextMenu {
+                Button("从资料库移除", systemImage: "minus.circle", role: .destructive) { saved.remove(id: savedID) }
+            }
+        } else {
+            link
+        }
     }
 }
 
@@ -119,49 +299,45 @@ nonisolated private struct RecentLibraryItem: Identifiable, Sendable {
         let values = try? url.resourceValues(forKeys: [.addedToDirectoryDateKey, .creationDateKey])
         return values?.addedToDirectoryDate ?? values?.creationDate ?? .distantPast
     }
-}
 
-private struct RecentLibraryCard: View {
-    let item: RecentLibraryItem
-
-    var body: some View {
-        NavigationLink(value: item.kind == .album ? AppRoute.localAlbum(id: item.id) : AppRoute.localPlaylist(id: item.id)) {
-            VStack(alignment: .leading, spacing: 6) {
-                ArtworkImage(url: item.coverURL)
-                Text(item.title).font(.subheadline.weight(.semibold)).foregroundStyle(DizzyPalette.text).lineLimit(1)
-                Text(item.subtitle).font(.caption).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
-            }
-            .multilineTextAlignment(.leading)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .prefetchAlbumArtwork(url: item.coverURL)
+    @MainActor var collection: LibraryShelfItem {
+        LibraryShelfItem(id: id, title: title, subtitle: subtitle, coverURL: coverURL, origin: .local,
+                          route: kind == .album ? .localAlbum(id: id) : .localPlaylist(id: id), addedAt: addedAt)
     }
 }
 
-/// 在本地专辑与曲目中按标题、歌手和专辑名查找。
-private struct LocalLibrarySearchResults: View {
+/// 在资料库的专辑、歌单与歌曲中按标题、歌手和专辑名查找。
+private struct LibrarySearchResults: View {
     let query: String
     @Environment(OfflineLibraryStore.self) private var library
+    @Environment(SavedLibraryStore.self) private var saved
     @Environment(PlayerStore.self) private var player
 
     var body: some View {
-        let albums = library.visibleAlbums.filter { $0.title.localizedStandardContains(query) || $0.artist.localizedStandardContains(query) }
-        let tracks = library.visibleAlbums.flatMap(\.tracks).filter {
-            $0.title.localizedStandardContains(query) || $0.artists.localizedStandardContains(query) || $0.albumTitle.localizedStandardContains(query)
+        let contents = LibraryContents(library: library, saved: saved)
+        let collections = (contents.albums(.all) + contents.playlists(.all)).filter {
+            $0.title.localizedStandardContains(query) || $0.subtitle.localizedStandardContains(query)
         }
-        if albums.isEmpty && tracks.isEmpty {
+        let songs = contents.songs(.all).filter {
+            $0.track.title.localizedStandardContains(query) || $0.track.artists.localizedStandardContains(query)
+                || $0.track.albumTitle.localizedStandardContains(query)
+        }
+        let shown = Array(songs.prefix(50))
+        if collections.isEmpty && songs.isEmpty {
             ContentUnavailableView.search(text: query)
         }
-        if !albums.isEmpty {
-            Text("专辑").font(.title3.bold())
-            ForEach(albums.prefix(6)) { album in
-                NavigationLink(value: AppRoute.localAlbum(id: album.id)) {
+        if !collections.isEmpty {
+            Text("专辑与歌单").font(.title3.bold())
+            ForEach(collections.prefix(6)) { item in
+                NavigationLink(value: item.route) {
                     HStack(spacing: 12) {
-                        ArtworkImage(url: album.coverURL, cornerRadius: 6).frame(width: 52, height: 52)
+                        ArtworkImage(url: item.coverURL, cornerRadius: 6).frame(width: 52, height: 52)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(album.title).foregroundStyle(DizzyPalette.text).lineLimit(1)
-                            Text(album.artist).font(.subheadline).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
+                            Text(item.title).foregroundStyle(DizzyPalette.text).lineLimit(1)
+                            HStack(spacing: 6) {
+                                LibraryOriginBadge(origin: item.origin)
+                                Text(item.subtitle).font(.subheadline).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
+                            }
                         }
                         Spacer()
                     }
@@ -170,31 +346,37 @@ private struct LocalLibrarySearchResults: View {
                 .buttonStyle(.plain)
             }
         }
-        if !tracks.isEmpty {
+        if !shown.isEmpty {
             Text("歌曲").font(.title3.bold())
-            ForEach(Array(tracks.prefix(50).enumerated()), id: \.element.id) { index, track in
-                LocalSongRow(track: track) { player.play(Array(tracks.prefix(50)), startAt: index) }
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, song in
+                LibrarySongRow(song: song) { player.play(shown.map(\.track), startAt: index) }
             }
         }
     }
 }
 
-/// 一首本地歌曲：封面、标题、歌手 · 专辑。
-struct LocalSongRow: View {
-    let track: Track
+/// 一首资料库歌曲：封面、标题、来源 · 歌手 · 专辑；在线歌曲长按可从资料库移除。
+struct LibrarySongRow: View {
+    let song: LibrarySong
+    var showsOrigin = true
     let play: () -> Void
     @Environment(PlayerStore.self) private var player
+    @Environment(SavedLibraryStore.self) private var saved
 
     var body: some View {
-        Button(action: play) {
+        let track = song.track
+        let row = Button(action: play) {
             HStack(spacing: 12) {
                 ArtworkImage(url: track.coverURL, cornerRadius: 6).frame(width: 44, height: 44)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.title)
                         .foregroundStyle(player.currentTrack?.id == track.id ? DizzyPalette.accent : DizzyPalette.text)
                         .lineLimit(1)
-                    Text([track.artists, track.albumTitle].filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.subheadline).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
+                    HStack(spacing: 6) {
+                        if showsOrigin { LibraryOriginBadge(origin: song.origin) }
+                        Text([track.artists, track.albumTitle].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.subheadline).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -203,72 +385,167 @@ struct LocalSongRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(track.title)，\(track.artists)")
+
+        if let savedID = song.savedID {
+            row.contextMenu {
+                Button("从资料库移除", systemImage: "minus.circle", role: .destructive) { saved.remove(id: savedID) }
+            }
+        } else {
+            row
+        }
     }
 }
 
-struct LocalPlaylistsPage: View {
-    var body: some View {
-        ScrollView { LocalPlaylistsView().padding(.horizontal, 20).padding(.vertical, 8) }
-            .dizzyPageBackground()
-            .navigationTitle("歌单")
-            .navigationBarTitleDisplayMode(.large)
-    }
-}
-
-struct LocalSongsPage: View {
+/// 资料库歌曲列表；带歌手名时只列这位歌手的歌。
+struct LibrarySongsPage: View {
+    var artist: String?
+    @State private var filter: LibraryOriginFilter
     @Environment(OfflineLibraryStore.self) private var library
+    @Environment(SavedLibraryStore.self) private var saved
     @Environment(PlayerStore.self) private var player
 
+    init(filter: LibraryOriginFilter, artist: String? = nil) {
+        self.artist = artist
+        _filter = State(initialValue: filter)
+    }
+
     var body: some View {
-        let tracks = library.visibleAlbums.flatMap(\.tracks)
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        let all = LibraryContents(library: library, saved: saved).songs(filter)
+        let songs = artist.map { name in all.filter { LibraryContents.artistNames($0.track).contains(name) } } ?? all
+        let tracks = songs.map(\.track)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 4) {
-                if tracks.isEmpty {
-                    ContentUnavailableView("还没有本地歌曲", systemImage: "music.note")
+                LibraryOriginPicker(selection: $filter).padding(.bottom, 8)
+                if songs.isEmpty {
+                    ContentUnavailableView("没有歌曲", systemImage: "music.note",
+                                           description: Text("换个来源看看，或在歌曲菜单里选「加入资料库」。"))
                 } else {
                     AlbumPlaybackActions(isEmpty: false) { shuffled in
                         player.play(tracks, startAt: shuffled ? Int.random(in: tracks.indices) : 0)
                         if player.isShuffled != shuffled { player.toggleShuffle() }
                     }
                     .padding(.bottom, 12)
-                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                        LocalSongRow(track: track) { player.play(tracks, startAt: index) }
+                    ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
+                        LibrarySongRow(song: song, showsOrigin: filter == .all) { player.play(tracks, startAt: index) }
                     }
                 }
             }
             .padding(.horizontal, 20).padding(.vertical, 8)
         }
         .dizzyPageBackground()
-        .navigationTitle("歌曲")
+        .navigationTitle(artist ?? "歌曲")
         .navigationBarTitleDisplayMode(.large)
     }
 }
 
-/// 全部本地专辑：长按可多选删除。
-struct LocalAlbumsPage: View {
+/// 资料库里的歌手，点进去是这位歌手的歌曲。
+struct LibraryArtistsPage: View {
+    @State private var filter: LibraryOriginFilter
     @Environment(OfflineLibraryStore.self) private var library
+    @Environment(SavedLibraryStore.self) private var saved
+
+    init(filter: LibraryOriginFilter) { _filter = State(initialValue: filter) }
+
+    var body: some View {
+        let artists = LibraryContents.artists(in: LibraryContents(library: library, saved: saved).songs(filter))
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                LibraryOriginPicker(selection: $filter).padding(.bottom, 8)
+                if artists.isEmpty {
+                    ContentUnavailableView("没有歌手", systemImage: "music.microphone")
+                }
+                ForEach(artists, id: \.name) { artist in
+                    NavigationLink(value: AppRoute.libraryArtist(artist.name, filter: filter)) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 40))
+                                .foregroundStyle(DizzyPalette.mutedText.opacity(0.5))
+                                .accessibilityHidden(true)
+                            Text(artist.name).foregroundStyle(DizzyPalette.text).lineLimit(1)
+                            Spacer()
+                            Text("\(artist.count) 首").font(.subheadline).foregroundStyle(DizzyPalette.mutedText)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                        .frame(minHeight: 56)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    Divider().padding(.leading, 52)
+                }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 8)
+        }
+        .dizzyPageBackground()
+        .navigationTitle("歌手")
+        .navigationBarTitleDisplayMode(.large)
+    }
+}
+
+/// 本地歌单（可新建、删除）与加入资料库的在线歌单。
+struct LocalPlaylistsPage: View {
+    @State private var filter: LibraryOriginFilter
+    @Environment(OfflineLibraryStore.self) private var library
+    @Environment(SavedLibraryStore.self) private var saved
+
+    init(filter: LibraryOriginFilter) { _filter = State(initialValue: filter) }
+
+    var body: some View {
+        let online = LibraryContents(library: library, saved: saved).online(.playlist, filter)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                LibraryOriginPicker(selection: $filter)
+                if filter.includes(.local) { LocalPlaylistsView() }
+                if !online.isEmpty {
+                    if filter.includes(.local) { SectionHeading(title: "在线歌单") }
+                    LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
+                        ForEach(online) { LibraryShelfCard(item: $0, showsOrigin: filter == .all) }
+                    }
+                } else if !filter.includes(.local) {
+                    ContentUnavailableView("没有歌单", systemImage: "music.note.list",
+                                           description: Text("在网易云歌单页点「加入资料库」。"))
+                }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 8)
+        }
+        .dizzyPageBackground()
+        .navigationTitle("歌单")
+        .navigationBarTitleDisplayMode(.large)
+    }
+}
+
+/// 全部专辑：本地专辑长按可多选删除，在线专辑长按可从资料库移除。
+struct LocalAlbumsPage: View {
+    @State private var filter: LibraryOriginFilter
+    @Environment(OfflineLibraryStore.self) private var library
+    @Environment(SavedLibraryStore.self) private var saved
     @State private var selection = LocalAlbumSelection()
     @State private var items: [LocalLibraryAlbumItem] = []
     @State private var deletingAlbums: [LocalLibraryAlbumItem]?
     @State private var isDeleting = false
     @State private var deletionFailure: String?
 
+    init(filter: LibraryOriginFilter) { _filter = State(initialValue: filter) }
+
     var body: some View {
+        let local = filter.includes(.local) ? items : []
+        let online = LibraryContents(library: library, saved: saved).online(.album, filter)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                if items.isEmpty && (library.isImporting || library.isScanning) {
+                LibraryOriginPicker(selection: $filter)
+                if local.isEmpty && online.isEmpty && filter.includes(.local) && (library.isImporting || library.isScanning) {
                     ContentSkeleton(layout: .grid)
-                } else if items.isEmpty {
-                    ContentUnavailableView("还没有本地专辑", systemImage: "music.note.list",
-                        description: Text("从「设置 › 音乐文件夹」导入音乐，下载的专辑也会显示在这里。"))
+                } else if local.isEmpty && online.isEmpty {
+                    ContentUnavailableView("没有专辑", systemImage: "square.stack",
+                        description: Text("从「设置 › 音乐文件夹」导入音乐，或在专辑页点「加入资料库」。"))
                 } else {
                     LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                        ForEach(items) { album in
-                            LocalLibraryAlbumCard(album: album, selection: selection, isDeleting: isDeleting) {
+                        ForEach(local) { album in
+                            LocalLibraryAlbumCard(album: album, selection: selection, isDeleting: isDeleting,
+                                                  showsOrigin: filter == .all) {
                                 deletingAlbums = [album]
                             }
                         }
+                        ForEach(online) { LibraryShelfCard(item: $0, showsOrigin: filter == .all) }
                     }
                 }
             }
@@ -280,7 +557,7 @@ struct LocalAlbumsPage: View {
         .navigationBarTitleDisplayMode(.large)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if selection.isSelecting {
-                LocalAlbumSelectionBar(selection: selection, ids: Set(items.map(\.id)), isDeleting: isDeleting) { ids in
+                LocalAlbumSelectionBar(selection: selection, ids: Set(local.map(\.id)), isDeleting: isDeleting) { ids in
                     deletingAlbums = items.filter { ids.contains($0.id) }
                 }
                 .padding(.horizontal, 20)
@@ -296,6 +573,7 @@ struct LocalAlbumsPage: View {
         .alert("删除失败", item: $deletionFailure) { _ in
             Button("好", role: .cancel) { }
         } message: { Text($0) }
+        .onChange(of: filter) { _, _ in selection.finish() }
         // File canonicalization and sorting happen only when the library changes, off the main actor.
         .task(id: library.contentRevision) {
             let result = await LocalLibraryAlbumItem.prepare(library.visibleAlbums)
@@ -384,6 +662,7 @@ private struct LocalLibraryAlbumCard: View {
     let album: LocalLibraryAlbumItem
     let selection: LocalAlbumSelection
     let isDeleting: Bool
+    var showsOrigin = false
     let delete: () -> Void
     @Environment(\.openRoute) private var openRoute
     private var isSelected: Bool { selection.ids.contains(album.id) }
@@ -427,6 +706,9 @@ private struct LocalLibraryAlbumCard: View {
                         RoundedRectangle(cornerRadius: 10).fill(DizzyPalette.accent.opacity(0.22))
                         RoundedRectangle(cornerRadius: 10).strokeBorder(DizzyPalette.accent, lineWidth: 3)
                     }
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if showsOrigin { LibraryOriginBadge(origin: .local, onArtwork: true).padding(7) }
                 }
                 .overlay(alignment: .topTrailing) {
                     if selection.isSelecting {
@@ -495,7 +777,7 @@ struct LocalAlbumDetailView: View {
                 .padding(.horizontal, 20).padding(.bottom, 32)
             } else {
                 ContentUnavailableView("找不到本地专辑", systemImage: "folder.badge.questionmark",
-                                       description: Text("专辑可能已被移动或删除，请下拉本地库重新扫描。"))
+                                       description: Text("专辑可能已被移动或删除，请下拉资料库重新扫描。"))
             }
         }
         .dizzyPageBackground()

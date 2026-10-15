@@ -2,7 +2,7 @@ import SwiftUI
 
 final class LocalLibraryModule: AppModule {
     static var metadata: ModuleDescriptor {
-        ModuleDescriptor(id: .localLibrary, title: String(localized: "本地库"), systemImage: "music.note.list")
+        ModuleDescriptor(id: .localLibrary, title: String(localized: "资料库"), systemImage: "music.note.list")
     }
     var descriptor: ModuleDescriptor { Self.metadata }
     let library: OfflineLibraryStore
@@ -13,9 +13,11 @@ final class LocalLibraryModule: AppModule {
         switch destination {
         case .album(let id): return AnyView(LocalAlbumDetailView(id: id))
         case .playlist(let id): return AnyView(LocalPlaylistDetailView(id: id))
-        case .albums: return AnyView(LocalAlbumsPage())
-        case .playlists: return AnyView(LocalPlaylistsPage())
-        case .songs: return AnyView(LocalSongsPage())
+        case .albums(let filter): return AnyView(LocalAlbumsPage(filter: filter))
+        case .playlists(let filter): return AnyView(LocalPlaylistsPage(filter: filter))
+        case .songs(let filter): return AnyView(LibrarySongsPage(filter: filter))
+        case .artists(let filter): return AnyView(LibraryArtistsPage(filter: filter))
+        case .artist(let name, let filter): return AnyView(LibrarySongsPage(filter: filter, artist: name))
         }
     }
     func handleURL(_ url: URL, host: ModuleHost) -> Bool {

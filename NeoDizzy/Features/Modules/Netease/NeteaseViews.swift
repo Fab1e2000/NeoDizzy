@@ -176,6 +176,12 @@ struct NeteaseCollectionView: View {
         .toolbar {
             if supportsFavorite, let sourceID, model.hasLoaded {
                 ToolbarItem(placement: .topBarTrailing) {
+                    SavedLibraryToggle(item: SavedLibraryItem(
+                        kind: model.playlist == nil ? .album : .playlist, providerID: "netease", itemID: String(sourceID),
+                        title: model.title, subtitle: model.playlist == nil ? collectionSubtitle : "网易云歌单",
+                        coverURL: artwork, addedAt: .now))
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     NeteaseDownloadButton(kind: model.playlist == nil ? "album" : "playlist", id: sourceID,
                                           title: model.title, coverURL: artwork)
                 }
@@ -277,6 +283,7 @@ struct NeteaseSongRows: View {
     @Environment(\.openRoute) private var openRoute
     @Environment(DownloadStore.self) private var downloads
     @Environment(OfflineLibraryStore.self) private var library
+    @Environment(SavedLibraryStore.self) private var saved
     @State private var downloadedKeys: Set<RemoteTrackKey> = []
     @State private var showsDownloads = false
     @State private var addingSong: NeteaseSong?
@@ -316,6 +323,7 @@ struct NeteaseSongRows: View {
                     catch { self.error = error.localizedDescription }
                 }
             },
+            saved.rowAction(for: .song(song.track, providerID: "netease", itemID: String(song.id))),
             .init(id: "add", title: "加入歌单", systemImage: "text.badge.plus") {
                 if store.profile == nil { store.showsLogin = true } else { addingSong = song }
             },

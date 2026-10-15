@@ -64,6 +64,13 @@ struct DiscDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            if let summary = model.detail.value?.summary {
+                ToolbarItem(placement: .topBarTrailing) {
+                    SavedLibraryToggle(item: SavedLibraryItem(
+                        kind: .album, providerID: "dizzylab", itemID: summary.id, title: summary.title,
+                        subtitle: summary.labelName ?? "DizzyLab", coverURL: summary.coverURL, addedAt: .now))
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ShareLink(item: DizzyURL.disc(model.id)) { Label("分享", systemImage: "square.and.arrow.up") }
@@ -91,6 +98,7 @@ private struct DiscDetailContent: View {
     let detail: DiscDetail
     let tracks: [Track]
     var artworkURL: URL?
+    @Environment(SavedLibraryStore.self) private var saved
     @Environment(PlayerStore.self) private var player
     @Environment(OfflineLibraryStore.self) private var offline
     @State private var purchaseSheet: PurchaseSheet?
@@ -212,7 +220,8 @@ private struct DiscDetailContent: View {
                 // 整张都是试听时由购买卡片统一说明，只在部分曲目可完整播放时逐行标注。
                 AlbumTrackRow(track: track,
                               isPreview: !isPreviewOnly && !localTrackIDs.contains(track.id)
-                                && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false)) {
+                                && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false),
+                              additionalActions: [saved.rowAction(for: .song(track, providerID: "dizzylab", itemID: track.id))]) {
                     play(from: index)
                 }
             }

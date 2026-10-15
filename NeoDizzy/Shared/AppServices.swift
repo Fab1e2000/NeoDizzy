@@ -11,6 +11,8 @@ final class AppServices {
     var downloads: DownloadStore { dizzyLab.downloads }
     var purchases: PurchaseStore { dizzyLab.purchases }
     let player: PlayerStore
+    /// 手动加入资料库的在线歌曲、专辑和歌单。
+    let savedLibrary = SavedLibraryStore()
 
     init() {
         #if os(iOS)

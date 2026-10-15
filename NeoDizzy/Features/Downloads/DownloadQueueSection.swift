@@ -11,7 +11,7 @@ struct DownloadQueueSection: View {
         VStack(alignment: .leading, spacing: 12) {
             if jobs.isEmpty {
                 ContentUnavailableView("没有下载任务", systemImage: "arrow.down.circle",
-                                       description: Text("下载的专辑和歌单会显示在这里，完成后自动加入本地库。"))
+                                       description: Text("下载的专辑和歌单会显示在这里，完成后自动加入资料库。"))
             }
             if !active.isEmpty { DownloadQueueSummary(jobs: active) }
             group("进行中", jobs: active)
@@ -59,7 +59,7 @@ private struct DownloadQueueSummary: View {
                 .tint(DizzyPalette.download)
                 .accessibilityLabel("总进度")
                 .accessibilityValue(overall.formatted(.percent.precision(.fractionLength(0))))
-            Text("完成后自动加入本地库")
+            Text("完成后自动加入资料库")
                 .font(.caption).foregroundStyle(DizzyPalette.mutedText)
         }
         .padding(16)
@@ -155,7 +155,7 @@ struct DownloadJobRow: View {
             Button("删除", role: .destructive) { Task { await downloads.remove(job) } }
             Button("取消", role: .cancel) { }
         } message: {
-            Text("已保存到本地库的音乐会保留。")
+            Text("已保存到资料库的音乐会保留。")
         }
     }
     private var transferRows: some View {

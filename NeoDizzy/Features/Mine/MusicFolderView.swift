@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 「音乐文件夹」：App 自己的文件夹就是本地库，下载和导入都存在这里，不需要授权外部文件夹。
+/// 「音乐文件夹」：App 自己的文件夹就是资料库，下载和导入都存在这里，不需要授权外部文件夹。
 struct MusicFolderView: View {
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(\.openURL) private var openURL
@@ -53,7 +53,7 @@ struct MusicImportButton: View {
                 Label {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(library.isImporting ? "正在导入音乐…" : "导入音乐")
-                        Text(library.isImporting ? "正在复制文件并更新本地库" : library.isScanning ? "正在更新本地库，请稍候" : "从「文件」中选择歌曲或压缩包")
+                        Text(library.isImporting ? "正在复制文件并更新资料库" : library.isScanning ? "正在更新资料库，请稍候" : "从「文件」中选择歌曲或压缩包")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

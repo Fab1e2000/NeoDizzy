@@ -94,7 +94,7 @@ struct DownloadAlbumView: View {
                 .disabled(isEnqueuing || activeJob != nil || offline.isScanning)
                 .accessibilityLabel("下载 \(option.title)")
             }
-            Text(isGift ? "下载完成后会自动解压到专辑目录的「特典」文件夹。可在专辑详情中查看进度、取消或重试。" : "下载完成后会自动解压并加入「本地库」。可在专辑详情中查看进度、取消或重试。")
+            Text(isGift ? "下载完成后会自动解压到专辑目录的「特典」文件夹。可在专辑详情中查看进度、取消或重试。" : "下载完成后会自动解压并加入「资料库」。可在专辑详情中查看进度、取消或重试。")
                 .font(.caption)
                 .foregroundStyle(DizzyPalette.mutedText)
         }

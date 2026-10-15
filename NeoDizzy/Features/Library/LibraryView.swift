@@ -55,7 +55,7 @@ struct PurchasedLibraryView: View {
                 }
             }
         } else {
-            LoginPrompt(systemImage: "music.note.list", message: "登录后，你购买过的专辑会显示在这里。本地专辑可在「本地库」中播放。")
+            LoginPrompt(systemImage: "music.note.list", message: "登录后，你购买过的专辑会显示在这里。本地专辑可在「资料库」中播放。")
         }
     }
 
