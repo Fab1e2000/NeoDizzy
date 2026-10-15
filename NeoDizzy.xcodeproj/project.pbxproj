@@ -96,7 +96,6 @@
 				Features/Disc/AlbumPresentation.swift,
 				Features/Disc/DiscDetailView.swift,
 				Features/Discover,
-				Features/Discover/DiscoverSearchBar.swift,
 				Features/Discover/DiscoverView.swift,
 				Features/Discover/DiscoveryShortcutButton.swift,
 				Features/Discover/DizzyLabShortcuts.swift,

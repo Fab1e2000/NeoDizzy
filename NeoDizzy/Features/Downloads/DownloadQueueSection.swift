@@ -1,18 +1,70 @@
 import SwiftUI
 
+/// 下载队列按状态分组：进行中、需要处理、已完成；有任务进行时顶部显示总进度。
 struct DownloadQueueSection: View {
     let jobs: [DownloadJob]
 
     var body: some View {
+        let active = jobs.filter(\.isActive)
+        let attention = jobs.filter { !$0.isActive && $0.canRetry }
+        let finished = jobs.filter { !$0.isActive && !$0.canRetry }
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeading(title: "下载队列")
             if jobs.isEmpty {
-                ContentUnavailableView("没有下载任务", systemImage: "arrow.down.circle")
+                ContentUnavailableView("没有下载任务", systemImage: "arrow.down.circle",
+                                       description: Text("下载的专辑和歌单会显示在这里，完成后自动加入本地库。"))
             }
+            if !active.isEmpty { DownloadQueueSummary(jobs: active) }
+            group("进行中", jobs: active)
+            group("需要处理", jobs: attention)
+            group("已完成", jobs: finished)
+        }
+    }
+
+    @ViewBuilder private func group(_ title: LocalizedStringKey, jobs: [DownloadJob]) -> some View {
+        if !jobs.isEmpty {
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(DizzyPalette.mutedText)
+                .padding(.top, 10)
+                .padding(.leading, 14)
+                .accessibilityAddTraits(.isHeader)
             ForEach(jobs) { job in
                 DownloadJobRow(job: job, showsTransfers: true)
             }
         }
+    }
+}
+
+/// 进行中任务的数量、合计速度与总进度。
+private struct DownloadQueueSummary: View {
+    let jobs: [DownloadJob]
+    @Environment(DownloadStore.self) private var downloads
+
+    var body: some View {
+        let fractions = jobs.map { downloads.progress(for: $0).fraction ?? 0 }
+        let overall = fractions.reduce(0, +) / Double(max(fractions.count, 1))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(jobs.count) 项下载中").font(.headline).foregroundStyle(DizzyPalette.text)
+                Spacer()
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let speed = jobs.flatMap(\.transfers)
+                        .filter { $0.state == .downloading }
+                        .reduce(0) { $0 + downloads.progress(for: $1).speed(at: context.date) }
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(speed), countStyle: .file) + "/s")
+                        .font(.subheadline).monospacedDigit().foregroundStyle(DizzyPalette.mutedText)
+                }
+            }
+            ProgressView(value: overall)
+                .tint(DizzyPalette.download)
+                .accessibilityLabel("总进度")
+                .accessibilityValue(overall.formatted(.percent.precision(.fractionLength(0))))
+            Text("完成后自动加入本地库")
+                .font(.caption).foregroundStyle(DizzyPalette.mutedText)
+        }
+        .padding(16)
+        .background(DizzyPalette.surface, in: .rect(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -97,7 +149,7 @@ struct DownloadJobRow: View {
             }
         }
         .padding(isEmbedded ? 0 : 14)
-        .background(isEmbedded ? .clear : DizzyPalette.surface, in: .rect(cornerRadius: 12))
+        .background(isEmbedded ? .clear : DizzyPalette.surface, in: .rect(cornerRadius: 16))
         .accessibilityElement(children: .contain)
         .confirmationDialog(job.isActive ? "取消并删除下载任务？" : "删除下载记录？", isPresented: $confirmsRemoval, titleVisibility: .visible) {
             Button("删除", role: .destructive) { Task { await downloads.remove(job) } }

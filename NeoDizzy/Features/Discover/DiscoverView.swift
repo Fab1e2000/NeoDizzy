@@ -8,11 +8,10 @@ struct DiscoverView: View {
 
     var body: some View {
         @Bindable var model = model
-        MainTabPage(title: "DizzyLab", onRefresh: {
+        MainTabPage(title: "DizzyLab", search: PageSearch(text: $search.query, prompt: "搜索专辑、社团、用户") { search.submit() }, onRefresh: {
             if let discs = search.discs { await discs.reload(keepingItems: true) }
             else { await model.refresh() }
         }) {
-            DiscoverSearchBar(text: $search.query) { search.submit() }
             if search.keyword != nil {
                 DiscoverSearchResults(model: search)
                     .id(search.keyword)
@@ -71,13 +70,13 @@ struct DiscoveryCategoryPicker<Selection: Hashable>: View {
                         selection = option.0
                     } label: {
                         Text(option.1)
-                            .font(.subheadline.weight(isSelected ? .semibold : .medium))
-                            .foregroundStyle(isSelected ? DizzyPalette.accent : Color.secondary)
+                            .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                            .foregroundStyle(isSelected ? DizzyPalette.background : DizzyPalette.text)
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
+                            .frame(minHeight: 34)
+                            .background(isSelected ? DizzyPalette.text : DizzyPalette.surface, in: .capsule)
                             .frame(minHeight: 44)
-                            .background(isSelected ? DizzyPalette.accent.opacity(0.12) : Color.clear, in: .capsule)
-                            .contentShape(.capsule)
+                            .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(isSelected ? .isSelected : [])

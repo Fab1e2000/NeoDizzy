@@ -9,7 +9,6 @@ struct NeteaseHomeView: View {
     @State private var submitted = ""
     @State private var kind = 1
     @State private var refreshRevision = 0
-    @Environment(\.dynamicTypeSize) private var typeSize
     private var requestKind: Int { submitted.isEmpty ? 0 : kind }
     private var model: NeteasePageModel {
         contentCache.page(.home(submitted, requestKind), revision: store.revision)
@@ -17,11 +16,10 @@ struct NeteaseHomeView: View {
     private var requestID: String { "\(store.revision)/\(submitted)/\(requestKind)" }
 
     var body: some View {
-        MainTabPage(title: "网易云音乐", onRefresh: { refreshRevision += 1; await load(refresh: true) }) {
-            DiscoverSearchBar(text: $query, placeholder: "搜索歌曲、歌单、专辑、歌手") {
-                submitted = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !submitted.isEmpty { kind = 1 }
-            }
+        MainTabPage(title: "网易云音乐", search: PageSearch(text: $query, prompt: "搜索歌曲、歌单、专辑、歌手") {
+            submitted = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !submitted.isEmpty { kind = 1 }
+        }, onRefresh: { refreshRevision += 1; await load(refresh: true) }) {
             if submitted.isEmpty {
                 shortcuts
                 NeteaseHomeSections(personal: model, refreshRevision: refreshRevision)
@@ -47,11 +45,19 @@ struct NeteaseHomeView: View {
                          library: store.library, refresh: refresh)
     }
     private var shortcuts: some View {
-        let entries: [(NeteaseRoute, String)] = [(.daily, "calendar"), (.radio, "dot.radiowaves.left.and.right"), (.charts, "chart.bar"), (.myPlaylists, "music.note.list")]
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 12) {
+        let entries: [(NeteaseRoute, String)] = [(.radio, "dot.radiowaves.left.and.right"), (.charts, "chart.bar"), (.myPlaylists, "music.note.list")]
+        return ModuleShortcutPanel {
+            NavigationLink(value: AppRoute.netease(.daily)) {
+                ModulePrimaryShortcut(title: NeteaseRoute.daily.title, subtitle: "根据你的口味，每天 6 点更新", showsToday: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(NeteaseRoute.daily.title)
+        } secondary: {
             ForEach(entries, id: \.0) { entry in
                 if entry.0 == .radio {
-                    DiscoveryShortcutButton(title: entry.0.title, systemImage: entry.1) {
+                    DiscoveryShortcutButton(title: entry.0.title) { starting in
+                        ModuleSecondaryShortcut(title: entry.0.title, systemImage: entry.1, isLoading: starting)
+                    } start: {
                         guard store.profile != nil else { store.showsLogin = true; return }
                         let revision = store.revision
                         let radio = contentCache.page(.route(.radio), revision: revision)
@@ -67,9 +73,11 @@ struct NeteaseHomeView: View {
                         nowPlaying.isPresented = true
                     }
                 } else {
-                NavigationLink(value: AppRoute.netease(entry.0)) {
-                    ModuleShortcutCard(title: entry.0.title, systemImage: entry.1)
-                }.buttonStyle(.plain)
+                    NavigationLink(value: AppRoute.netease(entry.0)) {
+                        ModuleSecondaryShortcut(title: entry.0.title, systemImage: entry.1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(entry.0.title)
                 }
             }
         }

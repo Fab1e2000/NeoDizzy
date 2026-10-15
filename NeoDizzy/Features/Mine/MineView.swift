@@ -6,7 +6,6 @@ struct AppSettingsView: View {
     @Environment(ModuleSettings.self) private var tabs
     @Environment(DownloadStore.self) private var downloads
     @Environment(ModuleRegistry.self) private var modules
-    @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
 
     var body: some View {
         @Bindable var tabs = tabs
@@ -31,16 +30,8 @@ struct AppSettingsView: View {
                     NavigationLink { TabSettingsView() } label: {
                         Label("模块管理", systemImage: "rectangle.bottomthird.inset.filled")
                     }
-                    Picker(selection: $pinsTitleBar) {
-                        Text("固定").tag(true)
-                        Text("滚动").tag(false)
-                    } label: {
-                        Label("标题栏", systemImage: "rectangle.topthird.inset.filled")
-                    }
                 } header: {
                     Text("导航")
-                } footer: {
-                    Text(pinsTitleBar ? "主页面标题固定在顶部。" : "主页面标题随内容自然滚动。")
                 }
                 .listRowBackground(DizzyPalette.surface)
 

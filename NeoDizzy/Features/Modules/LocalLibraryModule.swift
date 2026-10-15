@@ -13,6 +13,9 @@ final class LocalLibraryModule: AppModule {
         switch destination {
         case .album(let id): return AnyView(LocalAlbumDetailView(id: id))
         case .playlist(let id): return AnyView(LocalPlaylistDetailView(id: id))
+        case .albums: return AnyView(LocalAlbumsPage())
+        case .playlists: return AnyView(LocalPlaylistsPage())
+        case .songs: return AnyView(LocalSongsPage())
         }
     }
     func handleURL(_ url: URL, host: ModuleHost) -> Bool {

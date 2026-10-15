@@ -1,15 +1,16 @@
 import SwiftUI
 
 /// Single-tap playback entry with cancellation, duplicate-tap protection and retry feedback.
-struct DiscoveryShortcutButton: View {
+struct DiscoveryShortcutButton<Label: View>: View {
     let title: String
-    let systemImage: String
+    /// Receives whether playback is being prepared.
+    @ViewBuilder let label: (Bool) -> Label
     let start: () async throws -> Void
     @State private var starting = false
     @State private var failure: String?
     var body: some View {
         Button { starting = true } label: {
-            ModuleShortcutCard(title: starting ? "正在准备…" : title, systemImage: systemImage)
+            label(starting)
         }
         .buttonStyle(.plain)
         .disabled(starting)

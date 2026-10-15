@@ -10,17 +10,6 @@ struct DiscCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ArtworkImage(url: disc.coverURL, cornerRadius: 10)
-                .overlay(alignment: .topTrailing) {
-                    if disc.isHiRes {
-                        Text("Hi-Res")
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.black.opacity(0.6), in: .capsule)
-                            .foregroundStyle(DizzyPalette.accentOnDark)
-                            .padding(6)
-                    }
-                }
             Text(disc.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(DizzyPalette.text)
@@ -32,8 +21,11 @@ struct DiscCard: View {
                     .foregroundStyle(DizzyPalette.mutedText)
                     .lineLimit(1)
             }
-            if let price = disc.price {
-                PriceText(price: price)
+            if disc.price != nil || disc.isHiRes {
+                HStack(spacing: 6) {
+                    if let price = disc.price { PriceText(price: price) }
+                    if disc.isHiRes { HiResBadge() }
+                }
             }
             if let caption {
                 Text(caption)
@@ -44,6 +36,18 @@ struct DiscCard: View {
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
         .prefetchAlbumArtwork(url: disc.coverURL)
+    }
+}
+
+/// 音质标记放在价格旁边，不遮挡封面。
+struct HiResBadge: View {
+    var body: some View {
+        Text("Hi-Res")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(DizzyPalette.mutedText)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(DizzyPalette.mutedText.opacity(0.6), lineWidth: 1))
     }
 }
 
