@@ -101,37 +101,37 @@ struct AlbumPlaybackActions<Accessory: View>: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        GlassEffectContainer(spacing: 14) {
-            HStack(spacing: 14) {
-                Button { play(true) } label: {
-                    Image(systemName: "shuffle")
-                        .font(.title2.weight(.semibold))
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.glass)
+        // 页面内容里的普通按钮，不用液态玻璃：玻璃只留给浮在内容之上的控件。
+        HStack(spacing: 14) {
+            Button { play(true) } label: {
+                Image(systemName: "shuffle")
+                    .font(.title2.weight(.semibold))
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.circle)
+            .controlSize(.large)
+            .disabled(isEmpty)
+            .accessibilityLabel(isPreview ? "随机试听" : "随机播放")
+
+            Button { play(false) } label: {
+                Label(isPreview ? "试听" : "播放", systemImage: "play.fill")
+                    .font(.title3.bold())
+                    .frame(minWidth: 116)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+            .tint(colorScheme == .dark ? Color.white : .black)
+            .foregroundStyle(colorScheme == .dark ? Color.black : .white)
+            .disabled(isEmpty)
+
+            accessory()
+                .buttonStyle(.bordered)
                 .buttonBorderShape(.circle)
                 .controlSize(.large)
-                .disabled(isEmpty)
-                .accessibilityLabel(isPreview ? "随机试听" : "随机播放")
-
-                Button { play(false) } label: {
-                    Label(isPreview ? "试听" : "播放", systemImage: "play.fill")
-                        .font(.title3.bold())
-                        .frame(minWidth: 116)
-                }
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-                .tint(colorScheme == .dark ? Color.white : .black)
-                .foregroundStyle(colorScheme == .dark ? Color.black : .white)
-                .disabled(isEmpty)
-
-                accessory()
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .controlSize(.large)
-            }
         }
+        .tint(DizzyPalette.text)
     }
 }
 

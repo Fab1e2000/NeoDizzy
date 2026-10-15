@@ -5,7 +5,7 @@ struct LocalLibraryView: View {
     @Environment(DownloadStore.self) private var downloads
     @State private var showsDownloads = false
     @State private var query = ""
-    @State private var preview: [LocalLibraryAlbumItem] = []
+    @State private var recent: [RecentLibraryItem] = []
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
@@ -22,24 +22,15 @@ struct LocalLibraryView: View {
                     Label(issue, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(DizzyPalette.accent)
                 }
-                if preview.isEmpty && (library.isImporting || library.isScanning) {
+                if recent.isEmpty && (library.isImporting || library.isScanning) {
                     ContentSkeleton(layout: .grid)
-                } else if preview.isEmpty {
+                } else if recent.isEmpty {
                     ContentUnavailableView("还没有本地专辑", systemImage: "music.note.list",
                         description: Text("从「设置 › 音乐文件夹」导入音乐，下载的专辑也会显示在这里。"))
                 } else {
-                    NavigationLink(value: AppRoute.localAlbums) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text("专辑").font(.title2.bold())
-                            Spacer()
-                            Text("全部").font(.body).foregroundStyle(DizzyPalette.accent)
-                        }
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("查看全部专辑")
+                    Text("最近添加").font(.title2.bold()).accessibilityAddTraits(.isHeader)
                     LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                        ForEach(preview.prefix(4)) { LocalLibraryAlbumPreviewCard(album: $0) }
+                        ForEach(recent) { RecentLibraryCard(item: $0) }
                     }
                 }
             } else {
@@ -49,9 +40,9 @@ struct LocalLibraryView: View {
         .scrollDismissesKeyboard(.interactively)
         .sheet(isPresented: $showsDownloads) { DownloadQueueSheet() }
         .task(id: library.contentRevision) {
-            let result = await LocalLibraryAlbumItem.prepare(library.visibleAlbums)
+            let result = await RecentLibraryItem.prepare(albums: library.visibleAlbums, playlists: library.localPlaylists)
             guard !Task.isCancelled else { return }
-            preview = result
+            recent = result
         }
     }
 }
@@ -99,22 +90,52 @@ private struct LocalLibraryCategoryList: View {
     }
 }
 
-/// 首页预览只负责打开专辑；多选与删除在「专辑」页里进行。
-private struct LocalLibraryAlbumPreviewCard: View {
-    let album: LocalLibraryAlbumItem
+/// 最近加入音乐文件夹的专辑与歌单，按文件加入时间从新到旧。
+nonisolated private struct RecentLibraryItem: Identifiable, Sendable {
+    enum Kind: Sendable { case album, playlist }
+    let id: String
+    let kind: Kind
+    let title: String
+    let subtitle: String
+    let coverURL: URL?
+    let addedAt: Date
+
+    static let limit = 6
+
+    @concurrent static func prepare(albums: [LocalAlbum], playlists: [LocalPlaylist]) async -> [Self] {
+        let albumItems = albums.map { album in
+            Self(id: album.id, kind: .album, title: album.title, subtitle: "\(album.artist) · \(album.entries.count) 首",
+                 coverURL: album.coverURL, addedAt: album.entries.map { addedDate($0.fileURL) }.max() ?? .distantPast)
+        }
+        let playlistItems = playlists.map { playlist in
+            Self(id: playlist.id, kind: .playlist, title: playlist.title, subtitle: "歌单 · \(playlist.tracks.count) 首",
+                 coverURL: playlist.coverURL, addedAt: addedDate(playlist.fileURL))
+        }
+        return Array((albumItems + playlistItems).sorted { $0.addedAt > $1.addedAt }.prefix(limit))
+    }
+
+    /// 文件放进文件夹的时间；拿不到时用创建时间。
+    private static func addedDate(_ url: URL) -> Date {
+        let values = try? url.resourceValues(forKeys: [.addedToDirectoryDateKey, .creationDateKey])
+        return values?.addedToDirectoryDate ?? values?.creationDate ?? .distantPast
+    }
+}
+
+private struct RecentLibraryCard: View {
+    let item: RecentLibraryItem
 
     var body: some View {
-        NavigationLink(value: AppRoute.localAlbum(id: album.id)) {
+        NavigationLink(value: item.kind == .album ? AppRoute.localAlbum(id: item.id) : AppRoute.localPlaylist(id: item.id)) {
             VStack(alignment: .leading, spacing: 6) {
-                ArtworkImage(url: album.coverURL)
-                Text(album.title).font(.subheadline.weight(.semibold)).foregroundStyle(DizzyPalette.text).lineLimit(1)
-                Text("\(album.artist) · \(album.count) 首").font(.caption).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
+                ArtworkImage(url: item.coverURL)
+                Text(item.title).font(.subheadline.weight(.semibold)).foregroundStyle(DizzyPalette.text).lineLimit(1)
+                Text(item.subtitle).font(.caption).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
             }
             .multilineTextAlignment(.leading)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .prefetchAlbumArtwork(url: album.coverURL)
+        .prefetchAlbumArtwork(url: item.coverURL)
     }
 }
 

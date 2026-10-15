@@ -6,6 +6,8 @@ struct DiscCard: View {
     var showsLabel = true
     /// 额外的一行说明，例如限时优惠的截止日期。
     var caption: String?
+    /// 横向陈列里所有卡片都占两行标题的高度，封面大小一致。
+    var reservesTitleLines = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -13,7 +15,7 @@ struct DiscCard: View {
             Text(disc.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(DizzyPalette.text)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: reservesTitleLines)
                 .multilineTextAlignment(.leading)
             if showsLabel, let label = disc.labelName {
                 Text(label)

@@ -106,8 +106,10 @@ struct NeteaseCoverShelf: View {
     }
     private func card(_ title: String, artwork: URL?, route: NeteaseRoute) -> some View {
         NavigationLink(value: AppRoute.netease(route)) {
-            DiscCard(disc: DiscSummary(id: String(describing: route), title: title, coverURL: artwork), showsLabel: false)
+            DiscCard(disc: DiscSummary(id: String(describing: route), title: title, coverURL: artwork), showsLabel: false,
+                     reservesTitleLines: true)
                 .frame(width: typeSize.isAccessibilitySize ? 220 : 156)
+                .fixedSize(horizontal: false, vertical: true)
         }.buttonStyle(.plain)
     }
 }
