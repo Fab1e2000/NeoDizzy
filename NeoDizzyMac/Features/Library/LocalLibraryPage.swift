@@ -4,6 +4,7 @@ import SwiftUI
 /// 本地专辑：在标题右侧切换「专辑」网格与「歌曲」表格。下拉刷新换成 ⌘R 与「重新扫描」。
 struct LocalLibraryPage: View {
     @Environment(OfflineLibraryStore.self) private var library
+    @State private var showsPlaylists = false
     @AppStorage("localLibrary.showsSongs") private var showsSongs = false
 
     private var albums: [LocalAlbum] {
@@ -12,7 +13,9 @@ struct LocalLibraryPage: View {
 
     var body: some View {
         Group {
-            if albums.isEmpty {
+            if showsPlaylists {
+                PageScroll(title: MainTab.localLibrary.title) { LocalPlaylistsView() }
+            } else if albums.isEmpty {
                 PageScroll(title: MainTab.localLibrary.title) {
                     if library.isScanning {
                         DelayedProgress()
@@ -50,6 +53,7 @@ struct LocalLibraryPage: View {
         }
         .navigationTitle(MainTab.localLibrary.title)
         .toolbar {
+            ToolbarItem { Toggle("歌单", isOn: $showsPlaylists) }
             ToolbarItem(placement: .primaryAction) {
                 Button { Task { await library.scan() } } label: {
                     // 保留同一工具栏项和固定尺寸，扫描时不插入额外控件挤动刷新按钮。
@@ -114,6 +118,7 @@ struct AddFolderButton: View {
 private struct LocalAlbumCard: View {
     let album: LocalAlbum
     @Environment(MacAppModel.self) private var model
+    @Environment(OfflineLibraryStore.self) private var library
 
     var body: some View {
         AlbumCard(title: album.title, subtitle: album.artist, caption: String(localized: "\(album.tracks.count) 首"),
@@ -122,6 +127,11 @@ private struct LocalAlbumCard: View {
             if let folder = album.entries.first?.fileURL.deletingLastPathComponent() {
                 Button("在访达中显示", systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([folder]) }
                 Divider()
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if let label = library.sourceLabel(for: album) {
+                Text(label).font(.caption2).padding(5).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6)).padding(6)
             }
         }
     }
@@ -195,6 +205,7 @@ struct LocalAlbumPage: View {
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
     @State private var editing: AudioTagEditTarget?
+    @State private var playlistTrack: Track?
     @State private var batchAlbum: LocalAlbum?
 
     var body: some View {
@@ -232,6 +243,7 @@ struct LocalAlbumPage: View {
                                     }
                                 } rowMenu: { track in
                                     if let entry = entries.first(where: { $0.track.id == track.id }) {
+                                        Button("加入歌单", systemImage: "text.badge.plus") { playlistTrack = track }
                                         Button("编辑音乐标签…", systemImage: "pencil") {
                                             editing = AudioTagEditTarget(track: entry.track, url: entry.fileURL)
                                         }
@@ -255,6 +267,7 @@ struct LocalAlbumPage: View {
                                        description: Text("请检查扫描目录授权和音乐文件，然后重新扫描。"))
             }
         }
+        .sheet(item: $playlistTrack) { LocalPlaylistPicker(track: $0) }
         .sheet(item: $editing) { TagEditorSheet(target: $0) }
         .sheet(item: $batchAlbum) { BatchTagEditorSheet(album: $0) }
         .pageRefresh { await library.scan() }

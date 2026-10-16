@@ -1,119 +1,120 @@
 import SwiftUI
 
 struct RootView: View {
-    @State private var selection: MainTab = .discover
-    @State private var tabSettings = TabSettings()
-    @State private var paymentSheet: PurchaseSheet?
-    @State private var mine = MinePresentation()
+    @State private var host: ModuleHost
+    let modules: ModuleRegistry
+    private var tabSettings: ModuleSettings { host.settings }
+    @State private var settingsPresentation = AppSettingsPresentation()
+    @State private var search = SearchPresentation()
     @State private var themeIcon = ThemeIconController()
     private let appearance = AppearanceSettings.shared
     let services: AppServices
     private var player: PlayerStore { services.player }
     private var offlineLibrary: OfflineLibraryStore { services.offlineLibrary }
-    private var downloads: DownloadStore { services.downloads }
-    private var account: AccountStore { services.account }
-    @State private var isNowPlayingPresented = false
+    @State private var nowPlaying = NowPlayingPresentation()
     @State private var pendingPlayerRoute: AppRoute?
-    /// 每个标签页的导航路径。播放页里的「前往专辑」会往当前标签页推入页面。
-    @State private var paths: [MainTab: [AppRoute]] = [:]
     @Namespace private var playerTransition
+    /// 沉浸模式：隐藏屏幕顶部的时间、电量等状态栏信息（设置 › 外观）。
+    /// 与 MeloX 相同：页面可以临时收起迷你播放器（多选时给底部操作栏让位）。
+    @State private var isMiniPlayerSuppressed = false
+    @AppStorage(ImmersiveMode.storageKey) private var isImmersive = false
     @Environment(\.scenePhase) private var scenePhase
 
-    init(services: AppServices) {
+    init(services: AppServices, modules: ModuleRegistry, settings: ModuleSettings) {
         self.services = services
-        let settings = TabSettings()
-        _tabSettings = State(initialValue: settings)
-        _selection = State(initialValue: settings.initialTab)
+        self.modules = modules
+        _host = State(initialValue: ModuleHost(settings: settings))
     }
 
     var body: some View {
-        @Bindable var account = account
-        TabView(selection: $selection) {
-            ForEach(tabSettings.visiblePrimary) { tab in
-                Tab(tab.title, systemImage: tab.systemImage, value: tab) {
-                    MainNavigationStack(path: path(for: tab)) { page(for: tab) }
+        modules.install(in: AnyView(shell))
+            .tint(DizzyPalette.accent)
+            .environment(modules)
+            .environment(host)
+            .environment(tabSettings)
+            .environment(nowPlaying)
+            .environment(player)
+            .environment(offlineLibrary)
+            .environment(services.savedLibrary)
+            .environment(services.favorites)
+            .environment(services.accountLibrary)
+            .environment(services.playbackHistory)
+            .environment(themeIcon)
+            .environment(\.openRoute, OpenRouteAction { route in
+                settingsPresentation.isPresented = false
+                modules.dismissAccounts()
+                if nowPlaying.isPresented {
+                    pendingPlayerRoute = route
+                    nowPlaying.isPresented = false
+                } else {
+                    host.paths[host.selection, default: []].append(route)
+                }
+            })
+    }
+
+    private var shell: some View {
+        @Bindable var host = host
+        return TabView(selection: $host.selection) {
+            ForEach(tabSettings.visibleModules) { id in
+                if let descriptor = modules.descriptor(for: id) {
+                    Tab(descriptor.title, systemImage: descriptor.systemImage, value: id) {
+                        MainNavigationStack(path: path(for: id)) { modules.rootView(for: id) }
+                    }
                 }
             }
-
+            // 一次搜索所有来源，取代各页面自己的搜索框。
+            Tab(value: ModuleID.search, role: .search) {
+                MainNavigationStack(path: path(for: .search)) { UnifiedSearchView() }
+            }
         }
-        .onChange(of: tabSettings.visibleTabs, initial: true) { _, visible in
-            if !visible.contains(selection) { selection = tabSettings.visiblePrimary[0] }
+        .onChange(of: host.selection) { _, selection in
+            if selection == .search { search.isActive = true }
         }
-        .sheet(item: $paymentSheet) { sheet in PurchaseView(summary: sheet.summary) }
-        // 标签栏与底部播放器始终保持完整布局，不随滚动收缩。
-        .tabBarMinimizeBehavior(.never)
+        .environment(search)
+        .environment(\.setMiniPlayerSuppressed, SetMiniPlayerSuppressedAction { isMiniPlayerSuppressed = $0 })
+        .onChange(of: tabSettings.visibleModules, initial: true) { _, _ in
+            host.reconcileSelection()
+        }
+        // 与 MeloX 相同：向下滚动时标签栏收起，迷你播放器缩成一行（inline）跟在旁边；往回滚恢复。
+        .tabBarMinimizeBehavior(.onScrollDown)
         // 有曲目时在标签栏上方显示迷你播放器，点击打开播放页。
-        .tabViewBottomAccessory(isEnabled: player.currentTrack != nil) {
-            MiniPlayerView(transitionNamespace: playerTransition) { isNowPlayingPresented = true }
+        // 与 MeloX 相同：没有歌曲时不显示迷你播放器；页面要求时临时收起。
+        .tabViewBottomAccessory(isEnabled: player.currentTrack != nil && !isMiniPlayerSuppressed) {
+            MiniPlayerView(transitionNamespace: playerTransition) { nowPlaying.isPresented = true }
         }
-        .tint(DizzyPalette.accent)
-        // 「我的」只从各页页头的头像按钮进入，由根视图统一弹出。
-        .environment(mine)
-        .sheet(isPresented: $mine.isPresented) {
-            MineView()
+        // 齿轮始终打开同一个全局设置页；账号由模块呈现。
+        .environment(settingsPresentation)
+        .sheet(isPresented: $settingsPresentation.isPresented, onDismiss: {
+            // 设置里点了平台账号：等设置收起后再弹出该平台的登录或账号页。
+            guard let id = settingsPresentation.pendingAccount else { return }
+            settingsPresentation.pendingAccount = nil
+            modules.openAccount(for: id)
+        }) {
+            // 弹层不在上面 .environment 的作用范围内，要单独传入。
+            AppSettingsView().environment(settingsPresentation)
+                .statusBarHidden(isImmersive)
         }
         // 播放页全屏展开：从迷你播放器的封面放大出来，下拉收起。
-        .fullScreenCover(isPresented: $isNowPlayingPresented, onDismiss: finishPlayerNavigation) {
+        .fullScreenCover(isPresented: $nowPlaying.isPresented, onDismiss: finishPlayerNavigation) {
             NowPlayingView()
                 .presentationBackground(.clear)
                 .presentationContentInteraction(.resizes)
                 .navigationTransition(.zoom(sourceID: NowPlayingView.transitionID, in: playerTransition))
+                .statusBarHidden(isImmersive)
         }
-        // 已购买、关注页里的「登录」按钮打开这里。
-        .sheet(isPresented: $account.isLoginPresented) {
-            NavigationStack {
-                LoginView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button(role: .close) { account.isLoginPresented = false }
-                        }
-                    }
-            }
-        }
-        // 放在所有 sheet 外层，弹出的页面也能拿到播放器和账号。
-        .environment(tabSettings)
-        .environment(services.browsingHistory)
-        .environment(player)
-        .environment(account)
-        .environment(offlineLibrary)
-        .environment(downloads)
-        .environment(services.purchases)
-        .environment(themeIcon)
-        .environment(\.openRoute, OpenRouteAction { route in
-            mine.isPresented = false
-            if isNowPlayingPresented {
-                pendingPlayerRoute = route
-                isNowPlayingPresented = false
-            } else {
-                paths[selection, default: []].append(route)
-            }
-        })
-        .onOpenURL { url in
-            // 从其他 App 的分享菜单「用 NeoDizzy 打开」的歌曲或压缩包，导入音乐文件夹后打开本地库。
-            if url.isFileURL {
-                mine.isPresented = false
-                isNowPlayingPresented = false
-                if tabSettings.isVisible(.localLibrary) {
-                    selection = .localLibrary
-                    paths[.localLibrary] = []
-                }
-                Task { await offlineLibrary.importItems([url]) }
-                return
-            }
-            guard AlipayReturnRouter.isCallback(url) else { return }
-            // 回调仅作为唤醒信号，到账仍由当前账号的网站订单核验。
-            debugLog("收到支付宝返回，继续核验付款")
+        .statusBarHidden(isImmersive)
+        .onOpenURL { modules.handleURL($0, host: host) }
+        // 本机喜欢、收藏后立刻更新资料库；换账号时重新同步。
+        .onChange(of: services.netease.library.revision) { _, _ in services.accountLibrary.rebuildNetease(from: services.netease) }
+        .onChange(of: services.netease.profile?.userId) { _, _ in services.favorites.updateAccounts(); Task { await services.syncAccountLibrary(force: true) } }
+        .onChange(of: services.account.account?.userID) { _, _ in Task { await services.syncAccountLibrary(force: true) } }
+        .onChange(of: host.dismissPresentations) { _, shouldDismiss in
+            guard shouldDismiss else { return }
             pendingPlayerRoute = nil
-            isNowPlayingPresented = false
-            mine.isPresented = false
-            if tabSettings.isVisible(.purchased) {
-                selection = .purchased
-                paths[.purchased] = []
-            } else if let pending = services.purchases.current {
-                paymentSheet = PurchaseSheet(summary: DiscSummary(id: pending.attempt.discID, title: pending.title, coverURL: nil))
-            }
-            NotificationCenter.default.post(name: .dizzyPaymentReturned, object: nil)
-            Task { await services.purchases.check() }
+            modules.dismissAccounts()
+            nowPlaying.isPresented = false
+            settingsPresentation.isPresented = false
+            host.dismissPresentations = false
         }
         // 「正在播放」小组件跟着当前歌曲换封面；换歌时取消上一次未完成的封面请求。
         .task(id: player.currentTrack?.id) { await NowPlayingWidgetBridge.update(for: player.currentTrack) }
@@ -131,15 +132,13 @@ struct RootView: View {
             if oldPhase == .background, phase == .active {
                 Task { await offlineLibrary.scan(refreshMetadata: false) }
             }
+            // 资料库只在启动和回到前台时与账号同步一次，浏览时不刷新。
+            if phase == .active, oldPhase == .background || oldPhase == phase {
+                Task { await services.syncAccountLibrary(force: oldPhase == .background) }
+            }
             if phase == .background {
                 player.saveState()
-                services.purchases.pause()
             }
-            if phase == .active { Task { await services.purchases.check() } }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .dizzyAccountDidChange)) { _ in
-            services.purchases.accountDidChange()
-            Task { await services.purchases.check() }
         }
     }
 
@@ -147,34 +146,19 @@ struct RootView: View {
     private func finishPlayerNavigation() {
         guard let route = pendingPlayerRoute else { return }
         pendingPlayerRoute = nil
-        paths[selection, default: []].append(route)
+        host.paths[host.selection, default: []].append(route)
     }
 
-    private func path(for tab: MainTab) -> Binding<[AppRoute]> {
+    private func path(for tab: ModuleID) -> Binding<[AppRoute]> {
         Binding(
-            get: { paths[tab] ?? [] },
-            set: { paths[tab] = $0 }
+            get: { host.paths[tab] ?? [] },
+            set: { host.paths[tab] = $0 }
         )
     }
 
-    @ViewBuilder
-    private func page(for tab: MainTab) -> some View {
-        switch tab {
-        case .discover: DiscoverView()
-        case .shuffle:
-            ShuffleView { selection in
-                player.playDiscovery(selection)
-                isNowPlayingPresented = true
-            }
-        case .labels: LabelsView()
-        case .feed: FeedView()
-        case .purchased: PurchasedLibraryView()
-        case .localLibrary: LocalLibraryView()
-        }
-    }
 }
 
-/// 每个标签页各自的导航栈，统一登记可推入的页面。
+/// 每个模块各自的导航栈，统一登记可推入的页面。
 struct MainNavigationStack<Root: View>: View {
     @Binding var path: [AppRoute]
     @ViewBuilder var root: Root

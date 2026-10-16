@@ -12,7 +12,7 @@ struct ReviewDetailView: View {
         })
     }
     var body: some View {
-        LoadableContent(state: state, webURL: DizzyURL.page("/review/\(id)/")) { review in
+        LoadableContent(state: state, skeleton: .article, skeletonIsPage: true) { review in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(review.title).font(.title2.bold()).textSelection(.enabled)
@@ -22,7 +22,7 @@ struct ReviewDetailView: View {
                         LazyImage(url: url) { state in
                             if let image = state.image { image.resizable().scaledToFit() }
                             else if state.error != nil { Label("图片加载失败", systemImage: "photo").foregroundStyle(DizzyPalette.mutedText) }
-                            else { ProgressView().frame(maxWidth: .infinity).padding(30) }
+                            else { RoundedRectangle(cornerRadius: 12).fill(.gray.opacity(0.18)).aspectRatio(4.0 / 3.0, contentMode: .fit).accessibilityHidden(true) }
                         }
                     }
                     Link("在网页查看回复", destination: DizzyURL.page("/review/\(id)/")).font(.subheadline)

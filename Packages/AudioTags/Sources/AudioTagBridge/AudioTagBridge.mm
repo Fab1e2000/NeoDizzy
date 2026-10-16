@@ -34,7 +34,7 @@ static int mainPicture(const List<VariantMap> &pictures) {
     }
     return pictures.isEmpty() ? -1 : 0;
 }
-static NSArray *fields() { return @[@"TITLE", @"ARTIST", @"ALBUM", @"ALBUMARTIST", @"TRACKNUMBER", @"DISCNUMBER", @"DATE", @"GENRE"]; }
+static NSArray *fields() { return @[@"TITLE", @"ARTIST", @"ALBUM", @"ALBUMARTIST", @"TRACKNUMBER", @"DISCNUMBER", @"DATE", @"GENRE", @"LYRICS"]; }
 extern "C" char *NDTagRead(const char *path) {
     @autoreleasepool { try {
         FileStream stream(path, true);
@@ -84,7 +84,7 @@ extern "C" char *NDTagWrite(const char *path, const char *json) {
             // The generic property map uppercases free-form atom names. Restore
             // every untouched native atom to avoid rewriting/duplicating custom tags.
             NSDictionary *atoms = @{@"TITLE":@"©nam", @"ARTIST":@"©ART", @"ALBUM":@"©alb", @"ALBUMARTIST":@"aART",
-                                    @"TRACKNUMBER":@"trkn", @"DISCNUMBER":@"disk", @"DATE":@"©day", @"GENRE":@"©gen"};
+                                    @"TRACKNUMBER":@"trkn", @"DISCNUMBER":@"disk", @"DATE":@"©day", @"GENRE":@"©gen", @"LYRICS":@"©lyr"};
             StringList changedAtoms;
             for(NSString *key in values) if(atoms[key]) changedAtoms.append(tag(atoms[key]));
             const auto written = mp4->tag()->itemMap();

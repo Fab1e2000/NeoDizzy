@@ -1,56 +1,87 @@
 import SwiftUI
 
-/// 「我的」：账号卡片和关于。从各页页头的头像按钮弹出。
-struct MineView: View {
+/// 应用设置、各平台账号入口与本地存储管理。
+struct AppSettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(TabSettings.self) private var tabs
-    @Environment(AccountStore.self) private var account
-    @AppStorage(TitleBarSettings.storageKey) private var pinsTitleBar = TitleBarSettings.defaultValue
-    @State private var isConfirmingLogout = false
-    @State private var isLoggingOut = false
+    @Environment(ModuleSettings.self) private var tabs
+    @Environment(DownloadStore.self) private var downloads
+    @Environment(ModuleRegistry.self) private var modules
+    @Environment(AppSettingsPresentation.self) private var presentation
+    @AppStorage(ImmersiveMode.storageKey) private var isImmersive = false
 
     var body: some View {
         @Bindable var tabs = tabs
+        @Bindable var downloads = downloads
         NavigationStack {
             List {
-                accountSection
-                    .listRowBackground(DizzyPalette.surface)
-
-                Section {
-                    NavigationLink { BrowsingHistoryView() } label: {
-                        Label("浏览记录", systemImage: "clock.arrow.circlepath")
+                Section("账号") {
+                    ForEach(modules.descriptors) { module in
+                        if let entry = modules.accountEntry(for: module.id) {
+                            accountRow(module, entry: entry)
+                        }
                     }
                 }
                 .listRowBackground(DizzyPalette.surface)
 
                 Section {
-                    Picker("启动页面", selection: $tabs.startupTab) {
-                        ForEach(MainTab.primary) { tab in
-                            Text(tab.title + (tabs.isVisible(tab) ? "" : "（已隐藏）")).tag(tab)
-                        }
+                    NavigationLink(value: AppRoute.page { AppearanceSettingsView() }) {
+                        Label("外观与主题", systemImage: "paintpalette")
                     }
-                    NavigationLink("外观与主题") { AppearanceSettingsView() }
-                    NavigationLink("音乐文件夹") { MusicFolderView() }
-                    NavigationLink("标签栏") { TabSettingsView() }
-                    NavigationLink("歌词") { LyricsSettingsView() }
-                    Picker("标题栏", selection: $pinsTitleBar) {
-                        Text("固定").tag(true)
-                        Text("滚动").tag(false)
+                    Toggle(isOn: $isImmersive) {
+                        Label("沉浸模式", systemImage: "rectangle.dashed")
                     }
                 } header: {
-                    Text("设置")
+                    Text("外观")
                 } footer: {
-                    Text(pinsTitleBar ? "主页面标题固定在顶部。" : "主页面标题随内容滚动，下拉时保持原位。")
+                    Text("隐藏屏幕顶部的时间、电量和信号。")
+                }
+                .listRowBackground(DizzyPalette.surface)
+
+                Section {
+                    Picker(selection: $tabs.startupModule) {
+                        ForEach(modules.descriptors) { tab in
+                            Text(tab.title + (tabs.isVisible(tab.id) ? "" : "（已隐藏）")).tag(tab.id)
+                        }
+                    } label: {
+                        Label("启动页面", systemImage: "house")
+                    }
+                    NavigationLink(value: AppRoute.page { TabSettingsView() }) {
+                        Label("模块管理", systemImage: "rectangle.bottomthird.inset.filled")
+                    }
+                } header: {
+                    Text("导航")
+                }
+                .listRowBackground(DizzyPalette.surface)
+
+                Section("音乐库") {
+                    LibraryExportButton()
+                }
+                .listRowBackground(DizzyPalette.surface)
+
+                Section {
+                    Picker("并行下载数量", selection: $downloads.concurrentDownloadCount) {
+                        ForEach(Array(DownloadStore.concurrentDownloadRange), id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
+                    }
+                } header: {
+                    Text("下载")
+                } footer: {
+                    Text("下载与音频处理同时进行。调低数量后，已开始的下载会继续，后续按新数量调度。")
+                }
+                .listRowBackground(DizzyPalette.surface)
+
+                Section("播放") {
+                    NavigationLink(value: AppRoute.page { LyricsSettingsView() }) {
+                        Label("歌词", systemImage: "text.quote")
+                    }
                 }
                 .listRowBackground(DizzyPalette.surface)
 
                 Section("关于") {
                     LabeledContent("版本", value: Bundle.main.versionText)
                     LabeledContent("开源许可", value: "GPLv3")
-                    NavigationLink("免责声明") {
-                        DisclaimerView()
-                    }
-                    Link("访问 DizzyLab 官网", destination: URL(string: "https://www.dizzylab.net")!)
+                    NavigationLink("免责声明", value: AppRoute.page { DisclaimerView() })
                 }
                 .listRowBackground(DizzyPalette.surface)
             }
@@ -58,7 +89,7 @@ struct MineView: View {
             .dizzyPageBackground()
             .navigationDestination(for: AppRoute.self) { AppRouteDestination(route: $0) }
             .safeAreaPadding(.top, 5)
-            .navigationTitle("我的")
+            .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -68,66 +99,37 @@ struct MineView: View {
         }
     }
 
-    @ViewBuilder
-    private var accountSection: some View {
-        if let user = account.account {
-            Section {
-                HStack(spacing: 14) {
-                    AvatarImage(url: user.avatarURL, size: 52)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(user.nickname)
-                            .font(.headline)
-                        if account.isSessionExpired {
-                            Label("登录已失效", systemImage: "exclamationmark.triangle.fill")
-                                .font(.footnote)
-                                .foregroundStyle(DizzyPalette.danger)
-                        } else {
-                            Text("已登录，已购专辑可以收听完整版。")
-                                .font(.footnote)
-                                .foregroundStyle(DizzyPalette.mutedText)
-                        }
+
+    /// 一个平台的账号：已登录显示头像，点一下收起设置，再打开该平台的账号页或登录页。
+    private func accountRow(_ module: ModuleDescriptor, entry: ModuleAccountEntry) -> some View {
+        Button {
+            presentation.pendingAccount = module.id
+            dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                Group {
+                    if let url = entry.avatarURL {
+                        AvatarImage(url: url, size: 32)
+                    } else {
+                        Image(systemName: module.systemImage)
+                            .font(.body)
+                            .foregroundStyle(DizzyPalette.accent)
                     }
                 }
-                .padding(.vertical, 4)
-                if account.isSessionExpired {
-                    NavigationLink("重新登录") { LoginView() }
-                }
-                NavigationLink("个人主页", value: AppRoute.user(id: user.userID))
-                Button("退出登录", role: .destructive) {
-                    isConfirmingLogout = true
-                }
-                .disabled(isLoggingOut)
-                .confirmationDialog("退出登录？", isPresented: $isConfirmingLogout, titleVisibility: .visible) {
-                    Button("退出登录", role: .destructive) {
-                        isLoggingOut = true
-                        Task {
-                            await account.logout()
-                            isLoggingOut = false
-                        }
-                    }
-                } message: {
-                    Text("会清除保存在本机的登录会话。")
-                }
+                .frame(width: 32, height: 32)
+                .clipShape(.circle)
+                .accessibilityHidden(true)
+                Text(entry.title).foregroundStyle(DizzyPalette.text)
+                Spacer()
+                Text(entry.isSignedIn ? "已登录" : "登录").foregroundStyle(DizzyPalette.mutedText)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
-        } else {
-            Section {
-                HStack(spacing: 14) {
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .foregroundStyle(DizzyPalette.mutedText)
-                        .frame(width: 52, height: 52)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("未登录")
-                            .font(.headline)
-                        Text("登录后可以收听已购专辑的完整版，查看已购专辑和关注动态。")
-                            .font(.footnote)
-                            .foregroundStyle(DizzyPalette.mutedText)
-                    }
-                }
-                .padding(.vertical, 4)
-                NavigationLink("登录 DizzyLab 账号") { LoginView() }
-            }
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -137,4 +139,9 @@ private extension Bundle {
         let build = infoDictionary?["CFBundleVersion"] as? String ?? "?"
         return "\(version) (\(build))"
     }
+}
+
+/// 沉浸模式的开关存在 UserDefaults 里，根视图和各个弹层一起读取。
+enum ImmersiveMode {
+    static let storageKey = "appearance.immersive"
 }

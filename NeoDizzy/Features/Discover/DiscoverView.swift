@@ -1,26 +1,22 @@
 import SwiftUI
 
 struct DiscoverView: View {
-    @State private var model = DiscoverModel()
-    @State private var search = SearchModel()
+    @Environment(DizzyLabContentCache.self) private var contentCache
+    @Environment(AccountStore.self) private var account
+    private var model: DiscoverModel { contentCache.discover }
 
     var body: some View {
-        MainTabPage(tab: .discover, onRefresh: {
-            if let discs = search.discs { await discs.reload() }
-            else { await model.refresh() }
-        }) {
-            DiscoverSearchBar(text: $search.query) { search.submit() }
-            if search.keyword != nil {
-                DiscoverSearchResults(model: search)
-                    .id(search.keyword)
-            } else {
-                DiscoverSectionPicker(selection: $model.section)
+        @Bindable var model = model
+        MainTabPage(title: "DizzyLab", onRefresh: { await model.refresh() }) {
+            Group {
+                DizzyLabShortcuts()
+                DiscoveryCategoryPicker(selection: $model.section, options: DiscoverSection.allCases.map { ($0, $0.title) })
                 if let category = model.section.category, let list = model.lists[category] {
-                    PagedContent(list: list, webURL: DizzyURL.site) { discs in
+                    PagedContent(list: list) { discs in
                         DiscGrid(discs: discs)
                     }
                 } else {
-                    LoadableContent(state: model.showcase, webURL: DizzyURL.site) { showcase in
+                    LoadableContent(state: model.showcase) { showcase in
                         if model.section == .packs {
                             LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                                 ForEach(showcase.packs) { PackCard(pack: $0) }
@@ -45,31 +41,31 @@ struct DiscoverView: View {
                 }
             }
         }
-        .scrollDismissesKeyboard(.interactively)
-        .onChange(of: search.query) { _, query in
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { search.clear() }
-        }
+        .task { contentCache.prewarm(account: account) }
     }
 }
 
 /// 分段按钮，一行放不下时可以横向滑动。
-private struct DiscoverSectionPicker: View {
-    @Binding var selection: DiscoverSection
+struct DiscoveryCategoryPicker<Selection: Hashable>: View {
+    @Binding var selection: Selection
+    let options: [(Selection, String)]
 
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                ForEach(DiscoverSection.allCases) { section in
-                    let isSelected = section == selection
+                ForEach(options, id: \.0) { option in
+                    let isSelected = option.0 == selection
                     Button {
-                        selection = section
+                        selection = option.0
                     } label: {
-                        Text(section.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(isSelected ? DizzyPalette.onAccent : DizzyPalette.text)
+                        Text(option.1)
+                            .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                            .foregroundStyle(isSelected ? DizzyPalette.background : DizzyPalette.text)
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(isSelected ? DizzyPalette.accent : DizzyPalette.surface, in: .capsule)
+                            .frame(minHeight: 34)
+                            .background(isSelected ? DizzyPalette.text : DizzyPalette.surface, in: .capsule)
+                            .frame(minHeight: 44)
+                            .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(isSelected ? .isSelected : [])

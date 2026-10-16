@@ -56,6 +56,6 @@ struct PurchasedPage: View {
 
     private func caption(for item: PurchasedDisc) -> String? {
         let date = item.purchaseDate.map { String(localized: "购买于 \($0)") }
-        return offline.album(id: item.disc.id) == nil ? date : [String(localized: "已下载"), date].compactMap { $0 }.joined(separator: " · ")
+        return offline.collection(provider: "dizzylab", kind: "album", id: item.disc.id) == nil ? date : [String(localized: "已下载"), date].compactMap { $0 }.joined(separator: " · ")
     }
 }

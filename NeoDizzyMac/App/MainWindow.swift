@@ -406,16 +406,22 @@ struct RouteDestination: View {
     let route: AppRoute
 
     var body: some View {
-        switch route {
-        case .disc(let id): AlbumPage(id: id)
-        case .localAlbum(let id): LocalAlbumPage(id: id)
-        case .label(let name): LabelDetailPage(name: name)
-        case .user(let id): UserPage(userID: id)
-        case .tag(let tag): TagPage(tag: tag)
-        case .pack(let id): PackPage(id: id)
-        case .review(let id): ReviewPage(id: id)
-        // Mac 的专辑页里已经完整展示社区内容。
-        case .discCommunity(let id): AlbumPage(id: id)
+        if let route = route.destination.base as? DizzyLabRoute {
+            switch route {
+            case .section(let section): RootPage(item: .tab(section.tab))
+            case .disc(let id): AlbumPage(id: id)
+            case .label(let name): LabelDetailPage(name: name)
+            case .user(let id): UserPage(userID: id)
+            case .tag(let tag): TagPage(tag: tag)
+            case .pack(let id): PackPage(id: id)
+            case .review(let id): ReviewPage(id: id)
+            // Mac 的专辑页里已经完整展示社区内容。
+            case .discCommunity(let id): AlbumPage(id: id)
+            }
+        } else if let route = route.destination.base as? LocalLibraryRoute {
+            switch route { case .album(let id): LocalAlbumPage(id: id) }
+        } else {
+            ContentUnavailableView("模块不可用", systemImage: "square.stack.3d.up.slash")
         }
     }
 }

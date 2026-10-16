@@ -9,9 +9,17 @@
   - `Core/UI/ArtworkImage.swift`，`Core/UI/LoadStateViews.swift` 里的分页底栏
   - `Features/Player/MiniPlayerView.swift`
   - 播放页 `Features/Player/NowPlaying/`：Apple Music 式动态背景（`AppleMusicBackdropShaders.metal` 原样移植）、播放控制按钮样式（原样移植）、大封面页、队列页、底部控件和「…」菜单（按 NeoDizzy 精简）
+- 专辑和歌单的封面布局、玻璃播放操作、平均取色、预渲染模糊与渐变背景适配自上游 `PlaylistDetailContent.swift`、`ArtworkAccentColorProvider.swift`，复用 NeoDizzy 的 Nuke 预加载缓存。
 - 专辑曲目列表 `Features/Disc/AlbumPresentation.swift` 移植上游 `Features/Playlist/PlaylistTrackList.swift` 的布局和当前曲目样式，操作适配 NeoDizzy 的播放及本地标签编辑。
 - 主页面标题的固定 / 滚动设置与下拉补偿逻辑移植自 `MeloX_Modified/MeloX/Shared/Components/PageHeader.swift`，改用 NeoDizzy 的头像入口与泛型页头。
 - `PlayerStore` 参考了 MeloX 的结构，按需重写。M3 文件夹扫描按 NeoDizzy 的专辑对应关系格式独立实现。
+
+- 网易云音质档位、按网络选择与降级顺序、播放日志协议、心动模式接口与喜欢列表入口，参考 MeloX 本地分支 `b8bc60f` 的 `MusicQuality.swift`、`PlaybackHistoryRecorder.swift`、`NeteaseAPI+IntelligenceMode.swift` 和 `LibrarySongsView.swift`，适配模块设置、共享播放器与账号隔离。
+
+- 「继续播放」页直接移植 MeloX `b8bc60f` 的 `NowPlayingQueuePage.swift`，包括列表、双位置模式栏、空状态和拖动排序；数据类型、本地化、竖屏外置曲目头及底部控件高度接入 NeoDizzy。队列重排逻辑直接移植 `PlaybackQueue.moveUpcomingSongs`。
+
+- 全屏播放器进一步直接移植同一 MeloX `b8bc60f` 的封面页、横屏布局、曲目头、底部控件，以及 `NowPlayingMotionSpec`、`NowPlayingTransitionCoordinator`、`NowPlayingInterruptibleProgress`、页面呈现和控件转场源码。浮动歌词按钮替换为 AVRoutePickerView，歌曲操作接模块的喜欢/更多接口。歌词载入和渲染继续使用 NeoDizzy 的 LocalLyrics 适配层；未引入 MeloX 的 AutoMix、播客、其他歌词风格及其设置体系。
+- 播放器默认背景直接移植同一版本的 `NowPlayingAppleMusicBackground.swift` 与着色器参数封装：使用原封面 AsyncImage、相同模糊与明暗叠加、歌词页 pinch 过渡；频谱响应保持上游默认关闭，播放时钟接 NeoDizzy。
 
 ## Nuke
 
@@ -51,3 +59,29 @@
 - 源码和许可证保存在 `Packages/AudioTags`，通过本地 SwiftPM 包编译，不依赖预编译二进制。TagLib 按其 LGPL-2.1 / MPL 双许可证分发，完整条款见包内 `COPYING*`。
 - TagLib 使用的 utfcpp 固定为提交 `2d8e20b22dcb3e9b3c4f52103182ebda949c6089`，许可证见 `UTFCPP-LICENSE`。
 - NeoDizzy 的桥接层只负责标签读写，不提供额外音频解码器；官方 C++ 源码未修改，构建配置及桥接由本项目提供。
+
+## NeteaseCloudMusicApiEnhanced
+
+- 来源：<https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced>
+- `NeteaseCheckToken.swift` 的官方 Watchman SDK 初始化、就绪等待与按操作获取 token 流程参考 `module/register_checktoken_v2.js`；请求头与请求体的 token 用法参考 `module/playlist_subscribe.js` 和 `util/request.js`。未移植浏览器身份覆盖逻辑。
+- 许可证：MIT，条款如下。
+
+Copyright (c) 2013-2022 Binaryify
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

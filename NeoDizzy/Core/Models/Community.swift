@@ -21,6 +21,7 @@ nonisolated struct DiscCommunityContext: Sendable {
     let myComment: String?
     let commentLimit: Int
     let canComment: Bool
+    var requiresLogin: Bool = false
 }
 nonisolated struct ReviewSummary: Identifiable, Sendable {
     let id: Int

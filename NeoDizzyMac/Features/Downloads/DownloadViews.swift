@@ -10,7 +10,7 @@ struct DownloadJobRow: View {
 
     private var retryUnavailableReason: String? {
         if offline.folderName == nil { return String(localized: "请先选择下载目录") }
-        if downloads.jobs.contains(where: { $0.discID == job.discID && $0.isGift == job.isGift && $0.isActive }) {
+        if downloads.jobs.contains(where: { $0.identity == job.identity && $0.isActive }) {
             return String(localized: "这张专辑已有下载任务")
         }
         if offline.isScanning { return String(localized: "请等待文件夹扫描完成") }
@@ -19,14 +19,14 @@ struct DownloadJobRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            ArtworkImage(url: job.album.coverURL, cornerRadius: 5)
+            ArtworkImage(url: job.coverURL, cornerRadius: 5)
                 .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 4) {
-                Button(job.title) { model.navigation.open(.disc(id: job.discID)) }
+                Text(job.title)
                     .buttonStyle(.plain)
                     .font(.body.weight(.medium))
                     .lineLimit(1)
-                Text("\(job.format.uppercased()) · \(job.statusText)")
+                Text("\(job.providerID.uppercased()) · \(job.statusText)")
                     .font(.callout)
                     .foregroundStyle(job.canRetry ? Color.dizzyAccent : .secondary)
                     .lineLimit(2)

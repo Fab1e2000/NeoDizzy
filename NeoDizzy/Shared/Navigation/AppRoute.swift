@@ -1,30 +1,24 @@
 import Foundation
 
-/// 各标签页导航栈里可以推入的页面。
-///
-/// DizzyLab 的专辑、pack 用字符串 ID（如 `KSEP-001`），社团在网址里用名字（`/l/<名字>`），
-/// 用户用数字 ID（`/u/<id>`）。
-enum AppRoute: Hashable {
-    case disc(id: String)
-    case localAlbum(id: String)
-    case label(name: String)
-    case user(id: Int)
-    case tag(String)
-    case pack(id: String)
-    case review(id: Int)
-    /// 专辑的全部短评与 repo。
-    case discCommunity(id: String)
+/// Stable namespace owned by a module, independent of the tab slot displaying it.
+struct ModuleID: RawRepresentable, Hashable, Codable, Identifiable, Sendable {
+    let rawValue: String
+    var id: String { rawValue }
+    nonisolated init(rawValue: String) { self.rawValue = rawValue }
 
-    var title: String {
-        switch self {
-        case .localAlbum: String(localized: "本地专辑")
-        case .disc: String(localized: "专辑")
-        case .label(let name): name
-        case .user: String(localized: "用户主页")
-        case .tag(let tag): "#\(tag)"
-        case .pack: String(localized: "合集")
-        case .review: "repo 长评"
-        case .discCommunity: String(localized: "社区")
-        }
+    /// 标签栏右侧的统一搜索；它有自己的导航路径，但不是模块。
+    static let search = ModuleID(rawValue: "search")
+}
+
+/// The host transports routes without knowing their module-specific payload types.
+struct AppRoute: Hashable {
+    let moduleID: ModuleID
+    let destination: AnyHashable
+    let title: String
+
+    init<Destination: Hashable>(moduleID: ModuleID, destination: Destination, title: String) {
+        self.moduleID = moduleID
+        self.destination = AnyHashable(destination)
+        self.title = title
     }
 }

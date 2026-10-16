@@ -3,7 +3,7 @@
 
 # Xcode 用户本地的窗口布局等个人状态，不入库
 xcuserdata/
-DerivedData/
+DerivedData*/
 build/
 *.xcresult/
 

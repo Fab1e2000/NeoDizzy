@@ -5,11 +5,12 @@ struct PurchasedLibraryView: View {
     @Environment(AccountStore.self) private var account
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(PurchaseStore.self) private var payments
-    @State private var model = LibraryModel()
+    @Environment(DizzyLabContentCache.self) private var contentCache
+    private var model: LibraryModel { contentCache.library }
     @State private var purchaseSheet: PurchaseSheet?
 
     var body: some View {
-        MainTabPage(tab: .purchased, onRefresh: { await model.purchases?.reload() }) {
+        DizzyLabPage(section: .purchased, onRefresh: { await model.purchases?.reload(keepingItems: true) }) {
             if let pending = payments.current {
                 Button {
                     purchaseSheet = PurchaseSheet(summary: DiscSummary(id: pending.attempt.discID, title: pending.title, coverURL: nil))
@@ -34,16 +35,13 @@ struct PurchasedLibraryView: View {
         .onChange(of: account.account?.userID, initial: true) { _, userID in
             model.update(userID: userID)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .dizzyPurchaseDidComplete)) { _ in
-            Task { await model.purchases?.reload() }
-        }
         .sheet(item: $purchaseSheet) { sheet in PurchaseView(summary: sheet.summary) }
     }
 
     @ViewBuilder
     private var purchasedContent: some View {
-        if let userID = model.userID, let purchases = model.purchases {
-            PagedContent(list: purchases, webURL: DizzyURL.purchases(userID: userID), emptyMessage: "还没有购买过专辑。") { items in
+        if model.userID != nil, let purchases = model.purchases {
+            PagedContent(list: purchases, emptyMessage: "还没有购买过专辑。") { items in
                 LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                     ForEach(items) { item in
                         NavigationLink(value: AppRoute.disc(id: item.disc.id)) {
@@ -57,7 +55,7 @@ struct PurchasedLibraryView: View {
                 }
             }
         } else {
-            LoginPrompt(systemImage: "music.note.list", message: "登录后，你购买过的专辑会显示在这里。本地专辑可在「本地库」中播放。")
+            LoginPrompt(systemImage: "music.note.list", message: "登录后，你购买过的专辑会显示在这里。本地专辑可在「资料库」中播放。")
         }
     }
 

@@ -5,8 +5,30 @@ import Observation
 @MainActor
 final class DownloadProgress {
     var fraction: Double?
+    var receivedBytes: Int64 = 0
+    var expectedBytes: Int64 = 0
+    var bytesPerSecond: Double = 0
+    var updatedAt: Date = .distantPast
+    @ObservationIgnored private var sample: (time: ContinuousClock.Instant, bytes: Int64)?
 
     init(fraction: Double?) { self.fraction = fraction }
+
+    func update(received: Int64, expected: Int64, now: ContinuousClock.Instant = .now) {
+        if let sample {
+            let elapsed = sample.time.duration(to: now).components
+            let seconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+            if seconds > 0 { bytesPerSecond = Double(max(0, received - sample.bytes)) / seconds }
+        }
+        sample = (now, received)
+        receivedBytes = received
+        expectedBytes = expected
+        fraction = expected > 0 ? min(1, Double(received) / Double(expected)) : nil
+        updatedAt = .now
+    }
+
+    func speed(at date: Date) -> Double { date.timeIntervalSince(updatedAt) < 2 ? bytesPerSecond : 0 }
+    func finish() { bytesPerSecond = 0; sample = nil }
+
 }
 
 /// A menu choice, not a cached authorization: enqueue and retry always fetch a new page.
@@ -19,10 +41,11 @@ nonisolated struct DownloadOption: Identifiable, Hashable, Sendable {
 }
 
 nonisolated enum DownloadFailure: LocalizedError {
-    case ambiguousEncoding, folderMissing, unavailable, invalidResponse, unsafeArchive, archiveTooLarge, damagedArchive, interrupted
+    case songUnavailable, ambiguousEncoding, folderMissing, unavailable, invalidResponse, unsafeArchive, archiveTooLarge, damagedArchive, interrupted
 
     var errorDescription: String? {
         switch self {
+        case .songUnavailable: "需要 VIP 或已下架"
         case .ambiguousEncoding: "无法确定 ZIP 文件名编码，请在电脑解压后导入音乐库"
         case .folderMissing: "请先在音乐库选择保存文件夹"
         case .unavailable: "下载链接不可用，请确认已登录并已购买此专辑"
@@ -35,39 +58,6 @@ nonisolated enum DownloadFailure: LocalizedError {
     }
 }
 
-/// Persists only album metadata and the format. Signed URLs, cookies and streaming URLs are excluded.
-nonisolated struct DownloadAlbum: Codable, Sendable {
-    let id: String
-    let title: String
-    let coverURL: URL?
-    let labelName: String?
-    let tracks: [Track]
-    let releaseDate: String?
-    let description: String
-    let credits: String
-    let labelDescription: String
-    let hasGift: Bool
-
-    init(_ detail: DiscDetail) {
-        id = detail.id
-        title = detail.summary.title
-        coverURL = detail.summary.coverURL
-        labelName = detail.summary.labelName
-        tracks = detail.tracks
-        releaseDate = detail.releaseDate
-        description = detail.description
-        credits = detail.credits
-        labelDescription = detail.labelDescription
-        hasGift = detail.hasGift
-    }
-
-    var detail: DiscDetail {
-        DiscDetail(summary: DiscSummary(id: id, title: title, coverURL: coverURL, labelName: labelName, isOwned: true),
-                   releaseDate: releaseDate, description: description, credits: credits, labelDescription: labelDescription, hasGift: hasGift,
-                   tracks: tracks, streams: [:])
-    }
-}
-
 nonisolated struct DownloadJob: Identifiable, Codable, Sendable {
     enum State: String, Codable, Sendable {
         case queued, preparing, downloading, extracting, importing, completed, cancelled, failed
@@ -75,26 +65,46 @@ nonisolated struct DownloadJob: Identifiable, Codable, Sendable {
     }
 
     let id: UUID
-    let album: DownloadAlbum
-    let format: String
+    let providerID: String
+    let requestData: Data
+    var transfers: [DownloadTransfer] = []
     var state: State = .queued
     var progress: Double?
     var failureMessage: String?
-    var discID: String { album.id }
-    var isGift: Bool { format == "gift" }
-    var title: String { isGift ? "\(album.title) · 特典" : album.title }
+
     var isActive: Bool { state.isActive }
-    var canRetry: Bool { state == .failed || state == .cancelled }
+    var canRetry: Bool { state == .failed || state == .cancelled || (state == .completed && transfers.contains { $0.state == .failed }) }
     var statusText: String {
-        switch state {
+        if isActive, transfers.contains(where: { $0.state == .downloading }),
+           transfers.contains(where: { $0.state == .processing }) { return "正在下载与处理音频" }
+        return switch state {
         case .queued: "等待下载"
         case .preparing: "正在获取下载链接"
         case .downloading: "正在下载"
         case .extracting: "正在解压"
         case .importing: "正在保存到音乐库"
-        case .completed: "已下载"
+        case .completed: failureMessage ?? "已下载"
         case .cancelled: "已取消"
         case .failed: failureMessage ?? "下载失败，请重试"
         }
     }
+}
+
+nonisolated struct DownloadRequest: Codable, Sendable {
+    let title: String
+    let identity: String
+    let coverURL: URL?
+    let payload: Data
+}
+
+extension DownloadJob {
+    var request: DownloadRequest? { try? JSONDecoder().decode(DownloadRequest.self, from: requestData) }
+    var title: String { request?.title ?? "下载任务" }
+    var identity: String { "\(providerID)/\(request?.identity ?? id.uuidString)" }
+    var coverURL: URL? { request?.coverURL }
+}
+
+nonisolated struct DownloadSnapshot: Codable {
+    let version: Int
+    let jobs: [DownloadJob]
 }

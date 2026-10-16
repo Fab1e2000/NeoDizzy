@@ -1,73 +1,114 @@
+import Foundation
+import CoreGraphics
+import SwiftUI
+import UIKit
 import Testing
 @testable import NeoDizzy
 
+@Suite(.serialized)
 struct AlbumBackdropTests {
-    private typealias RGB = SIMD3<Double>
+    @MainActor @Test func emptyCollectionCanAppearAndDismissBeforeArtworkArrives() async throws {
+        // Recent playback has no cover until its response arrives. Exercise this path
+        // with the real SwiftUI task modifiers, including Release optimization.
+        let controller = UIHostingController(rootView:
+            AlbumDetailScrollView(artworkURL: nil) {
+                AlbumHero(artworkURL: nil, title: "最近播放", metadata: "正在加载…") {
+                    Text("网易云账号的最近播放记录")
+                } actions: {
+                    AlbumPlaybackActions(isEmpty: true) { _ in }
+                }
+            }
+        )
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(controller.view.window != nil)
+    }
 
-    /// 一张 `size` 见方的不透明图，`color(x, y)` 给出每个像素的 0–255 颜色。
-    private func image(size: Int = 100, color: (Int, Int) -> SIMD3<UInt8>) -> [UInt8] {
-        var pixels: [UInt8] = []
-        for y in 0..<size {
-            for x in 0..<size {
-                let value = color(x, y)
-                pixels += [value.x, value.y, value.z, 255]
+    @MainActor @Test(arguments: [false, true])
+    func recentCollectionReceivesArtworkAfterAppearing(preloaded: Bool) async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 32)).image { context in
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 32, height: 32))
+        }
+        try #require(image.pngData()).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        if preloaded { await AlbumArtworkPreload.prepare(url) }
+        let controller = UIHostingController(rootView: RecentArtworkFixture(loadedURL: url))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        try await Task.sleep(for: .seconds(1))
+        #expect(controller.view.window != nil)
+    }
+
+    @Test func decodingTheSamePaletteDoesNotRestartTheTransition() throws {
+        let context = try #require(CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8,
+                                            bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+                                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let first = try #require(context.makeImage())
+        let second = try #require(context.makeImage())
+        let color = SIMD3<Double>(0.2, 0.4, 0.6)
+        let displayed = AlbumBackdrop(averageRGB: color, blurredImage: first)
+        let redecoded = AlbumBackdrop(averageRGB: color, blurredImage: second)
+        #expect(displayed.alreadyDisplays(redecoded))
+        #expect(!AlbumBackdrop(averageRGB: color).alreadyDisplays(redecoded))
+        #expect(!displayed.alreadyDisplays(AlbumBackdrop(averageRGB: SIMD3(repeating: 0.9))))
+    }
+
+    @Test func darkArtworkKeepsItsHueOnADarkBackground() {
+        let backdrop = AlbumBackdrop(averageRGB: SIMD3(0.2, 0.4, 0.6))
+        #expect(backdrop.prefersDarkAppearance)
+        #expect(backdrop.backgroundRGB.z > backdrop.backgroundRGB.y)
+        #expect(backdrop.backgroundRGB.y > backdrop.backgroundRGB.x)
+        #expect(backdrop.backgroundRGB.z < 0.3)
+    }
+
+    @Test func brightArtworkUsesALightBackground() {
+        let backdrop = AlbumBackdrop(averageRGB: SIMD3(1, 0.9, 0.1))
+        #expect(!backdrop.prefersDarkAppearance)
+        #expect(backdrop.backgroundRGB.x > 0.9)
+        #expect(backdrop.backgroundRGB.z > 0.65)
+    }
+
+    @Test func paletteProvidesReadableTextAcrossSourceColors() {
+        func linear(_ value: Double) -> Double {
+            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        for r in stride(from: 0.0, through: 1.0, by: 0.2) {
+            for g in stride(from: 0.0, through: 1.0, by: 0.2) {
+                for b in stride(from: 0.0, through: 1.0, by: 0.2) {
+                    let backdrop = AlbumBackdrop(averageRGB: SIMD3(r, g, b))
+                    let color = backdrop.backgroundRGB
+                    let luminance = linear(color.x) * 0.2126 + linear(color.y) * 0.7152 + linear(color.z) * 0.0722
+                    let contrast = backdrop.prefersDarkAppearance ? 1.05 / (luminance + 0.05) : (luminance + 0.05) / 0.05
+                    #expect(contrast >= 4.5)
+                }
             }
         }
-        return pixels
     }
+}
 
-    private func isClose(_ lhs: RGB, _ rhs: RGB, tolerance: Double = 0.02) -> Bool {
-        ((lhs - rhs) * (lhs - rhs)).sum() < tolerance * tolerance * 3
-    }
-
-
-    @Test func picksEdgeColorRatherThanCenter() {
-        // 白底中间一大块黑：平均色是灰，边缘是白。
-        let pixels = image { x, y in (20..<80).contains(x) && (20..<80).contains(y) ? [0, 0, 0] : [255, 255, 255] }
-        let edge = AlbumBackdrop.edgeColor(pixels: pixels, width: 100, height: 100)
-        #expect(isClose(edge, RGB(repeating: 1)))
-    }
-
-    @Test func mostCommonEdgeColorWinsOverMixing() {
-        // 外圈大半是红，上边一条蓝：取红，不混成紫。
-        let pixels = image { _, y in y < 3 ? [0, 0, 255] : [220, 30, 30] }
-        let edge = AlbumBackdrop.edgeColor(pixels: pixels, width: 100, height: 100)
-        #expect(isClose(edge, RGB(220, 30, 30) / 255))
-    }
-
-    @Test func busyEdgeFallsBackToWholeCoverDominantColor() {
-        // 外圈每个像素颜色都不同，中间是一整块绿。
-        let pixels = image { x, y in
-            (8..<92).contains(x) && (8..<92).contains(y)
-                ? [40, 160, 70]
-                : [UInt8((x * 37 + y * 11) % 256), UInt8((x * 13 + y * 71) % 256), UInt8((x * 59 + y * 29) % 256)]
+private struct RecentArtworkFixture: View {
+    let loadedURL: URL
+    @State private var url: URL?
+    var body: some View {
+        AlbumDetailScrollView(artworkURL: url) {
+            AlbumHero(artworkURL: url, title: "最近播放", metadata: "测试") {
+                Text("最近播放")
+            } actions: {
+                AlbumPlaybackActions(isEmpty: true) { _ in }
+            }
         }
-        let edge = AlbumBackdrop.edgeColor(pixels: pixels, width: 100, height: 100)
-        #expect(isClose(edge, RGB(40, 160, 70) / 255))
-    }
-
-    @Test func ignoresTransparentPixels() {
-        var pixels = image { x, _ in x < 50 ? [255, 255, 255] : [30, 60, 200] }
-        for index in stride(from: 0, to: pixels.count, by: 4) where (index / 4) % 100 < 50 {
-            pixels[index..<index + 4] = [0, 0, 0, 0]
-        }
-        let edge = AlbumBackdrop.edgeColor(pixels: pixels, width: 100, height: 100)
-        #expect(isClose(edge, RGB(30, 60, 200) / 255))
-    }
-
-    @Test func backgroundIsEdgeColorUnchanged() {
-        let pixels = image { _, _ in [230, 150, 140] }
-        let edge = AlbumBackdrop.edgeColor(pixels: pixels, width: 100, height: 100)
-        #expect(isClose(AlbumBackdrop(edgeRGB: edge).edgeRGB, RGB(230, 150, 140) / 255))
-    }
-
-    @Test func textColorFollowsBackgroundContrast() {
-        // 浅色、亮黄、浅粉配黑字；深蓝、深灰、纯红配白字。
-        for light in [RGB(1, 1, 1), RGB(1, 0.9, 0.1), RGB(0.9, 0.6, 0.55)] {
-            #expect(!AlbumBackdrop(edgeRGB: light).prefersDarkAppearance)
-        }
-        for dark in [RGB(0, 0, 0), RGB(0.1, 0.15, 0.4), RGB(0.3, 0.3, 0.3), RGB(0.8, 0.1, 0.1)] {
-            #expect(AlbumBackdrop(edgeRGB: dark).prefersDarkAppearance)
+        .task {
+            try? await Task.sleep(for: .milliseconds(50))
+            url = loadedURL
         }
     }
 }

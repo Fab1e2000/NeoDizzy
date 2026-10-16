@@ -11,11 +11,13 @@ final class PagedList<Item: Identifiable & Sendable> {
     private(set) var isLoading = false
     private(set) var failure: String?
 
+    var didLoad: (([Item]) -> Void)?
     private let fetch: (Int) async throws -> Page<Item>
     private(set) var loadedPages = 0
     private var loadTask: Task<Void, Never>?
     /// 重新加载后，还没返回的旧请求作废。
     private var generation = 0
+    private var needsReload = false
 
     init(fetch: @escaping (Int) async throws -> Page<Item>) {
         self.fetch = fetch
@@ -24,16 +26,22 @@ final class PagedList<Item: Identifiable & Sendable> {
     /// 已经加载完、而且一条都没有。
     var isEmpty: Bool { items.isEmpty && !hasMore && failure == nil }
 
-    func reload() async {
+    /// 下拉刷新可保留旧内容，避免滚动高度在请求期间塌缩。
+    func reload(keepingItems: Bool = false) async {
         generation += 1
+        needsReload = true
         loadTask?.cancel()
         loadTask = nil
-        items = []
-        loadedPages = 0
-        hasMore = true
+        if !keepingItems {
+            items = []
+            loadedPages = 0
+            hasMore = true
+        }
         failure = nil
-        isLoading = false
-        await loadMore()
+        isLoading = true
+        let task = Task { await fetchNextPage(generation: generation, replacing: true) }
+        loadTask = task
+        await task.value
     }
 
     /// 加载下一页；已有请求在进行时等它完成，不重复请求。
@@ -42,24 +50,27 @@ final class PagedList<Item: Identifiable & Sendable> {
             await loadTask.value
             return
         }
-        guard hasMore else { return }
+        guard hasMore || needsReload else { return }
         isLoading = true
         failure = nil
-        let task = Task { await fetchNextPage(generation: generation) }
+        let task = Task { await fetchNextPage(generation: generation, replacing: needsReload) }
         loadTask = task
         await task.value
     }
 
-    private func fetchNextPage(generation requestGeneration: Int) async {
-        let page = loadedPages + 1
+    private func fetchNextPage(generation requestGeneration: Int, replacing: Bool = false) async {
+        let page = replacing ? 1 : loadedPages + 1
         do {
             let result = try await fetch(page)
             guard requestGeneration == generation else { return }
             // 翻页期间有新作品上架时，同一张专辑可能在相邻两页各出现一次。
-            var known = Set(items.map(\.id))
-            items += result.items.filter { known.insert($0.id).inserted }
+            var known = Set((replacing ? [] : items).map(\.id))
+            let incoming = result.items.filter { known.insert($0.id).inserted }
+            items = replacing ? incoming : items + incoming
+            needsReload = false
             loadedPages = page
             hasMore = result.hasMore && !result.items.isEmpty
+            didLoad?(incoming)
         } catch {
             guard requestGeneration == generation else { return }
             if !(error is CancellationError) {

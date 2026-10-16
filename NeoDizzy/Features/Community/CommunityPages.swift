@@ -16,6 +16,9 @@ struct CommunityProfileView: View {
                         }
                     }
                 }
+                if model.profile == nil && model.failure == nil {
+                    ContentSkeleton(layout: .rows, count: 1)
+                }
                 Picker("用户内容", selection: $model.section) {
                     ForEach(ProfileSection.allCases) { Text($0.title).tag($0) }
                 }.pickerStyle(.segmented)
@@ -33,10 +36,16 @@ struct CommunityProfileView: View {
                     ForEach(model.reviews) { ReviewRow(review: $0) }
                 } else { DiscGrid(discs: model.discs) }
                 if let failure = model.failure {
-                    LoadFailureView(message: failure, webURL: DizzyURL.page("/u/\(model.userID)/\(model.section.rawValue)/")) { await model.next() }
-                } else if model.loading { ProgressView().frame(maxWidth: .infinity) }
+                    LoadFailureView(message: failure) { await model.next() }
+                } else if model.loading || model.page == 0 {
+                    if model.discs.isEmpty && model.labels.isEmpty && model.reviews.isEmpty {
+                        ContentSkeleton(layout: model.section == .following ? .rows : model.section == .review ? .comments : .grid)
+                    }
+                }
                 else if model.profile?.hasMore == true {
-                    Button("加载更多") { Task { await model.next() } }.frame(maxWidth: .infinity)
+                    AutoLoadMoreFooter(progress: model.page, load: { await model.next() }) {
+                        ContentSkeleton(layout: model.section == .following ? .rows : model.section == .review ? .comments : .grid, count: 2)
+                    }
                 } else if model.profile != nil && model.discs.isEmpty && model.labels.isEmpty && model.reviews.isEmpty {
                     Text("这里还没有内容。").foregroundStyle(DizzyPalette.mutedText).frame(maxWidth: .infinity).padding(.vertical, 40)
                 }
@@ -44,7 +53,7 @@ struct CommunityProfileView: View {
         }
         .safeAreaPadding(.top, 5)
         .navigationTitle("用户主页").navigationBarTitleDisplayMode(.inline).dizzyPageBackground()
-        .task(id: model.section) { await model.reset() }
-        .refreshable { await model.reset() }
+        .task(id: model.section) { await model.loadSectionIfNeeded() }
+        .refreshable { await model.reset(keepingItems: true) }
     }
 }

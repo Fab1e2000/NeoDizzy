@@ -24,7 +24,6 @@ nonisolated struct DownloadProgressThrottle {
             let finished = expected > 0 && written >= expected
             let becameDeterminate = expected > 0 && previous.expected <= 0
             if !finished && !becameDeterminate {
-                if expected <= 0 && previous.expected <= 0 { return false }
                 if previous.time.duration(to: now) < interval { return false }
             }
         }
@@ -57,7 +56,7 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
         configuration.urlCredentialStorage = nil
         configuration.sessionSendsLaunchEvents = true
         configuration.isDiscretionary = false
-        configuration.httpMaximumConnectionsPerHost = 2
+        configuration.httpMaximumConnectionsPerHost = 6
         configuration.timeoutIntervalForRequest = 60
         configuration.timeoutIntervalForResource = 24 * 60 * 60
         let queue = OperationQueue()
@@ -65,10 +64,9 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: queue)
     }
 
-    func start(url: URL, id: UUID) {
+    func start(url: URL, id: UUID, headers: [String: String] = [:]) {
         var request = URLRequest(url: url)
-        request.setValue(DizzyHTTPClient.userAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue(DizzyURL.site.absoluteString + "/", forHTTPHeaderField: "Referer")
+        for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
         let task = session.downloadTask(with: request)
         task.taskDescription = id.uuidString
         task.resume()
@@ -98,7 +96,6 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
                   (200..<300).contains(response.statusCode), !Self.isErrorContentType(response.mimeType) else {
                 throw DownloadFailure.invalidResponse
             }
-            try SafeZipExtractor.validateZIP(location)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let target = archiveURL(id)
             try? FileManager.default.removeItem(at: target)

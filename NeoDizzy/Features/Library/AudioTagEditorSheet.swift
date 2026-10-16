@@ -72,7 +72,7 @@ struct AudioTagEditorSheet: View {
                     } footer: {
                         Text("只修改当前音频的内嵌标签；专辑仍按文件夹归类。空白字段会删除相应标签。")
                     }
-                } else if busy { ProgressView("读取文件标签") }
+                } else if busy { Section("音乐标签") { ContentSkeleton(layout: .rows) } }
                 else { Button("重新读取") { Task { await load() } } }
             }
             .safeAreaPadding(.top, 5)

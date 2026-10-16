@@ -4,7 +4,7 @@ import AudioTagBridge
 nonisolated struct AudioTagDocument: Codable, Equatable, Sendable {
     var values: [String: [String]]
     var cover: String
-    static let keys = ["TITLE", "ARTIST", "ALBUM", "ALBUMARTIST", "TRACKNUMBER", "DISCNUMBER", "DATE", "GENRE"]
+    static let keys = ["TITLE", "ARTIST", "ALBUM", "ALBUMARTIST", "TRACKNUMBER", "DISCNUMBER", "DATE", "GENRE", "LYRICS"]
     func text(_ key: String) -> String { values[key]?.first ?? "" }
     var coverData: Data? { cover.isEmpty ? nil : Data(base64Encoded: cover) }
 

@@ -120,7 +120,7 @@ struct OfflineManifestTests {
         #expect(!json.contains("private-signed-stream"))
         #expect(!json.contains(source.path))
         let decoded = try JSONDecoder().decode(OfflineManifest.self, from: manifestData)
-        #expect(decoded.version == 1)
+        #expect(decoded.version == 2)
         #expect(decoded.entries[0].relativePath == "原始目录/01 星空.flac")
     }
 
@@ -289,14 +289,15 @@ struct OfflineManifestTests {
         #expect(scan.albums.first?.localFile(for: detail.tracks[0]) != nil)
     }
 
-    @Test func missingAudioSkipsAlbumWithIssue() throws {
+    @Test func missingAudioSkipsAlbumSilently() throws {
         let root = try temporaryOfflineDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let manifest = try OfflineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "missing.wav"], coverPath: nil)
         try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent(OfflineManifest.filename))
         let scan = try OfflineLibraryWorker.scanDirectory(root)
+        // A manifest left without any audio (e.g. after deleting the album) is not a broken download.
         #expect(scan.albums.isEmpty)
-        #expect(scan.issues.count == 1)
+        #expect(scan.issues.isEmpty)
     }
 
     @Test func rejectsFutureManifestVersionAndDuplicateTrackFiles() throws {

@@ -48,6 +48,14 @@ struct CommunityTests {
         #expect(anonymous.userID == nil && anonymous.myComment == nil)
         #expect(try CommunityPageParser.csrf("<script>let x={'csrfmiddlewaretoken':'abc123'}</script>") == "abc123")
     }
+    @Test func missingViewerMarkupIsNotProofOfLogout() throws {
+        let unknown = try CommunityPageParser.discContext("<div id='commentbox'></div>")
+        #expect(unknown.userID == nil && !unknown.requiresLogin)
+        let loggedOut = try CommunityPageParser.discContext("<a href='/albums/login/'>登录</a><div id='commentbox'></div>")
+        #expect(loggedOut.requiresLogin)
+        let form = try CommunityPageParser.discContext("<a href='/albums/login/'>登录</a><textarea id='comment_txt_box'></textarea><div id='commentbox'></div>")
+        #expect(!form.requiresLogin)
+    }
     @Test func followUsesObservedSamePageQueryOnly() throws {
         let prefix = "<a class='dropdown-item' href='/u/42'>我</a>"
         let html = prefix + "<a href='?ilikeit'><button name='likeit-on'>关注</button></a>"
@@ -89,6 +97,16 @@ struct CommunityNetworkTests {
         let config = URLSessionConfiguration.dizzy
         config.protocolClasses = [CommunityStub.self]
         return DizzyCommunity(client: DizzyHTTPClient(session: URLSession(configuration: config)))
+    }
+    @Test func albumWithoutAccountDropdownConfirmsViewerUsingSameSession() async throws {
+        let service = api { request in
+            #expect(request.value(forHTTPHeaderField: "Cookie") == "sessionid=fixture-session")
+            if request.url?.path == "/" { return "<a class='dropdown-item' href='/u/42'>我</a>" }
+            return "<div id='commentbox'></div><textarea id='comment_txt_box'></textarea><input name='csrfmiddlewaretoken' value='fixture-csrf'>"
+        }
+        service.client.credentials.restore(.init(cookies: [.init(name: "sessionid", value: "fixture-session", expires: nil)]))
+        let context = try await service.context("test")
+        #expect(context.userID == 42 && context.canComment && !context.requiresLogin)
     }
     @Test func likeIsConfirmedByFreshReadAndNotRetried() async throws {
         let state = CommunityRequestState()
@@ -155,4 +173,42 @@ nonisolated private final class CommunityRequestState: @unchecked Sendable {
     private var value = 0
     var count: Int { lock.lock(); defer { lock.unlock() }; return value }
     func increment() { lock.lock(); value += 1; lock.unlock() }
+}
+
+@MainActor
+struct CommunityProfileModelTests {
+    @Test func refreshRetainsItemsUntilReplacementArrives() async throws {
+        let profile = try CommunityPageParser.profile(Fixture.text("community-profile-empty.html"), userID: 42, section: .review)
+        var calls = 0
+        var model: CommunityProfileModel!
+        model = CommunityProfileModel(userID: 42) { _, _, _ in
+            calls += 1
+            if calls == 2 { #expect(model.discs.map(\.id) == ["cached"]) }
+            return profile
+        }
+        await model.loadSectionIfNeeded()
+        model.discs = [DiscSummary(id: "cached", title: "Cached", coverURL: nil)]
+        await model.reset(keepingItems: true)
+        #expect(model.discs.isEmpty)
+    }
+
+    @Test func preservesIdentityDuringSectionChangesAndDoesNotReloadOnReturn() async throws {
+        let profile = try CommunityPageParser.profile(Fixture.text("community-profile-empty.html"), userID: 42, section: .review)
+        var calls = 0
+        var model: CommunityProfileModel!
+        model = CommunityProfileModel(userID: 42) { _, _, _ in
+            calls += 1
+            if calls > 1 { #expect(model.profile?.user.id == 42) }
+            return profile
+        }
+        await model.loadSectionIfNeeded()
+        await model.loadSectionIfNeeded()
+        #expect(calls == 1)
+        model.section = .following
+        await model.loadSectionIfNeeded()
+        #expect(calls == 2)
+        await model.reset()
+        #expect(calls == 3)
+        #expect(model.profile?.user.id == 42)
+    }
 }

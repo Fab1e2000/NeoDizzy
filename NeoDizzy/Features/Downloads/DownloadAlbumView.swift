@@ -9,6 +9,7 @@ struct DownloadAlbumView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var options: [DownloadOption] = []
     @State private var isLoading = false
+    @State private var didLoad = false
     @State private var isEnqueuing = false
     @State private var failure: String?
 
@@ -47,19 +48,18 @@ struct DownloadAlbumView: View {
 
     @ViewBuilder
     private var formatSelection: some View {
-        if isLoading {
-            ProgressView("正在获取可下载格式…")
+        if isLoading || !didLoad {
+            ContentSkeleton(layout: .rows, count: 3)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
         } else if let failure {
-            LoadFailureView(message: failure, webURL: DizzyURL.disc(detail.id)) {
+            LoadFailureView(message: failure) {
                 await loadOptions()
             }
         } else if options.isEmpty {
-            Text(isGift ? "暂无可下载的特典，请在专辑网页中确认特典和下载权限。" : "暂时没有可下载的格式，请在专辑网页中确认下载权限。")
+            Text(isGift ? "暂无可下载的特典，请确认已购买并拥有特典下载权限。" : "暂时没有可下载的格式，请确认已购买并拥有下载权限。")
                 .font(.subheadline)
                 .foregroundStyle(DizzyPalette.mutedText)
-            Link("在网页中打开", destination: DizzyURL.disc(detail.id))
         } else {
             SectionHeading(title: isGift ? "特典" : "选择格式")
             ForEach(options) { option in
@@ -93,7 +93,7 @@ struct DownloadAlbumView: View {
                 .disabled(isEnqueuing || activeJob != nil || offline.isScanning)
                 .accessibilityLabel("下载 \(option.title)")
             }
-            Text(isGift ? "下载完成后会自动解压到专辑目录的「特典」文件夹。可在专辑详情中查看进度、取消或重试。" : "下载完成后会自动解压并加入「本地库」。可在专辑详情中查看进度、取消或重试。")
+            Text(isGift ? "下载完成后会自动解压到专辑目录的「特典」文件夹。可在专辑详情中查看进度、取消或重试。" : "下载完成后会自动解压并加入「资料库」。可在专辑详情中查看进度、取消或重试。")
                 .font(.caption)
                 .foregroundStyle(DizzyPalette.mutedText)
         }
@@ -103,7 +103,7 @@ struct DownloadAlbumView: View {
         guard !isLoading, options.isEmpty, activeJob == nil else { return }
         isLoading = true
         failure = nil
-        defer { isLoading = false }
+        defer { isLoading = false; didLoad = true }
         do {
             let result = try await DizzyPages.shared.downloadOptions(discID: detail.id, gift: isGift)
             try Task.checkCancellation()

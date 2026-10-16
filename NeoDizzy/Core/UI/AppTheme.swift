@@ -18,9 +18,15 @@ struct AppTheme: Identifiable, Equatable {
     let dark: UInt32
     /// 浅色外观的颜色，也是浅色图标里字母的颜色。
     let light: UInt32
+    /// 深色外观里实底（卡片、角标、主要按钮）的颜色；默认用较深的 `light` 一档，白字才看得清。
+    var darkFill: UInt32? = nil
+    /// 实底上的文字和图标；默认白色。主题色太浅、白字看不清时换成同色系的深色。
+    var darkInk: UInt32? = nil
+    var lightInk: UInt32? = nil
 
     static let presets: [AppTheme] = [
-        .init(id: "gold", name: "鎏金", dark: 0xF0AD4E, light: 0xC4851C),
+        // 金色太亮，白字对比不足：保留原色，配深棕字。
+        .init(id: "gold", name: "鎏金", dark: 0xF0AD4E, light: 0xC4851C, darkFill: 0xF0AD4E, darkInk: 0x3D2600, lightInk: 0x2E1C00),
         .init(id: "orange", name: "橘橙", dark: 0xFF8F4D, light: 0xD9622B),
         .init(id: "coral", name: "珊瑚红", dark: 0xF26B5E, light: 0xD2463A),
         .init(id: "pink", name: "樱花粉", dark: 0xF27BAE, light: 0xD2508C),
@@ -29,7 +35,8 @@ struct AppTheme: Identifiable, Equatable {
         .init(id: "teal", name: "青瓷", dark: 0x3CC4B4, light: 0x16917F),
         .init(id: "green", name: "青草绿", dark: 0x5CCB7E, light: 0x2E9A55),
         .init(id: "cocoa", name: "可可棕", dark: 0xC9A07F, light: 0x8F6447),
-        .init(id: "graphite", name: "石墨灰", dark: 0xAEB4BC, light: 0x5F6670),
+        // 深色外观的浅灰配近黑字；浅色外观的深灰配白字。
+        .init(id: "graphite", name: "石墨灰", dark: 0xAEB4BC, light: 0x5F6670, darkFill: 0xAEB4BC, darkInk: 0x1C1F24),
     ]
 
     static func selected(_ id: String) -> AppTheme {
@@ -41,7 +48,13 @@ struct AppTheme: Identifiable, Equatable {
 
     var color: Color { .adaptive(light: light, dark: dark) }
 
-    /// 铺在主题色上的文字和图标：按对比度在黑白之间选，浅色主题配黑字，深色主题配白字。
+    /// 主题色铺满的实底：卡片、角标、主要按钮。比文字用的主题色深一些。
+    var fill: Color { .adaptive(light: light, dark: darkFill ?? light) }
+
+    /// 实底上的文字和图标。
+    var onFill: Color { .adaptive(light: lightInk ?? 0xFFFFFF, dark: darkInk ?? 0xFFFFFF) }
+
+    /// 直接铺在主题色（`color`）上的符号，例如色板里的对勾：按对比度在黑白之间选。
     var onColor: Color { .adaptive(light: Self.contrastingInk(on: light), dark: Self.contrastingInk(on: dark)) }
 
     private static func contrastingInk(on hex: UInt32) -> UInt32 {
@@ -87,8 +100,6 @@ final class AppearanceSettings {
     static let shared = AppearanceSettings()
     static let themeKey = "appearance.theme"
     static let modeKey = "appearance.mode"
-    static let albumDimmingKey = "appearance.albumDimming"
-    static let defaultAlbumDimming = 5
 
     var themeID: String {
         didSet { defaults.set(themeID, forKey: Self.themeKey) }
@@ -96,15 +107,6 @@ final class AppearanceSettings {
 
     var mode: AppAppearance {
         didSet { defaults.set(mode.rawValue, forKey: Self.modeKey) }
-    }
-
-    /// 专辑页封面取色背景上叠的黑（深色）或白（浅色）的不透明度，0–100。
-    var albumDimming: Int {
-        didSet {
-            let clamped = min(max(albumDimming, 0), 100)
-            if clamped != albumDimming { albumDimming = clamped }
-            defaults.set(clamped, forKey: Self.albumDimmingKey)
-        }
     }
 
     var theme: AppTheme { .selected(themeID) }
@@ -115,8 +117,6 @@ final class AppearanceSettings {
         self.defaults = defaults
         themeID = AppTheme.selected(defaults.string(forKey: Self.themeKey) ?? AppTheme.defaultID).id
         mode = defaults.string(forKey: Self.modeKey).flatMap(AppAppearance.init(rawValue:)) ?? .system
-        albumDimming = (defaults.object(forKey: Self.albumDimmingKey) as? Int).map { min(max($0, 0), 100) }
-            ?? Self.defaultAlbumDimming
     }
 }
 

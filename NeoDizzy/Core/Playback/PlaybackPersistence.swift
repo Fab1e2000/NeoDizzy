@@ -11,6 +11,8 @@ nonisolated struct PlaybackSnapshot: Codable, Sendable {
     let isShuffled: Bool
     let shuffledOrder: [Int]
     var isDiscovery: Bool? = nil
+    var sourceID: Int? = nil
+    var heartMode: Bool? = nil
 }
 
 final class PlaybackPersistence {

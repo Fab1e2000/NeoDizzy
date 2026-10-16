@@ -13,12 +13,12 @@ struct AlbumPage: View {
     }
 
     private var historySummary: DiscSummary? {
-        offline.album(id: model.id)?.detail.summary ?? model.detail.value?.summary
+        offline.collection(provider: "dizzylab", kind: "album", id: model.id)?.detail.summary ?? model.detail.value?.summary
     }
 
     var body: some View {
         Group {
-            if let album = offline.album(id: model.id) {
+            if let album = offline.collection(provider: "dizzylab", kind: "album", id: model.id) {
                 AlbumContent(detail: album.detail, tracks: album.tracks, artworkURL: album.coverURL)
             } else {
                 LoadablePage(state: model.detail, webURL: DizzyURL.disc(model.id)) { detail in
@@ -66,7 +66,7 @@ private struct AlbumContent: View {
     @State private var downloadTarget: DownloadTarget?
 
     private var summary: DiscSummary { detail.summary }
-    private var localAlbum: OfflineAlbum? { offline.album(id: detail.id) }
+    private var localAlbum: OfflineAlbum? { offline.collection(provider: "dizzylab", kind: "album", id: detail.id) }
     private var localTrackIDs: Set<String> {
         checkedLocalTrackIDs ?? Set(localAlbum?.manifest.entries.map { $0.track.id } ?? [])
     }
@@ -115,7 +115,8 @@ private struct AlbumContent: View {
         .task(id: LocalAvailabilityRequest(discID: detail.id, revision: offline.contentRevision)) {
             checkedLocalTrackIDs = nil
             do {
-                let ids = try await offline.availableTrackIDs(discID: detail.id)
+                let keys = try await offline.localTrackKeys(provider: "dizzylab", collectionID: detail.id)
+                let ids = Set(keys.map(\.itemID))
                 try Task.checkCancellation()
                 checkedLocalTrackIDs = ids
             } catch is CancellationError {

@@ -4,24 +4,50 @@ import SwiftUI
 struct DiscDetailView: View {
     @Environment(BrowsingHistoryStore.self) private var history
     @Environment(OfflineLibraryStore.self) private var offline
+    @Environment(AccountLibraryMirror.self) private var accountLibrary
     @State private var model: DiscDetailModel
 
-    init(id: String) {
-        _model = State(initialValue: DiscDetailModel(id: id))
+    let initialArtworkURL: URL?
+
+    init(id: String, cachedModel: DiscDetailModel? = nil, initialArtworkURL: URL? = nil) {
+        self.initialArtworkURL = initialArtworkURL
+        _model = State(initialValue: cachedModel ?? DiscDetailModel(id: id))
     }
 
     private var historySummary: DiscSummary? {
-        offline.album(id: model.id)?.detail.summary ?? model.detail.value?.summary
+        offline.collection(provider: "dizzylab", kind: "album", id: model.id)?.detail.summary ?? model.detail.value?.summary
+    }
+
+    private var displayedArtworkURL: URL? {
+        offline.collection(provider: "dizzylab", kind: "album", id: model.id)?.coverURL ?? model.detail.value?.summary.coverURL ?? initialArtworkURL
     }
 
     var body: some View {
-        Group {
-            if let album = offline.album(id: model.id) {
+        // Keep background state alive when loading content is replaced by album details.
+        AlbumDetailScrollView(artworkURL: displayedArtworkURL) {
+            if let album = offline.collection(provider: "dizzylab", kind: "album", id: model.id) {
                 // 已扫描到的专辑立即显示，不发起详情或试听时长请求。
                 DiscDetailContent(detail: album.detail, tracks: album.tracks, artworkURL: album.coverURL)
             } else {
-                LoadableContent(state: model.detail, webURL: DizzyURL.disc(model.id)) { detail in
-                    DiscDetailContent(detail: detail, tracks: model.tracks(of: detail))
+                Group {
+                    if let detail = model.detail.value {
+                        DiscDetailContent(detail: detail, tracks: model.tracks(of: detail))
+                    } else {
+                        if let failure = model.detail.failure {
+                            LoadFailureView(message: failure) { await model.detail.load() }
+                        } else {
+                            VStack(spacing: 0) {
+                                AlbumHero(artworkURL: displayedArtworkURL, title: "专辑名称", metadata: "歌曲数量", reservesTitleSpace: true, metadataIsPlaceholder: true, titleIsPlaceholder: true) {
+                                    Text("创作者").redacted(reason: .placeholder)
+                                } actions: {
+                                    AlbumPlaybackActions(isEmpty: true) { _ in }
+                                }
+
+                                ContentSkeleton(layout: .songs, count: 6)
+                            }
+                        }
+                        Color.clear.frame(height: 0).task { await model.detail.loadIfNeeded() }
+                    }
                 }
                 .task { await model.loadDurations() }
                 .task(id: model.detail.value?.id) {
@@ -39,10 +65,17 @@ struct DiscDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            // 已购专辑自动在资料库里；没买的可以手动加入（只记在 App 里）。
+            if let summary = model.detail.value?.summary, !summary.isOwned, !accountLibrary.isDizzyLabAlbumPurchased(summary.id) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    SavedLibraryToggle(item: SavedLibraryItem(
+                        kind: .album, providerID: "dizzylab", itemID: summary.id, title: summary.title,
+                        subtitle: summary.labelName ?? "DizzyLab", coverURL: summary.coverURL, addedAt: .now))
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ShareLink(item: DizzyURL.disc(model.id)) { Label("分享", systemImage: "square.and.arrow.up") }
-                    Link(destination: DizzyURL.disc(model.id)) { Label("在网页中打开", systemImage: "safari") }
                 } label: {
                     Label("更多", systemImage: "ellipsis")
                 }
@@ -72,7 +105,7 @@ private struct DiscDetailContent: View {
     @State private var checkedLocalTrackIDs: Set<String>?
 
     private var summary: DiscSummary { detail.summary }
-    private var localAlbum: OfflineAlbum? { offline.album(id: detail.id) }
+    private var localAlbum: OfflineAlbum? { offline.collection(provider: "dizzylab", kind: "album", id: detail.id) }
     private var localTrackIDs: Set<String> {
         checkedLocalTrackIDs ?? Set(localAlbum?.manifest.entries.map { $0.track.id } ?? [])
     }
@@ -88,33 +121,32 @@ private struct DiscDetailContent: View {
     }
 
     var body: some View {
-        AlbumDetailScrollView(artworkURL: artworkURL ?? summary.coverURL) {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                header
-                if !detail.description.isEmpty || !detail.credits.isEmpty {
-                    DiscNotesExcerpt(detail: detail)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
-                }
-                DiscStoreCard(detail: detail, isPreviewOnly: isPreviewOnly, hasMissingLocalFiles: hasMissingLocalFiles) {
-                    purchaseSheet = PurchaseSheet(summary: summary)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-                trackList
-                trackFooter
-                VStack(alignment: .leading, spacing: 32) {
-                    if !summary.tags.isEmpty { tags }
-                    DiscCommunityView(discID: detail.id)
-                }
-                .padding(.top, 28)
+        LazyVStack(alignment: .leading, spacing: 0) {
+            header
+            if !detail.description.isEmpty || !detail.credits.isEmpty {
+                DiscNotesExcerpt(detail: detail)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
             }
-            .padding(.bottom, 32)
+            DiscStoreCard(detail: detail, isPreviewOnly: isPreviewOnly, hasMissingLocalFiles: hasMissingLocalFiles) {
+                purchaseSheet = PurchaseSheet(summary: summary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+            trackList
+            trackFooter
+            VStack(alignment: .leading, spacing: 32) {
+                if !summary.tags.isEmpty { tags }
+                DiscCommunityView(discID: detail.id)
+            }
+            .padding(.top, 28)
         }
+        .padding(.bottom, 32)
         .task(id: LocalAvailabilityRequest(discID: detail.id, revision: offline.contentRevision)) {
             checkedLocalTrackIDs = nil
             do {
-                let ids = try await offline.availableTrackIDs(discID: detail.id)
+                let keys = try await offline.localTrackKeys(provider: "dizzylab", collectionID: detail.id)
+                let ids = Set(keys.map(\.itemID))
                 try Task.checkCancellation()
                 checkedLocalTrackIDs = ids
             } catch is CancellationError {
@@ -134,10 +166,9 @@ private struct DiscDetailContent: View {
                   metadata: ([detail.releaseDate, summary.isHiRes ? "Hi-Res" : nil]
                     .compactMap { $0 }).joined(separator: " · ")) {
             if let label = summary.labelName {
-                // 与 Apple Music 的艺人名一样用主题色，表示可以点进社团页。
                 NavigationLink(value: AppRoute.label(name: label)) { Text(label) }
                     .buttonStyle(.plain)
-                    .foregroundStyle(DizzyPalette.accent)
+                    .foregroundStyle(.primary)
             }
         } actions: {
             AlbumPlaybackActions(isEmpty: tracks.isEmpty, isPreview: isPreviewOnly) { shuffled in
@@ -215,10 +246,11 @@ private struct DiscStoreCard: View {
     let purchase: () -> Void
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(DownloadStore.self) private var downloads
+    @Environment(\.colorScheme) private var colorScheme
     @State private var downloadSheet: DownloadSheet?
 
     private var summary: DiscSummary { detail.summary }
-    private var localAlbum: OfflineAlbum? { offline.album(id: detail.id) }
+    private var localAlbum: OfflineAlbum? { offline.collection(provider: "dizzylab", kind: "album", id: detail.id) }
     private var activeJob: DownloadJob? {
         downloads.jobs.first { $0.discID == detail.id && !$0.isGift && $0.isActive }
     }
@@ -317,8 +349,8 @@ private struct DiscStoreCard: View {
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
-            .tint(DizzyPalette.accent)
-            .foregroundStyle(DizzyPalette.onAccent)
+            .tint(.primary)
+            .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
             .fontWeight(.semibold)
             .accessibilityLabel("购买 / 支持创作者")
         } else if activeJob == nil {
@@ -485,41 +517,19 @@ private struct DiscNotesSheet: View {
 }
 
 /// 可折叠的长文本：默认显示前几行，被截断时右下角出现「更多」，与 App Store 的介绍相同。
+/// 带标题的简介，全文直接展开，不折叠。
 struct ExpandableText: View {
     let title: LocalizedStringKey
     let text: String
-    @State private var isExpanded = false
-    @State private var isTruncated = false
-    private static let collapsedLines = 4
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeading(title: title)
             Text(text)
                 .font(.subheadline)
-                .lineLimit(isExpanded ? nil : Self.collapsedLines)
                 .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    // 用不限行数的同一段文字比较高度，判断是否真的被截断。
-                    Text(text).font(.subheadline)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .hidden()
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { full in
-                            isTruncated = full > collapsedHeight + 1
-                        }
-                }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { collapsedHeight = $0 }
-            if isTruncated || isExpanded {
-                Button(isExpanded ? "收起" : "更多") {
-                    withAnimation(.snappy) { isExpanded.toggle() }
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(DizzyPalette.accent)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
         }
     }
-
-    @State private var collapsedHeight: CGFloat = 0
 }

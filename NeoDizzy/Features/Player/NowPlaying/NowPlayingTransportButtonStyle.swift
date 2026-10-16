@@ -1,5 +1,5 @@
-// 移植自 MeloX（GPLv3）Features/Player/NowPlaying/NowPlayingTransportButtonStyle.swift，内容未改动。
-
+// Direct source port from MeloX (GPL-3.0), b8bc60f.
+// NeoDizzy adapters are limited to track data, available playback features and localization.
 import SwiftUI
 
 struct NowPlayingTransportButtonStyle: ButtonStyle {

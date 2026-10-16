@@ -5,6 +5,7 @@ import CryptoKit
 actor LocalLibraryScanner {
     struct Result: Sendable {
         var albums: [LocalAlbum]
+        var playlists: [LocalPlaylist] = []
         var issues: [String]
     }
     private struct CachedFile: Codable {
@@ -142,6 +143,17 @@ actor LocalLibraryScanner {
             var artists: [String] = []
             for credit in credits where !artists.contains(credit) { artists.append(credit) }
             let artist = artists.isEmpty ? "未知艺术家" : artists.joined(separator: " / ")
+            // 下载的专辑文件夹名带平台编号防止重名，显示时用下载记录里的专辑名。
+            let managed = managedTracks[Self.canonical(first.url)]
+            let managedTitle = managed?.albumTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            // A copied downloaded song must not rename a mixed user folder.
+            let isManagedAlbum = managed != nil && files.allSatisfy { file in
+                guard let track = managedTracks[Self.canonical(file.url)] else { return false }
+                return track.discID == managed?.discID
+                    && track.remoteSource?.providerID == managed?.remoteSource?.providerID
+                    && track.albumTitle.trimmingCharacters(in: .whitespacesAndNewlines) == managedTitle
+            }
+            let albumTitle = isManagedAlbum ? (managedTitle.flatMap { $0.isEmpty ? nil : $0 } ?? first.title) : first.title
             let entries = files.enumerated().map { offset, file in
                 var record = file.cached
                 record.albumID = albumID
@@ -152,13 +164,13 @@ actor LocalLibraryScanner {
                 let track = Track(discID: managedTracks[Self.canonical(file.url)]?.discID ?? "", number: managedTracks[Self.canonical(file.url)]?.number ?? String(file.number ?? offset + 1),
                                   title: metadata.title.isEmpty ? file.fallbackTitle : metadata.title,
                                   artists: metadata.artist.isEmpty ? "未知艺术家" : metadata.artist,
-                                  albumTitle: first.title, coverURL: cover, duration: metadata.duration,
+                                  albumTitle: albumTitle, coverURL: cover, duration: metadata.duration,
                                   // Every visible file has its own identity, including
                                   // copies of the same downloaded site track.
                                   localSource: LocalTrackSource(albumID: albumID, trackID: record.trackID))
                 return LocalAlbum.Entry(track: track, fileURL: file.url, discNumber: file.disc, previousTrackIDs: Set(record.previousTrackIDs ?? []))
             }
-            albums.append(LocalAlbum(id: albumID, title: first.title, artist: artist, coverURL: cover, entries: entries, previousIDs: previousIDs))
+            albums.append(LocalAlbum(id: albumID, title: albumTitle, artist: artist, coverURL: cover, entries: entries, previousIDs: previousIDs))
         }
         // A formerly merged ID must not shadow a currently visible folder album.
         let currentIDs = Set(albums.map(\.id))
@@ -173,7 +185,30 @@ actor LocalLibraryScanner {
         try Task.checkCancellation()
         cache = index
         try JSONEncoder().encode(index).write(to: cacheURL.appendingPathComponent("index.json"), options: .atomic)
-        return Result(albums: albums.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }, issues: issues)
+        var playlists: [LocalPlaylist] = []
+        let tracks = Dictionary(albums.flatMap(\.entries).map { (Self.canonical($0.fileURL), $0.track) }, uniquingKeysWith: { first, _ in first })
+        var seenPlaylists = Set<String>()
+        for folder in folders {
+            try Task.checkCancellation()
+            var coordinationError: NSError?
+            NSFileCoordinator().coordinate(readingItemAt: folder.url, options: [], error: &coordinationError) { root in
+                do {
+                    let directory = try LocalPlaylistFile.checked("Playlists", root: root)
+                    guard FileManager.default.fileExists(atPath: directory.path) else { return }
+                    let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                    for file in files.sorted(by: { $0.path < $1.path }) where file.pathExtension.lowercased() == "m3u8" {
+                        guard seenPlaylists.insert(Self.canonical(file)).inserted else { continue }
+                        do {
+                            let (playlist, failures) = try LocalPlaylistFile.read(file, root: root, tracks: tracks)
+                            playlists.append(playlist)
+                            issues += failures
+                        } catch { issues.append("\(file.lastPathComponent)：\(error.localizedDescription)") }
+                    }
+                } catch { issues.append("Playlists：\(error.localizedDescription)") }
+            }
+            if let coordinationError { issues.append(coordinationError.localizedDescription) }
+        }
+        return Result(albums: albums.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }, playlists: playlists, issues: issues)
     }
 
     nonisolated static func canonical(_ url: URL) -> String { url.standardizedFileURL.resolvingSymlinksInPath().path }
@@ -204,7 +239,7 @@ actor LocalLibraryScanner {
                     try Task.checkCancellation()
                     do {
                         let values = try file.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey])
-                        if values.isSymbolicLink == true || file.lastPathComponent == "__MACOSX" {
+                        if values.isSymbolicLink == true || file.lastPathComponent == "__MACOSX" || file.lastPathComponent == "Playlists" {
                             enumerator.skipDescendants(); continue
                         }
                         if values.isRegularFile == true, AudioFileMatcher.extensions.contains(file.pathExtension.lowercased()) {

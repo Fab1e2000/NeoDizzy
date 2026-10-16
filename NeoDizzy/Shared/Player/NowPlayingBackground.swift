@@ -1,85 +1,153 @@
-// 移植自 MeloX（GPLv3）Features/Player/NowPlaying/AppleMusicBackdrop/NowPlayingAppleMusicBackground.swift
-// 和 AppleMusicBackdropShader.swift：只保留 Apple Music 式背景，去掉随音频频谱变化和歌词页的扭曲过渡，
-// 封面改用 Nuke 按缩略图加载。
-
-import Nuke
-import NukeUI
+// Direct source port from MeloX (GPL-3.0), b8bc60f.
+// Default Apple Music backdrop; audio response remains disabled as upstream defaults.
 import SwiftUI
 
-/// 播放页背景：封面缓慢旋转、扭曲并大幅模糊，随播放进度流动，暂停时停住。
 struct NowPlayingBackground: View {
     @Environment(PlayerStore.self) private var player
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.accessibilityReduceMotion)
+    private var accessibilityReduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     @Environment(\.scenePhase) private var scenePhase
 
     let artworkURL: URL?
+    let isBehindLyrics: Bool
+    let motionIntensity: Double
+    let saturation: Double
 
     @State private var meshIndex = Int.random(in: 0..<5)
+    @State private var pinchMix: Float
 
-    private static let baseColor = Color(red: 0.18, green: 0.18, blue: 0.18)
+    init(
+        artworkURL: URL?,
+        isBehindLyrics: Bool,
+        motionIntensity: Double = 1,
+        saturation: Double = 1
+    ) {
+        self.artworkURL = artworkURL
+        self.isBehindLyrics = isBehindLyrics
+        self.motionIntensity = motionIntensity
+        self.saturation = saturation
+        _pinchMix = State(initialValue: isBehindLyrics ? 1 : 0)
+    }
 
     var body: some View {
         GeometryReader { proxy in
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: pausesAnimation)) { context in
-                let time = animationTime(at: context.date)
+            TimelineView(
+                .animation(
+                    minimumInterval:
+                        isBehindLyrics
+                        ? 1.0 / 120.0
+                        : 1.0 / 60.0,
+                    paused: pausesAnimation
+                )
+            ) { context in
+                // MeloX defaults to disabled audio response.
+                let spectrum = SIMD4<Float>.zero
+
                 ZStack {
-                    Self.baseColor
+                    Color(
+                        red: 0.18,
+                        green: 0.18,
+                        blue: 0.18
+                    )
 
                     artwork(in: proxy.size)
                         .layerEffect(
-                            ShaderLibrary.appleMusicBackdropRotation(
-                                .float2(proxy.size),
-                                .float(time),
-                                // 不随音频变化：频谱固定为 0。
-                                .float4(0, 0, 0, 0),
-                                .float(1),
-                                .float(0.5),
-                                .float(1)
+                            AppleMusicBackdropShader.rotation(
+                                size: proxy.size,
+                                time: animationTime(
+                                    at: context.date
+                                ),
+                                spectrum: spectrum,
+                                saturation: saturation,
+                                blackScrimAlpha:
+                                    colorScheme == .dark
+                                    ? 0.5
+                                    : 0.35,
+                                motionIntensity:
+                                    motionIntensity
                             ),
                             maxSampleOffset: proxy.size
                         )
                         .blur(radius: 80, opaque: true)
                         .layerEffect(
-                            ShaderLibrary.appleMusicBackdropPinch(
-                                .float2(proxy.size),
-                                .float(time),
-                                .float(0),
-                                .float(Float(meshIndex))
+                            AppleMusicBackdropShader.pinch(
+                                size: proxy.size,
+                                time: animationTime(
+                                    at: context.date
+                                ),
+                                pinchMix: pinchMix,
+                                meshIndex: meshIndex
                             ),
                             maxSampleOffset: proxy.size
                         )
 
                     Color.white.opacity(0.1)
 
-                    LinearGradient(colors: [.black.opacity(0), .black], startPoint: .top, endPoint: .bottom)
-                        .opacity(0.4)
+                    LinearGradient(
+                        colors: [
+                            .black.opacity(0),
+                            .black,
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .opacity(0.4)
                 }
-                .frame(width: proxy.size.width, height: proxy.size.height)
+                .frame(
+                    width: proxy.size.width,
+                    height: proxy.size.height
+                )
                 .clipped()
             }
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
+        .onChange(of: isBehindLyrics) { _, newValue in
+            withAnimation(
+                accessibilityReduceMotion
+                    ? nil
+                    : .timingCurve(
+                        0.42,
+                        0,
+                        0.58,
+                        1,
+                        duration: 0.4
+                    )
+            ) {
+                pinchMix = newValue ? 1 : 0
+            }
+        }
     }
 
+    @ViewBuilder
     private func artwork(in size: CGSize) -> some View {
-        // 背景会被模糊 80 点，按小尺寸解码就够了。
-        LazyImage(
-            request: artworkURL.map { url in
-                var request = ImageRequest(url: url)
-                request.thumbnail = ImageRequest.ThumbnailOptions(size: CGSize(width: 300, height: 300), contentMode: .aspectFill)
-                return request
-            },
-            transaction: Transaction(animation: accessibilityReduceMotion ? nil : .timingCurve(0, 0, 0.3, 1, duration: 0.8))
-        ) { state in
-            if let image = state.image {
+        AsyncImage(
+            url: artworkURL,
+            transaction: Transaction(
+                animation: accessibilityReduceMotion
+                    ? nil
+                    : .timingCurve(
+                        0,
+                        0,
+                        0.3,
+                        1,
+                        duration: 0.8
+                    )
+            )
+        ) { phase in
+            if case .success(let image) = phase {
                 image
                     .resizable()
                     .scaledToFill()
                     .transition(.opacity)
             } else {
-                Self.baseColor
+                Color(
+                    red: 0.18,
+                    green: 0.18,
+                    blue: 0.18
+                )
             }
         }
         .id(artworkURL)
@@ -88,10 +156,58 @@ struct NowPlayingBackground: View {
     }
 
     private var pausesAnimation: Bool {
-        accessibilityReduceMotion || isLuminanceReduced || scenePhase != .active || !player.isPlaying
+        accessibilityReduceMotion
+            || isLuminanceReduced
+            || scenePhase != .active
+            || !player.isPlaying
     }
 
-    private func animationTime(at date: Date) -> TimeInterval {
-        pausesAnimation ? player.estimatedProgress() : player.estimatedProgress(at: date)
+    private func animationTime(
+        at date: Date
+    ) -> TimeInterval {
+        guard !pausesAnimation else {
+            return player.estimatedProgress()
+        }
+        return player.estimatedProgress(at: date)
+    }
+}
+
+
+private enum AppleMusicBackdropShader {
+    static func rotation(
+        size: CGSize,
+        time: TimeInterval,
+        spectrum: SIMD4<Float>,
+        saturation: Double,
+        blackScrimAlpha: Double,
+        motionIntensity: Double
+    ) -> Shader {
+        ShaderLibrary.appleMusicBackdropRotation(
+            .float2(size),
+            .float(time),
+            .float4(
+                spectrum.x,
+                spectrum.y,
+                spectrum.z,
+                spectrum.w
+            ),
+            .float(saturation),
+            .float(blackScrimAlpha),
+            .float(motionIntensity)
+        )
+    }
+
+    static func pinch(
+        size: CGSize,
+        time: TimeInterval,
+        pinchMix: Float,
+        meshIndex: Int
+    ) -> Shader {
+        ShaderLibrary.appleMusicBackdropPinch(
+            .float2(size),
+            .float(time),
+            .float(pinchMix),
+            .float(Float(meshIndex))
+        )
     }
 }

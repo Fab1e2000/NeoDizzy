@@ -120,6 +120,8 @@ struct LoginPrompt: View {
                 account.isLoginPresented = true
             }
             .buttonStyle(.borderedProminent)
+            .tint(DizzyPalette.accentFill)
+            .foregroundStyle(DizzyPalette.onAccent)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)

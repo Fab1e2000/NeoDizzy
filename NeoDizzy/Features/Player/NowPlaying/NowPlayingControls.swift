@@ -1,141 +1,57 @@
-// 布局移植自 MeloX（GPLv3）Features/Player/NowPlaying/NowPlayingBottomControls.swift、NowPlayingControls.swift、
-// NowPlayingMenuButton.swift：保留现有播放能力，底部为本地歌词、隔空播放和队列。
-
-import AVKit
+// Direct source port from MeloX (GPL-3.0), b8bc60f.
+// NeoDizzy adapters are limited to track data, available playback features and localization.
 import MediaPlayer
 import SwiftUI
-import UIKit
 
-/// 播放页：封面、本地歌词与队列。
-enum NowPlayingPage {
-    case artwork
-    case queue
-    case lyrics
-}
-
-/// 播放页底部的控件：进度、播放控制、音量、页面切换。高度固定，页面内容在它上方留出同样的空间。
-struct NowPlayingBottomControls: View {
-    static let coreHeight: CGFloat = 279
-
-    @Binding var page: NowPlayingPage
-
-    var body: some View {
-        VStack(spacing: 0) {
-            NowPlayingProgressControl()
-            Color.clear.frame(height: 19)
-            NowPlayingTransportControls()
-            Color.clear.frame(height: 31)
-            NowPlayingVolumeControl()
-            Color.clear.frame(height: 3)
-            NowPlayingPageSelector(page: $page)
-        }
-        .frame(minHeight: Self.coreHeight)
-        // 挡住下面列表的点按，避免点到控件间隙时误触队列里的曲目。
-        .background {
-            Color.clear
-                .contentShape(.rect)
-                .onTapGesture {}
-        }
-    }
-}
-
-/// 进度条：按住后跟随手指，松手才跳转，避免拖动中反复请求音频；点一下也能直接跳到那里。
-/// 仅标记试听和播放错误；正常音频不附加版本或音质标签。
 struct NowPlayingProgressControl: View {
     @Environment(PlayerStore.self) private var player
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    @State private var scrubbingPosition: TimeInterval?
+
+    let song: Track
 
     var body: some View {
-        let duration = player.duration
-        let position = scrubbingPosition ?? min(player.progress, duration)
-        let fraction = duration > 0 ? min(max(position / duration, 0), 1) : 0
-        let isScrubbing = scrubbingPosition != nil
-
         VStack(spacing: 2) {
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(.white.opacity(0.2))
-                    Capsule()
-                        .fill(.white.opacity(isScrubbing ? 1 : 0.78))
-                        .frame(width: proxy.size.width * fraction)
-                }
-                .frame(height: isScrubbing ? 12 : 7)
-                .frame(maxHeight: .infinity)
-                .contentShape(.rect)
-                .gesture(scrubGesture(width: proxy.size.width, duration: duration))
-            }
-            .frame(height: 26)
-            .animation(accessibilityReduceMotion ? nil : .snappy(duration: 0.2), value: isScrubbing)
+            Slider(
+                value: Binding(
+                    get: { min(player.progress, progressMaximum) },
+                    set: { player.seek(to: $0) }
+                ),
+                in: 0...progressMaximum
+            )
+            .sliderThumbVisibility(.hidden)
+            .tint(.white)
+            .accessibilityLabel("播放进度")
+            .accessibilityValue(
+                "\(formatTime(player.progress))，共 \(formatTime(progressMaximum))"
+            )
 
             HStack {
-                Text(Self.format(position))
+                Text(formatTime(player.progress))
+
                 Spacer()
-                Text(duration > 0 ? "−" + Self.format(max(duration - position, 0)) : "--:--")
+
+                Text("−\(formatTime(max(player.duration - player.progress, 0)))")
             }
-            .overlay { statusLabel }
+            .overlay {
+                if player.isPreview { Text("试听").foregroundStyle(.white.opacity(0.8)) }
+                else if player.issue != nil { Image(systemName: "exclamationmark.circle") }
+            }
             .font(.caption2.monospacedDigit())
-            .foregroundStyle(.white.opacity(isScrubbing ? 0.85 : 0.5))
+            .foregroundStyle(.white.opacity(0.5))
         }
         .frame(height: 52)
-        .onChange(of: player.currentTrack?.id) {
-            // 不把上一首的拖动带到下一首。
-            scrubbingPosition = nil
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("播放进度")
-        .accessibilityValue(duration > 0 ? "\(Self.format(position))，共 \(Self.format(duration))" : "")
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: player.seek(to: player.progress + 10)
-            case .decrement: player.seek(to: player.progress - 10)
-            @unknown default: break
-            }
-        }
     }
 
-    @ViewBuilder
-    private var statusLabel: some View {
-        if let issue = player.issue {
-            Text(issue)
-                .foregroundStyle(DizzyPalette.danger)
-                .lineLimit(1)
-                .padding(.horizontal, 44)
-        } else if player.duration > 0 && player.isPreview {
-            Text("试听")
-                .fontWeight(.medium)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(.white.opacity(player.isPreview ? 0.2 : 0.12), in: .rect(cornerRadius: 7))
-                .foregroundStyle(.white.opacity(0.86))
-        }
+    private var progressMaximum: TimeInterval {
+        max(player.duration, song.duration ?? 0, 1)
     }
 
-    private func scrubGesture(width: CGFloat, duration: TimeInterval) -> some Gesture {
-        func position(at x: CGFloat) -> TimeInterval {
-            min(max(x / max(width, 1), 0), 1) * duration
-        }
-        return DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                guard duration > 0 else { return }
-                scrubbingPosition = position(at: value.location.x)
-            }
-            .onEnded { value in
-                guard duration > 0 else { return }
-                player.seek(to: position(at: value.location.x))
-                scrubbingPosition = nil
-            }
-    }
-
-    private static func format(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite else { return "0:00" }
-        let seconds = max(0, Int(seconds))
+    private func formatTime(_ value: TimeInterval) -> String {
+        guard value.isFinite else { return "0:00" }
+        let seconds = max(0, Int(value))
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 }
 
-/// 上一首、播放 / 暂停、下一首。按下时图标缩小、背后亮起一圈（NowPlayingTransportButtonStyle）。
 struct NowPlayingTransportControls: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(PlayerStore.self) private var player
@@ -152,9 +68,11 @@ struct NowPlayingTransportControls: View {
                     .frame(width: 64, height: 64)
                     .contentShape(.circle)
             }
-            .buttonStyle(NowPlayingTransportButtonStyle(reducesMotion: accessibilityReduceMotion))
-            .disabled(!player.canPlayPrevious)
-            .opacity(player.canPlayPrevious ? 1 : 0.4)
+            .buttonStyle(
+                NowPlayingTransportButtonStyle(
+                    reducesMotion: accessibilityReduceMotion
+                )
+            )
             .accessibilityLabel("上一首")
 
             Spacer()
@@ -173,10 +91,15 @@ struct NowPlayingTransportControls: View {
                             .contentTransition(
                                 accessibilityReduceMotion
                                     ? .identity
-                                    : .symbolEffect(.replace.downUp.wholeSymbol, options: .speed(1.6))
+                                    : .symbolEffect(
+                                        .replace.downUp.wholeSymbol,
+                                        options: .speed(1.6)
+                                    )
                             )
                             .animation(
-                                accessibilityReduceMotion ? nil : .snappy(duration: 0.2, extraBounce: 0),
+                                accessibilityReduceMotion
+                                    ? nil
+                                    : .snappy(duration: 0.2, extraBounce: 0),
                                 value: player.isPlaying
                             )
                     }
@@ -184,8 +107,16 @@ struct NowPlayingTransportControls: View {
                 .frame(width: 64, height: 64)
                 .contentShape(.circle)
             }
-            .buttonStyle(NowPlayingTransportButtonStyle(reducesMotion: accessibilityReduceMotion))
-            .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
+            .buttonStyle(
+                NowPlayingTransportButtonStyle(
+                    reducesMotion: accessibilityReduceMotion
+                )
+            )
+            .accessibilityLabel(
+                player.isPlaying
+                    ? "暂停"
+                    : "播放"
+            )
 
             Spacer()
 
@@ -197,9 +128,11 @@ struct NowPlayingTransportControls: View {
                     .frame(width: 64, height: 64)
                     .contentShape(.circle)
             }
-            .buttonStyle(NowPlayingTransportButtonStyle(reducesMotion: accessibilityReduceMotion))
-            .disabled(!player.canPlayNext)
-            .opacity(player.canPlayNext ? 1 : 0.4)
+            .buttonStyle(
+                NowPlayingTransportButtonStyle(
+                    reducesMotion: accessibilityReduceMotion
+                )
+            )
             .accessibilityLabel("下一首")
 
             Spacer()
@@ -208,19 +141,16 @@ struct NowPlayingTransportControls: View {
     }
 }
 
-/// 系统音量。
 struct NowPlayingVolumeControl: View {
+    @Environment(PlayerStore.self) private var player
+
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "speaker.fill")
-                .font(.caption2)
+            Image(systemName: "speaker.fill").font(.caption2)
             SystemVolumeSlider()
-                .frame(maxWidth: .infinity)
-                .frame(height: 32)
-                .layoutPriority(1)
-                .accessibilityLabel("音量")
-            Image(systemName: "speaker.wave.3.fill")
-                .font(.caption)
+                .frame(maxWidth: .infinity).frame(height: 32).layoutPriority(1)
+                .accessibilityLabel("系统音量")
+            Image(systemName: "speaker.wave.3.fill").font(.caption)
         }
         .foregroundStyle(.white.opacity(0.62))
         .frame(height: 42)
@@ -235,161 +165,117 @@ private final class AlignedSystemVolumeView: MPVolumeView {
 
 private struct SystemVolumeSlider: UIViewRepresentable {
     func makeUIView(context: Context) -> AlignedSystemVolumeView {
-        let volumeView = AlignedSystemVolumeView(frame: CGRect(x: 0, y: 0, width: 200, height: 32))
+        let volumeView = AlignedSystemVolumeView(
+            frame: CGRect(x: 0, y: 0, width: 200, height: 32)
+        )
         volumeView.backgroundColor = .clear
+        volumeView.showsVolumeSlider = true
         volumeView.tintColor = .white
         return volumeView
     }
 
-    func updateUIView(_ volumeView: AlignedSystemVolumeView, context: Context) {
+    func updateUIView(
+        _ volumeView: AlignedSystemVolumeView,
+        context: Context
+    ) {
+        volumeView.showsVolumeSlider = true
         volumeView.tintColor = .white
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: AlignedSystemVolumeView, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? 200, height: proposal.height ?? 32)
+    func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: AlignedSystemVolumeView,
+        context: Context
+    ) -> CGSize? {
+        CGSize(
+            width: proposal.width ?? 200,
+            height: proposal.height ?? 32
+        )
     }
 }
 
-/// 底部一行：歌词、隔空播放和「继续播放」队列。
 struct NowPlayingPageSelector: View {
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.accessibilityReduceMotion)
+    private var accessibilityReduceMotion
+    @Environment(PlayerStore.self) private var player
+
     @Binding var page: NowPlayingPage
 
     var body: some View {
         HStack {
-            Button {
-                withAnimation(accessibilityReduceMotion ? nil : .smooth(duration: 0.3)) {
-                    page = page == .lyrics ? .artwork : .lyrics
-                }
-            } label: {
-                Image(systemName: "quote.bubble")
-                    .font(.title3).frame(width: 44, height: 44)
-                    .foregroundStyle(page == .lyrics ? .black.opacity(0.68) : .white.opacity(0.72))
-                    .background(.white.opacity(page == .lyrics ? 0.68 : 0), in: .circle)
-                    // 背景透明时不参与点按，必须显式给出整圆的点按区域，否则只有图标本身能点中。
-                    .contentShape(.circle)
-            }
-            .buttonStyle(.plain).accessibilityLabel("歌词")
-            .accessibilityAddTraits(page == .lyrics ? .isSelected : [])
+            pageButton(page: .lyrics, systemImage: "quote.bubble", accessibilityLabel: "歌词")
             Spacer()
-            AirPlayButton()
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("隔空播放")
-
+            AirPlayButton().frame(width: 44, height: 44).accessibilityLabel("隔空播放")
             Spacer()
-
-            let isQueue = page == .queue
-            Button {
-                withAnimation(accessibilityReduceMotion ? nil : .smooth(duration: 0.3)) {
-                    page = isQueue ? .artwork : .queue
-                }
-            } label: {
-                Image(systemName: "list.bullet")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-                    .foregroundStyle(isQueue ? .black.opacity(0.68) : .white.opacity(0.72))
-                    .background(.white.opacity(isQueue ? 0.68 : 0), in: .circle)
-                    .contentShape(.circle)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("继续播放")
-            .accessibilityAddTraits(isQueue ? .isSelected : [])
+            pageButton(page: .queue, systemImage: "list.bullet", accessibilityLabel: "继续播放",
+                       badgeSystemImage: page == .queue ? nil : player.queueModeBadgeSystemImage)
         }
         .padding(.horizontal, 32)
         .foregroundStyle(.white.opacity(0.72))
         .frame(height: 50)
     }
-}
 
-private struct AirPlayButton: UIViewRepresentable {
-    func makeUIView(context: Context) -> AVRoutePickerView {
-        let picker = AVRoutePickerView()
-        picker.tintColor = UIColor.white.withAlphaComponent(0.72)
-        picker.prioritizesVideoDevices = false
-        return picker
-    }
+    private func pageButton(
+        page destination: NowPlayingPage,
+        systemImage: String,
+        accessibilityLabel: String,
+        badgeSystemImage: String? = nil
+    ) -> some View {
+        let isSelected = page == destination
 
-    /// 播放页固定深色，用主题色的深色档，不随窗口外观取浅色档。
-    func updateUIView(_ picker: AVRoutePickerView, context: Context) {
-        picker.activeTintColor = UIColor(DizzyPalette.accentOnDark)
-    }
-}
-
-/// 曲目的「…」菜单：前往专辑、在网页中打开。
-struct NowPlayingSongActions: View {
-    @Environment(OfflineLibraryStore.self) private var library
-    @Environment(PlayerStore.self) private var player
-    @Environment(\.openRoute) private var openRoute
-    @Environment(\.openURL) private var openURL
-
-    let track: Track
-    var onImportLyrics: (() -> Void)? = nil
-
-    var body: some View {
-        NowPlayingMenuButton {
-            var items = menuItems()
-            if let onImportLyrics {
-                items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() })
+        return Button {
+            let targetPage: NowPlayingPage =
+                isSelected ? .artwork : destination
+            withAnimation(
+                accessibilityReduceMotion
+                    ? nil
+                    : NowPlayingPageTransition
+                        .selectionAnimation(
+                            from: page,
+                            to: targetPage
+                        )
+            ) {
+                page = targetPage
             }
-            return items
-        }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: systemImage)
+                    .symbolVariant(isSelected ? .fill : .none)
+                    .font(.title3)
+                    .frame(width: 44, height: 44)
+                    .foregroundStyle(
+                        isSelected
+                            ? .black.opacity(0.68)
+                            : .white.opacity(0.72)
+                    )
+                    .background(
+                        .white.opacity(isSelected ? 0.68 : 0),
+                        in: .circle
+                    )
+
+                if let badgeSystemImage {
+                    Image(systemName: badgeSystemImage)
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(
+                            isSelected
+                                ? .white.opacity(0.9)
+                                : .black.opacity(0.74)
+                        )
+                        .frame(width: 15, height: 15)
+                        .background(
+                            isSelected
+                                ? .black.opacity(0.58)
+                                : .white.opacity(0.82),
+                            in: .circle
+                        )
+                        .offset(x: 3, y: 1)
+                }
+            }
             .frame(width: 44, height: 44)
-    }
-
-    private func menuItems() -> [UIMenuElement] {
-        if let source = track.localSource {
-            return [UIAction(title: String(localized: "前往专辑「\(track.albumTitle)」"), image: UIImage(systemName: "music.note.list")) { _ in
-                openRoute(.localAlbum(id: library.localAlbum(for: track)?.id ?? source.albumID))
-            }]
+            .contentShape(.circle)
         }
-        let discID = track.discID
-        var items: [UIMenuElement] = [
-            UIAction(title: String(localized: "前往专辑「\(track.albumTitle)」"), image: UIImage(systemName: "music.note.list")) { _ in
-                openRoute(.disc(id: discID))
-            },
-        ]
-        if player.isPreview {
-            items.append(UIAction(title: String(localized: "前往专辑购买"), image: UIImage(systemName: "cart")) { _ in
-                openRoute(.disc(id: discID))
-            })
-        }
-        items.append(UIAction(title: String(localized: "在网页中打开"), image: UIImage(systemName: "safari")) { _ in
-            openURL(DizzyURL.disc(discID))
-        })
-        return items
-    }
-}
-
-/// 由 UIKit 负责按下、滑动、松开整个过程：播放器每秒刷新 SwiftUI，用 SwiftUI 的 Menu 会在手指还按着时被打断。
-private struct NowPlayingMenuButton: UIViewRepresentable {
-    var items: () -> [UIMenuElement]
-
-    final class Coordinator {
-        var items: () -> [UIMenuElement]
-        init(items: @escaping () -> [UIMenuElement]) { self.items = items }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(items: items) }
-
-    func makeUIView(context: Context) -> UIButton {
-        let button = UIButton(type: .system)
-        button.setImage(
-            UIImage(systemName: "ellipsis", withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold)),
-            for: .normal
-        )
-        button.tintColor = .white
-        button.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-        button.layer.cornerRadius = 22
-        button.showsMenuAsPrimaryAction = true
-        button.accessibilityLabel = String(localized: "更多")
-        // 每次打开时再取当前的菜单项，而不是在 updateUIView 里换掉菜单打断正在进行的操作。
-        button.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak coordinator = context.coordinator] completion in
-            completion(coordinator?.items() ?? [])
-        }])
-        return button
-    }
-
-    func updateUIView(_ button: UIButton, context: Context) {
-        context.coordinator.items = items
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
