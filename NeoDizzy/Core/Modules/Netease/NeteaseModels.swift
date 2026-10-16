@@ -6,6 +6,7 @@ nonisolated struct NeteaseArtist: Decodable, Identifiable, Hashable, Sendable {
     var picUrl: String? = nil
     var img1v1Url: String? = nil
     var briefDesc: String? = nil
+    var alias: [String]? = nil
     var artworkURL: URL? { NeteaseArtwork.url(picUrl ?? img1v1Url) }
 }
 nonisolated struct NeteaseAlbum: Decodable, Identifiable, Hashable, Sendable {

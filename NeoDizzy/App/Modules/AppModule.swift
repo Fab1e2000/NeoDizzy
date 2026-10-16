@@ -6,10 +6,11 @@ struct ModuleDescriptor: Identifiable, Equatable {
     let systemImage: String
 }
 
-/// Optional account capability; modules without accounts contribute no avatar button.
+/// Optional account capability; modules with accounts get a row in the global settings.
 struct ModuleAccountEntry {
     let title: String
     let avatarURL: URL?
+    var isSignedIn = false
 }
 
 /// A compiled-in feature plugs into these slots; the host never switches on provider IDs.
@@ -24,6 +25,8 @@ protocol AppModule {
     func install(in content: AnyView) -> AnyView
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView?
     func handleURL(_ url: URL, host: ModuleHost) -> Bool
+    /// 统一搜索里这个模块的一组结果（含标题和「查看全部」）；没有搜索能力的模块返回 nil。
+    func searchSection(query: String) -> AnyView?
 }
 
 extension AppModule {
@@ -33,6 +36,7 @@ extension AppModule {
     func dismissAccount() {}
     func install(in content: AnyView) -> AnyView { content }
     func handleURL(_ url: URL, host: ModuleHost) -> Bool { false }
+    func searchSection(query: String) -> AnyView? { nil }
 }
 
 @Observable
@@ -57,6 +61,13 @@ final class ModuleRegistry {
         modules.lazy.compactMap { $0.songActions(for: track, onImportLyrics: onImportLyrics) }.first
     }
     func descriptor(for id: ModuleID) -> ModuleDescriptor? { descriptors.first { $0.id == id } }
+    /// 统一搜索的各组结果：资料库在最前，其余按模块顺序；只包含 `ids` 里的模块。
+    func searchSections(query: String, in ids: [ModuleID]) -> [(id: ModuleID, view: AnyView)] {
+        Self.searchOrder(ids).compactMap { id in module(for: id)?.searchSection(query: query).map { (id, $0) } }
+    }
+    static func searchOrder(_ ids: [ModuleID]) -> [ModuleID] {
+        ids.filter { $0 == .localLibrary } + ids.filter { $0 != .localLibrary }
+    }
     func accountEntry(for id: ModuleID) -> ModuleAccountEntry? { module(for: id)?.accountEntry }
     func openAccount(for id: ModuleID) { module(for: id)?.openAccount() }
     func dismissAccounts() { modules.forEach { $0.dismissAccount() } }
@@ -90,7 +101,8 @@ final class ModuleHost {
         selection = settings.initialModule
     }
     func reconcileSelection() {
-        if !settings.isVisible(selection) { selection = settings.visibleModules[0] }
+        // 「搜索」标签不是模块，不受模块显示设置影响。
+        if selection != .search, !settings.isVisible(selection) { selection = settings.visibleModules[0] }
     }
     @discardableResult
     func select(_ id: ModuleID, path: [AppRoute] = []) -> Bool {

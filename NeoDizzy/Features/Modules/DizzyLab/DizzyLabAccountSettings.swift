@@ -28,7 +28,7 @@ struct DizzyLabAccountSettings: View {
     var body: some View {
         accountSection.listRowBackground(DizzyPalette.surface)
         Section {
-            NavigationLink { BrowsingHistoryView() } label: {
+            NavigationLink(value: AppRoute.page { BrowsingHistoryView() }) {
                 Label("浏览记录", systemImage: "clock.arrow.circlepath")
             }
             Link("访问 DizzyLab 官网", destination: DizzyURL.site)
@@ -58,7 +58,7 @@ struct DizzyLabAccountSettings: View {
                 }
                 .padding(.vertical, 4)
                 if account.isSessionExpired {
-                    NavigationLink("重新登录") { LoginView() }
+                    NavigationLink("重新登录", value: AppRoute.page { LoginView() })
                 }
                 NavigationLink("个人主页", value: AppRoute.user(id: user.userID))
                 Button(role: .destructive) {
@@ -99,7 +99,7 @@ struct DizzyLabAccountSettings: View {
                     }
                 }
                 .padding(.vertical, 4)
-                NavigationLink("登录 DizzyLab 账号") { LoginView() }
+                NavigationLink("登录 DizzyLab 账号", value: AppRoute.page { LoginView() })
             }
         }
     }

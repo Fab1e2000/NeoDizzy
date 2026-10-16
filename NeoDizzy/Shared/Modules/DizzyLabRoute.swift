@@ -8,6 +8,7 @@ enum DizzyLabRoute: Hashable {
     case section(DizzyLabSection)
     case disc(String), label(String), tag(String), pack(String)
     case user(Int), review(Int), discCommunity(String)
+    case search(String)
 
     var title: String {
         switch self {
@@ -19,6 +20,7 @@ enum DizzyLabRoute: Hashable {
         case .pack: String(localized: "合集")
         case .review: "repo 长评"
         case .discCommunity: String(localized: "社区")
+        case .search: String(localized: "搜索")
         }
     }
 }
@@ -37,6 +39,7 @@ extension AppRoute {
     static func user(id: Int) -> Self { dizzyLabRoute(.user(id)) }
     static func review(id: Int) -> Self { dizzyLabRoute(.review(id)) }
     static func discCommunity(id: String) -> Self { dizzyLabRoute(.discCommunity(id)) }
+    static func dizzyLabSearch(_ query: String) -> Self { dizzyLabRoute(.search(query)) }
 }
 
 /// 模块首页的四个功能入口；作品分类仍由 DiscoverSection 管理。

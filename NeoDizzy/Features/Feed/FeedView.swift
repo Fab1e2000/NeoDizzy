@@ -9,7 +9,7 @@ struct FeedView: View {
     var body: some View {
         DizzyLabPage(section: .feed, onRefresh: { await model.groups?.reload(keepingItems: true) }) {
             if account.isLoggedIn, !account.isSessionExpired, let groups = model.groups {
-                PagedContent(list: groups, skeleton: .rows, webURL: DizzyURL.page("/feed/"), emptyMessage: "关注的社团还没有发布新作。") { groups in
+                PagedContent(list: groups, skeleton: .rows, emptyMessage: "关注的社团还没有发布新作。") { groups in
                     ForEach(groups) { group in
                         FeedGroupSection(group: group)
                     }

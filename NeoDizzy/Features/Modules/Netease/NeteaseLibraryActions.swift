@@ -1,60 +1,21 @@
 import SwiftUI
 import UIKit
 
-struct NeteaseLikeButton: View {
-    let songID: Int
-    var requestLogin: (() -> Void)? = nil
-    @Environment(NeteaseStore.self) private var store
-    @State private var error: String?
-    @State private var working = false
-    private var liked: Bool { store.library.likedIDs.contains(songID) }
-    var body: some View {
-        Button {
-            guard store.profile != nil else { if let requestLogin { requestLogin() } else { store.showsLogin = true }; return }
-            working = true
-            Task {
-                defer { working = false }
-                do { try await store.library.toggleLike(songID) }
-                catch is CancellationError { }
-                catch { self.error = error.localizedDescription }
-            }
-        } label: {
-            Image(systemName: liked ? "heart.fill" : "heart")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(liked ? DizzyPalette.accentOnDark : .white)
-                .frame(width: 44, height: 44)
-                .background(.white.opacity(0.15), in: .circle)
-        }
-        .buttonStyle(.plain)
-        .disabled(working || store.library.pending.contains("song/\(songID)"))
-        .accessibilityLabel(liked ? "取消喜欢" : "喜欢这首歌")
-        .accessibilityValue(working ? "正在同步" : liked ? "已喜欢" : "未喜欢")
-        .task(id: store.revision) {
-            if store.profile != nil { try? await store.library.loadLikes() }
-        }
-        .alert("操作失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("好", role: .cancel) { error = nil }
-        } message: { Text(error ?? "") }
-    }
-}
-
 struct NeteasePlayerActions: View {
     @Environment(PlayerStore.self) private var player
     let track: Track
     var onImportLyrics: (() -> Void)?
     @Environment(NeteaseStore.self) private var store
     @Environment(\.openRoute) private var openRoute
-    @Environment(\.openURL) private var openURL
     @State private var showsPicker = false
-    @State private var showsLogin = false
     var body: some View {
         HStack(spacing: 10) {
             if let id = (track.remoteSource?.itemID).flatMap(Int.init) {
-                NeteaseLikeButton(songID: id, requestLogin: { showsLogin = true })
+                FavoriteButton(track: track, playerStyle: true)
                 NowPlayingMenuButton {
                     var items: [UIMenuElement] = [
                         UIAction(title: "加入歌单", image: UIImage(systemName: "text.badge.plus")) { _ in
-                            if store.profile == nil { showsLogin = true } else { showsPicker = true }
+                            showsPicker = true
                         },
                         UIAction(title: "相似歌曲", image: UIImage(systemName: "music.note.list")) { _ in openRoute(.netease(.similar(id))) }
                     ]
@@ -66,21 +27,22 @@ struct NeteasePlayerActions: View {
                     if let albumID = Int(track.discID), albumID > 0 {
                         items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "square.stack")) { _ in openRoute(.netease(.album(albumID))) })
                     }
-                    items.append(UIAction(title: "在网易云网页中打开", image: UIImage(systemName: "safari")) { _ in
-                        openURL(URL(string: "https://music.163.com/#/song?id=\(id)")!)
+                    // 播放中的曲目只记着歌手名字；打开菜单时查一次歌曲详情拿到歌手 ID。
+                    let api = store.api
+                    items.append(UIDeferredMenuElement.uncached { [openRoute] completion in
+                        Task { @MainActor in
+                            let song = try? await api.songs([id]).first
+                            let artists = (song?.artists ?? []).filter { $0.id > 0 }
+                                .map { (name: $0.name, route: AppRoute.netease(.artist($0.id))) }
+                            completion(ArtistMenu.elements(artists) { openRoute($0) })
+                        }
                     })
                     if let onImportLyrics { items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() }) }
                     return items
                 }.frame(width: 44, height: 44)
             }
         }
-        .sheet(isPresented: $showsPicker) {
-            if let id = (track.remoteSource?.itemID).flatMap(Int.init) { NeteasePlaylistPicker(songID: id) }
-        }
-        // A login requested from the full-screen player belongs to that presentation.
-        .sheet(isPresented: $showsLogin) {
-            NeteaseLoginView(store: store)
-        }
+        .songPlaylistSheet(isPresented: $showsPicker, track: track)
     }
 }
 
@@ -150,6 +112,7 @@ struct NeteaseCollectionFavorite: View {
     @Environment(NeteaseStore.self) private var store
     @State private var error: String?
     @State private var working = false
+    @State private var confirmsRemoval = false
     private var owned: Bool { playlist?.creator?.userId == store.profile?.userId && store.profile != nil }
     private var subscription: Bool? {
         if let playlist { return store.library.isSubscribed(playlist) }
@@ -164,17 +127,10 @@ struct NeteaseCollectionFavorite: View {
         "\(store.revision)/\(playlist?.id ?? 0)/\(album?.id ?? 0)"
     }
     var body: some View {
+        // 网易云的收藏就是资料库：收藏 = 加入资料库，取消前先确认。
         Button {
             guard store.profile != nil else { store.showsLogin = true; return }
-            working = true; error = nil
-            Task {
-                defer { working = false }
-                do {
-                    if let playlist { try await store.library.togglePlaylist(playlist) }
-                    if let album { try await store.library.toggleAlbum(album) }
-                } catch is CancellationError { }
-                catch { self.error = error.localizedDescription }
-            }
+            if selected { confirmsRemoval = true } else { toggle() }
         } label: {
             ZStack {
                 Image(systemName: owned || selected ? "checkmark" : "plus")
@@ -185,15 +141,33 @@ struct NeteaseCollectionFavorite: View {
             .frame(width: 30, height: 30)
         }
         .disabled(working || owned || !isReady)
-        .accessibilityLabel(owned ? "我的歌单" : selected ? "取消收藏" : "收藏")
-        .accessibilityHint(selected && !owned ? "点击取消收藏" : "收藏到网易云音乐账号")
+        .accessibilityLabel(owned ? "我的歌单" : selected ? "从资料库移除" : "加入资料库")
+        .accessibilityHint(selected && !owned ? "同时在网易云取消收藏" : "同时收藏到网易云音乐账号")
+        .confirmationDialog("从资料库移除「\(playlist?.name ?? album?.name ?? "")」？", isPresented: $confirmsRemoval, titleVisibility: .visible) {
+            Button("从资料库移除", role: .destructive) { toggle() }
+            Button("取消", role: .cancel) { }
+        } message: {
+            Text(playlist != nil ? "网易云账号也会取消收藏这个歌单。" : "网易云账号也会取消收藏这张专辑。")
+        }
         .task(id: statusRequestID) { await loadSubscription() }
-        .alert("收藏失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+        .alert("操作失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             if subscription == nil && (playlist != nil || album != nil) {
                 Button("重试读取收藏状态") { Task { await loadSubscription() } }
             }
             Button("好", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
+    }
+
+    private func toggle() {
+        working = true; error = nil
+        Task {
+            defer { working = false }
+            do {
+                if let playlist { try await store.library.togglePlaylist(playlist) }
+                if let album { try await store.library.toggleAlbum(album) }
+            } catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
+        }
     }
 
     private func loadSubscription() async {

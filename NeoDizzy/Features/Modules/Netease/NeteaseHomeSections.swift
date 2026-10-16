@@ -7,10 +7,11 @@ struct NeteaseHomeSections: View {
     private var visibleBlocks: [NeteaseHomeBlock] {
         var seen = Set<String>()
         return personal.blocks.filter { block in
-            let hiddenTitles = ["猜你喜欢", "热门歌手", "新歌推荐", "黑胶vip专享"]
+            let hiddenTitles = ["猜你喜欢", "热门歌手", "新歌推荐", "黑胶vip专享", "推荐歌单", "新碟上架", "精品歌单"]
             let normalizedTitle = block.title.components(separatedBy: .whitespacesAndNewlines).joined().lowercased()
             // Style recommendations use changing editorial titles, so exclude the section by its stable code.
             return block.blockCode != "HOMEPAGE_BLOCK_STYLE_RCMD"
+                && block.blockCode != "HOMEPAGE_BLOCK_PLAYLIST_RCMD"
                 && !hiddenTitles.contains(where: { normalizedTitle.contains($0) })
                 && (!block.playlists.isEmpty || !block.songs.isEmpty)
                 && seen.insert(block.id).inserted
@@ -40,7 +41,7 @@ struct NeteaseHomeSections: View {
                 }
             }
         }
-        ForEach([NeteaseRoute.recommended, .charts, .newAlbums(.all), .quality], id: \.self) { route in
+        ForEach([NeteaseRoute.recommended, .charts], id: \.self) { route in
             NeteaseHomeSection(route: route, refreshRevision: refreshRevision)
         }
     }
@@ -110,27 +111,6 @@ struct NeteaseCoverShelf: View {
                      reservesTitleLines: true)
                 .frame(width: typeSize.isAccessibilitySize ? 220 : 156)
                 .fixedSize(horizontal: false, vertical: true)
-        }.buttonStyle(.plain)
-    }
-}
-
-struct NeteaseLibraryLinks: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            entry(.liked, image: "heart.fill")
-            Divider()
-            entry(.subscribedAlbums, image: "square.stack")
-            Divider()
-            entry(.recent, image: "clock")
-        }
-    }
-    private func entry(_ route: NeteaseRoute, image: String) -> some View {
-        NavigationLink(value: AppRoute.netease(route)) {
-            HStack {
-                Label(route.title, systemImage: image)
-                Spacer()
-                Image(systemName: "chevron.right").font(.footnote).foregroundStyle(.secondary)
-            }.padding(.vertical, 14).contentShape(.rect)
         }.buttonStyle(.plain)
     }
 }

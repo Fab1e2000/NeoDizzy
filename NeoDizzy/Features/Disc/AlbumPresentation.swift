@@ -254,12 +254,9 @@ private struct AlbumArtworkBackground: View {
 
     private var overlayColors: [Color] {
         let dark = backdrop?.prefersDarkAppearance ?? (colorScheme == .dark)
-        let color: Color = dark ? .black : .white
-        // Keep the user's adjustment; the default reproduces MeloX's gradient exactly.
-        let adjustment = Double(AppearanceSettings.shared.albumDimming - AppearanceSettings.defaultAlbumDimming) / 100
-        return (dark ? [0.08, 0.24, 0.40] : [0.06, 0.16, 0.30]).map {
-            color.opacity(min(max($0 + adjustment, 0), 1))
-        }
+        return dark
+            ? [.black.opacity(0.08), .black.opacity(0.24), .black.opacity(0.40)]
+            : [.white.opacity(0.06), .white.opacity(0.16), .white.opacity(0.30)]
     }
 }
 
@@ -304,16 +301,17 @@ private actor AlbumBackdropProvider {
 
     func backdrop(for url: URL) async -> AlbumBackdrop? {
         if let cached = AlbumBackdropCache.shared.backdrop(for: url) { return cached }
-        var request = ImageRequest(url: url)
-        request.thumbnail = .init(size: CGSize(width: 160, height: 160), unit: .pixels, contentMode: .aspectFit)
-        guard let loaded = try? await ImagePipeline.shared.image(for: request),
-              let source = CIImage(image: loaded), !Task.isCancelled else { return nil }
+        // Same source as MeloX: original bytes with EXIF orientation, Lanczos-scaled to at most 160 px.
+        guard let (data, _) = try? await ImagePipeline.shared.data(for: ImageRequest(url: Self.paletteURL(for: url))),
+              let image = CIImage(data: data, options: [.applyOrientationProperty: true]),
+              !Task.isCancelled else { return nil }
         if let cached = AlbumBackdropCache.shared.backdrop(for: url) { return cached }
+        let source = Self.downsampled(image)
         let extent = source.extent.integral
         guard !extent.isEmpty, !extent.isInfinite else { return nil }
         let average = CIFilter.areaAverage()
         average.inputImage = source
-        average.extent = extent
+        average.extent = source.extent
         guard let output = average.outputImage else { return nil }
         var pixel = [UInt8](repeating: 0, count: 4)
         context.render(output, toBitmap: &pixel, rowBytes: 4,
@@ -331,6 +329,27 @@ private actor AlbumBackdropProvider {
         AlbumBackdropCache.shared.insert(backdrop, for: url)
         return backdrop
     }
+
+    /// NetEase covers are requested at 160×160, as MeloX does.
+    nonisolated static func paletteURL(for url: URL) -> URL {
+        guard url.host?.hasSuffix(".music.126.net") == true,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = components.queryItems ?? []
+        items.removeAll { $0.name.caseInsensitiveCompare("param") == .orderedSame }
+        items.append(URLQueryItem(name: "param", value: "160y160"))
+        components.queryItems = items
+        return components.url ?? url
+    }
+
+    private static func downsampled(_ image: CIImage) -> CIImage {
+        let maximumDimension = max(image.extent.width, image.extent.height)
+        guard maximumDimension > 160 else { return image }
+        let filter = CIFilter.lanczosScaleTransform()
+        filter.inputImage = image
+        filter.scale = Float(160 / maximumDimension)
+        filter.aspectRatio = 1
+        return filter.outputImage ?? image
+    }
 }
 
 // Adapted from upstream MeloX Features/Playlist/PlaylistTrackList.swift (GPL-3.0).
@@ -344,12 +363,15 @@ struct AlbumRowAction: Identifiable {
 }
 
 struct AlbumTrackRow: View {
+    @State private var songActions = SongActionPresentation()
     let track: Track
     var displayNumber: String? = nil
     var isPreview = false
     var isDownloaded = false
     var editTags: (() -> Void)?
     var additionalActions: [AlbumRowAction] = []
+    /// 搜索结果用的紧凑行：小封面代替序号，歌名后跟歌手，不额外缩进。
+    var compact = false
     let play: () -> Void
     @Environment(PlayerStore.self) private var player
 
@@ -366,6 +388,7 @@ struct AlbumTrackRow: View {
                 Button(action: primaryAction) {
                     Label(isCurrent && player.isPlaying ? "暂停" : "播放", systemImage: isCurrent && player.isPlaying ? "pause.fill" : "play.fill")
                 }
+                SongLibraryActions(track: track, presentation: songActions)
                 if let editTags {
                     Button("编辑音乐标签", systemImage: "pencil", action: editTags)
                 }
@@ -380,10 +403,15 @@ struct AlbumTrackRow: View {
             }
             .accessibilityLabel("\(track.title)的更多操作")
         }
-        .padding(.leading, 20)
-        .padding(.trailing, 8)
-        // 与 MeloX 相同：44pt 的更多按钮上下再各留 11pt，每行 66pt。
-        .padding(.vertical, 11)
+        .modifier(SongActionPresentationModifier(track: track, presentation: songActions))
+        .padding(.leading, compact ? 0 : 20)
+        .padding(.trailing, compact ? 0 : 8)
+        // 与 MeloX 相同：44pt 的更多按钮上下再各留 11pt，每行 66pt；紧凑行 58pt。
+        .padding(.vertical, compact ? 7 : 11)
+        .overlay(alignment: .bottom) {
+            // Divider 在 HStack 的 overlay 里会变成竖线，这里画一条横线。
+            if compact { Rectangle().fill(Color(uiColor: .separator)).frame(height: 0.5).padding(.leading, 50) }
+        }
         .foregroundStyle(.primary)
         .tint(.primary)
         .background(isCurrent ? Color.primary.opacity(0.10) : .clear)
@@ -403,11 +431,19 @@ struct AlbumTrackRow: View {
         Button(action: primaryAction) {
             HStack(spacing: 12) {
                 leadingContent
-                Text(track.title)
-                    .font(.body)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+                if compact {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(track.title).font(.body).lineLimit(1).layoutPriority(1)
+                        Text(track.artists).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text(track.title)
+                        .font(.body)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .contentShape(.rect)
         }
@@ -417,7 +453,22 @@ struct AlbumTrackRow: View {
     }
 
     @ViewBuilder private var leadingContent: some View {
-        if isCurrent {
+        if compact {
+            ArtworkImage(url: track.coverURL, cornerRadius: 5)
+                .frame(width: 38, height: 38)
+                .overlay {
+                    if isCurrent {
+                        RoundedRectangle(cornerRadius: 5).fill(.black.opacity(0.35))
+                        if player.isLoading {
+                            ProgressView().controlSize(.mini).tint(.white)
+                        } else {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.caption.weight(.bold)).foregroundStyle(.white)
+                        }
+                    }
+                }
+                .accessibilityHidden(true)
+        } else if isCurrent {
             ZStack {
                 Circle().stroke(Color.primary.opacity(0.60), lineWidth: 1.5)
                 if player.isLoading {
@@ -514,21 +565,14 @@ extension View {
 // Adapted from MeloX ExpandablePlaylistDescription (GPL-3.0).
 struct AlbumDescriptionExcerpt: View {
     let text: String
-    @State private var expanded = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    // 简介全文直接展开，不折叠。
     var body: some View {
-        Button {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { expanded.toggle() }
-        } label: {
-            Text("\(text)  \(Text(expanded ? "收起" : "更多").bold())")
-                .font(.body).foregroundStyle(.secondary)
-                .multilineTextAlignment(.leading)
-                .lineLimit(expanded ? nil : 3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(expanded ? "收起简介" : "展开简介")
-        .accessibilityValue(text)
+        Text(text)
+            .font(.body).foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

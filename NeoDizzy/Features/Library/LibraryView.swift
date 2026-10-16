@@ -40,8 +40,8 @@ struct PurchasedLibraryView: View {
 
     @ViewBuilder
     private var purchasedContent: some View {
-        if let userID = model.userID, let purchases = model.purchases {
-            PagedContent(list: purchases, webURL: DizzyURL.purchases(userID: userID), emptyMessage: "还没有购买过专辑。") { items in
+        if model.userID != nil, let purchases = model.purchases {
+            PagedContent(list: purchases, emptyMessage: "还没有购买过专辑。") { items in
                 LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                     ForEach(items) { item in
                         NavigationLink(value: AppRoute.disc(id: item.disc.id)) {

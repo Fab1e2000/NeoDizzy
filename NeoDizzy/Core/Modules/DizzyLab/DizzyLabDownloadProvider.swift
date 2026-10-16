@@ -4,10 +4,11 @@ nonisolated struct DizzyLabDownloadRequest: Codable, Sendable {
     let album: DownloadAlbum
     let format: String
     var isGift: Bool { format == "gift" }
+    /// DizzyLab 的下载统一放在 dizzylab/ 下，再按社团分。
     var folderName: String {
         let label = OfflinePaths.directoryName(album.labelName ?? "", fallback: "未知社团")
         let title = OfflinePaths.directoryName(album.title, fallback: "未命名专辑")
-        return "\(label)/\(title) [\(OfflinePaths.identifierName(album.id))]"
+        return "dizzylab/\(label)/\(title) [\(OfflinePaths.identifierName(album.id))]"
     }
     var request: DownloadRequest {
         DownloadRequest(title: isGift ? "\(album.title) · 特典" : album.title,

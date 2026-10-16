@@ -143,6 +143,17 @@ actor LocalLibraryScanner {
             var artists: [String] = []
             for credit in credits where !artists.contains(credit) { artists.append(credit) }
             let artist = artists.isEmpty ? "未知艺术家" : artists.joined(separator: " / ")
+            // 下载的专辑文件夹名带平台编号防止重名，显示时用下载记录里的专辑名。
+            let managed = managedTracks[Self.canonical(first.url)]
+            let managedTitle = managed?.albumTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            // A copied downloaded song must not rename a mixed user folder.
+            let isManagedAlbum = managed != nil && files.allSatisfy { file in
+                guard let track = managedTracks[Self.canonical(file.url)] else { return false }
+                return track.discID == managed?.discID
+                    && track.remoteSource?.providerID == managed?.remoteSource?.providerID
+                    && track.albumTitle.trimmingCharacters(in: .whitespacesAndNewlines) == managedTitle
+            }
+            let albumTitle = isManagedAlbum ? (managedTitle.flatMap { $0.isEmpty ? nil : $0 } ?? first.title) : first.title
             let entries = files.enumerated().map { offset, file in
                 var record = file.cached
                 record.albumID = albumID
@@ -153,13 +164,13 @@ actor LocalLibraryScanner {
                 let track = Track(discID: managedTracks[Self.canonical(file.url)]?.discID ?? "", number: managedTracks[Self.canonical(file.url)]?.number ?? String(file.number ?? offset + 1),
                                   title: metadata.title.isEmpty ? file.fallbackTitle : metadata.title,
                                   artists: metadata.artist.isEmpty ? "未知艺术家" : metadata.artist,
-                                  albumTitle: first.title, coverURL: cover, duration: metadata.duration,
+                                  albumTitle: albumTitle, coverURL: cover, duration: metadata.duration,
                                   // Every visible file has its own identity, including
                                   // copies of the same downloaded site track.
                                   localSource: LocalTrackSource(albumID: albumID, trackID: record.trackID))
                 return LocalAlbum.Entry(track: track, fileURL: file.url, discNumber: file.disc, previousTrackIDs: Set(record.previousTrackIDs ?? []))
             }
-            albums.append(LocalAlbum(id: albumID, title: first.title, artist: artist, coverURL: cover, entries: entries, previousIDs: previousIDs))
+            albums.append(LocalAlbum(id: albumID, title: albumTitle, artist: artist, coverURL: cover, entries: entries, previousIDs: previousIDs))
         }
         // A formerly merged ID must not shadow a currently visible folder album.
         let currentIDs = Set(albums.map(\.id))

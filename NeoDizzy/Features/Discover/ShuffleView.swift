@@ -21,7 +21,7 @@ struct ShuffleView: View {
                     .padding(CGFloat(30 + ring * 12))
             }
             Circle()
-                .fill(DizzyPalette.accent.gradient)
+                .fill(DizzyPalette.accentFill.gradient)
                 .frame(width: 82, height: 82)
             Image(systemName: "shuffle")
                 .font(.system(size: 30, weight: .semibold))
@@ -66,9 +66,9 @@ struct ShuffleView: View {
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .tint(DizzyPalette.accent)
+                .tint(DizzyPalette.accentFill)
                 .foregroundStyle(DizzyPalette.onAccent)
+                .buttonBorderShape(.capsule)
                 .controlSize(.large)
                 .disabled(isRequesting)
                 .padding(.horizontal, 16)

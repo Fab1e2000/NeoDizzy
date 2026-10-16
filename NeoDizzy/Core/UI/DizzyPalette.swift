@@ -12,8 +12,10 @@ enum DizzyPalette {
     static let mutedText = Color.adaptive(light: 0x6A737B, dark: 0x919AA1)
     /// 主题色。默认是官网 `--warning` 的金色：「现在购买」按钮和价格。
     static var accent: Color { AppearanceSettings.shared.theme.color }
-    /// 铺在主题色上的文字和图标。
-    static var onAccent: Color { AppearanceSettings.shared.theme.onColor }
+    /// 主题色实底（卡片、角标、主要按钮），比文字用的主题色深一些，白字看得清。
+    static var accentFill: Color { AppearanceSettings.shared.theme.fill }
+    /// 实底上的文字和图标。
+    static var onAccent: Color { AppearanceSettings.shared.theme.onFill }
     /// 深色底上的主题色（封面上的半透明黑角标等），浅色外观下也用明亮的一档。
     static var accentOnDark: Color { Color(hex: AppearanceSettings.shared.theme.dark) }
     /// 官网 `--success`：免费。

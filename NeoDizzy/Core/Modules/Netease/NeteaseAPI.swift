@@ -69,8 +69,26 @@ final class NeteaseAPI {
         let response: Response = try await client.request("/api/user/playlist", data: ["uid": userID, "limit": limit, "offset": offset, "includeVideo": true], authenticated: true)
         return response.playlist
     }
+    /// Use the actual account playlist, matching “我的歌单 → 我喜欢的音乐”.
+    func favoritePlaylistSongs(userID: Int) async throws -> [NeteaseSong] {
+        let lists = try await userPlaylists(userID)
+        guard let favorite = lists.first(where: { $0.specialType == 5 && $0.creator?.userId == userID }) else {
+            throw NeteaseError.response
+        }
+        let detail = try await playlist(favorite.id)
+        guard let ids = detail.trackIds?.map(\.id) else { throw NeteaseError.response }
+        if let count = detail.trackCount, count != ids.count { throw NeteaseError.response }
+        var result: [NeteaseSong] = []
+        for start in stride(from: 0, to: ids.count, by: 400) {
+            let batch = Array(ids[start..<min(start + 400, ids.count)])
+            let values = try await songs(batch)
+            guard values.count == batch.count else { throw NeteaseError.response }
+            result += values
+        }
+        return result
+    }
     struct SearchResult: Decodable {
-        let songs: [NeteaseSong]?
+        var songs: [NeteaseSong]?
         let albums: [NeteaseAlbum]?
         let playlists: [NeteasePlaylist]?
         let songCount: Int?
@@ -82,7 +100,16 @@ final class NeteaseAPI {
     func search(_ query: String, kind: Int, offset: Int = 0) async throws -> SearchResult {
         struct Response: Decodable { let result: SearchResult? }
         let response: Response = try await client.request("/api/search/get", data: ["s": query, "type": kind, "limit": 30, "offset": offset])
-        return response.result ?? SearchResult(songs: [], albums: [], playlists: [], songCount: 0, albumCount: 0, playlistCount: 0)
+        var result = response.result ?? SearchResult(songs: [], albums: [], playlists: [], songCount: 0, albumCount: 0, playlistCount: 0)
+        // 搜索接口的歌曲只带专辑 ID、不带封面；用歌曲详情补上，播放器和「喜欢」才有封面。
+        if let songs = result.songs, songs.contains(where: { $0.album?.artworkURL == nil }) {
+            let details = (try? await self.songs(songs.map(\.id))) ?? []
+            let byID = Dictionary(details.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            result.songs = songs.map { song in
+                song.album?.artworkURL == nil ? byID[song.id] ?? song : song
+            }
+        }
+        return result
     }
     func stream(_ id: String) async throws -> RemotePlaybackSource {
         struct Trial: Decodable { let start: Double?; let end: Double? }

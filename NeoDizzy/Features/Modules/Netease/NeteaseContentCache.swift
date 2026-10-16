@@ -70,11 +70,9 @@ final class NeteaseContentCache {
         guard shortcutTask == nil else { return }
         let revision = store.revision
         let userID = store.profile?.userId
-        let routes: [NeteaseRoute] = userID == nil ? [.charts] : [.charts, .daily, .myPlaylists, .radio]
+        let routes: [NeteaseRoute] = userID == nil ? [.charts] : [.charts, .daily, .radio]
         // Sequential API requests and bounded artwork work, only once per module session.
         shortcutTask = Task {
-            let albums = page(.route(.newAlbums(.all)), revision: revision)
-            if !albums.hasLoaded { await albums.load(api: store.api, route: .newAlbums(.all)) }
             for route in routes {
                 guard !Task.isCancelled, self.revision == revision else { return }
                 let model = page(.route(route), revision: revision)

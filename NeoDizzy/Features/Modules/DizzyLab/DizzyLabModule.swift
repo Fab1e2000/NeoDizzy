@@ -6,7 +6,8 @@ final class DizzyLabModule: AppModule {
     }
     var descriptor: ModuleDescriptor { Self.metadata }
     var accountEntry: ModuleAccountEntry? {
-        ModuleAccountEntry(title: "DizzyLab 账号", avatarURL: services.account.account?.avatarURL)
+        ModuleAccountEntry(title: "DizzyLab", avatarURL: services.account.account?.avatarURL,
+                           isSignedIn: services.account.account != nil)
     }
     func openAccount() {
         if services.account.account == nil {
@@ -25,6 +26,7 @@ final class DizzyLabModule: AppModule {
 
     init(services: DizzyLabServices) { self.services = services }
     func rootView() -> AnyView { AnyView(DiscoverView()) }
+    func searchSection(query: String) -> AnyView? { AnyView(DizzyLabSearchSection(query: query)) }
     func destination(for route: AppRoute) -> AnyView? {
         guard route.moduleID == descriptor.id, let destination = route.destination.base as? DizzyLabRoute else { return nil }
         return AnyView(DizzyLabDestination(route: destination))

@@ -53,14 +53,13 @@ struct DownloadAlbumView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
         } else if let failure {
-            LoadFailureView(message: failure, webURL: DizzyURL.disc(detail.id)) {
+            LoadFailureView(message: failure) {
                 await loadOptions()
             }
         } else if options.isEmpty {
-            Text(isGift ? "暂无可下载的特典，请在专辑网页中确认特典和下载权限。" : "暂时没有可下载的格式，请在专辑网页中确认下载权限。")
+            Text(isGift ? "暂无可下载的特典，请确认已购买并拥有特典下载权限。" : "暂时没有可下载的格式，请确认已购买并拥有下载权限。")
                 .font(.subheadline)
                 .foregroundStyle(DizzyPalette.mutedText)
-            Link("在网页中打开", destination: DizzyURL.disc(detail.id))
         } else {
             SectionHeading(title: isGift ? "特典" : "选择格式")
             ForEach(options) { option in

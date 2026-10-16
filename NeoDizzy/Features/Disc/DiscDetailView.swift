@@ -4,6 +4,7 @@ import SwiftUI
 struct DiscDetailView: View {
     @Environment(BrowsingHistoryStore.self) private var history
     @Environment(OfflineLibraryStore.self) private var offline
+    @Environment(AccountLibraryMirror.self) private var accountLibrary
     @State private var model: DiscDetailModel
 
     let initialArtworkURL: URL?
@@ -33,7 +34,7 @@ struct DiscDetailView: View {
                         DiscDetailContent(detail: detail, tracks: model.tracks(of: detail))
                     } else {
                         if let failure = model.detail.failure {
-                            LoadFailureView(message: failure, webURL: DizzyURL.disc(model.id)) { await model.detail.load() }
+                            LoadFailureView(message: failure) { await model.detail.load() }
                         } else {
                             VStack(spacing: 0) {
                                 AlbumHero(artworkURL: displayedArtworkURL, title: "专辑名称", metadata: "歌曲数量", reservesTitleSpace: true, metadataIsPlaceholder: true, titleIsPlaceholder: true) {
@@ -64,7 +65,8 @@ struct DiscDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
-            if let summary = model.detail.value?.summary {
+            // 已购专辑自动在资料库里；没买的可以手动加入（只记在 App 里）。
+            if let summary = model.detail.value?.summary, !summary.isOwned, !accountLibrary.isDizzyLabAlbumPurchased(summary.id) {
                 ToolbarItem(placement: .topBarTrailing) {
                     SavedLibraryToggle(item: SavedLibraryItem(
                         kind: .album, providerID: "dizzylab", itemID: summary.id, title: summary.title,
@@ -74,7 +76,6 @@ struct DiscDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ShareLink(item: DizzyURL.disc(model.id)) { Label("分享", systemImage: "square.and.arrow.up") }
-                    Link(destination: DizzyURL.disc(model.id)) { Label("在网页中打开", systemImage: "safari") }
                 } label: {
                     Label("更多", systemImage: "ellipsis")
                 }
@@ -98,7 +99,6 @@ private struct DiscDetailContent: View {
     let detail: DiscDetail
     let tracks: [Track]
     var artworkURL: URL?
-    @Environment(SavedLibraryStore.self) private var saved
     @Environment(PlayerStore.self) private var player
     @Environment(OfflineLibraryStore.self) private var offline
     @State private var purchaseSheet: PurchaseSheet?
@@ -220,8 +220,7 @@ private struct DiscDetailContent: View {
                 // 整张都是试听时由购买卡片统一说明，只在部分曲目可完整播放时逐行标注。
                 AlbumTrackRow(track: track,
                               isPreview: !isPreviewOnly && !localTrackIDs.contains(track.id)
-                                && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false),
-                              additionalActions: [saved.rowAction(for: .song(track, providerID: "dizzylab", itemID: track.id))]) {
+                                && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false)) {
                     play(from: index)
                 }
             }
@@ -518,41 +517,19 @@ private struct DiscNotesSheet: View {
 }
 
 /// 可折叠的长文本：默认显示前几行，被截断时右下角出现「更多」，与 App Store 的介绍相同。
+/// 带标题的简介，全文直接展开，不折叠。
 struct ExpandableText: View {
     let title: LocalizedStringKey
     let text: String
-    @State private var isExpanded = false
-    @State private var isTruncated = false
-    private static let collapsedLines = 4
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeading(title: title)
             Text(text)
                 .font(.subheadline)
-                .lineLimit(isExpanded ? nil : Self.collapsedLines)
                 .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    // 用不限行数的同一段文字比较高度，判断是否真的被截断。
-                    Text(text).font(.subheadline)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .hidden()
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { full in
-                            isTruncated = full > collapsedHeight + 1
-                        }
-                }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { collapsedHeight = $0 }
-            if isTruncated || isExpanded {
-                Button(isExpanded ? "收起" : "更多") {
-                    withAnimation(.snappy) { isExpanded.toggle() }
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(DizzyPalette.accent)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
         }
     }
-
-    @State private var collapsedHeight: CGFloat = 0
 }

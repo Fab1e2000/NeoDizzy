@@ -49,8 +49,11 @@ import Testing
         player.restore()
         let library = OfflineLibraryStore(defaults: defaults)
         let size = landscape ? CGSize(width: 852, height: 393) : CGSize(width: 393, height: 852)
+        let favoritesDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: favoritesDirectory) }
+        let favorites = FavoritesStore(directory: favoritesDirectory)
         let controller = UIHostingController(rootView: NowPlayingView(initialPage: page)
-            .environment(player).environment(library).frame(width: size.width, height: size.height))
+            .environment(player).environment(library).environment(favorites).frame(width: size.width, height: size.height))
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let window = UIWindow(windowScene: scene)
         window.rootViewController = controller

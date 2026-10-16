@@ -5,6 +5,8 @@ nonisolated enum NeteaseRoute: Hashable {
     case album(Int), playlist(Int), daily, radio, charts, myPlaylists
     case recommended, quality, category(String), newAlbums(NeteaseRegion), newSongs(NeteaseRegion), personalizedSongs
     case artists, artist(Int), artistAlbums(Int), liked, recent, subscribedAlbums, similar(Int)
+    /// 搜索「查看全部」：关键词与结果类型（1 歌曲、10 专辑、100 歌手、1000 歌单）。
+    case search(String, Int)
     var title: String {
         switch self {
         case .album: "专辑"
@@ -26,6 +28,7 @@ nonisolated enum NeteaseRoute: Hashable {
         case .recent: "最近播放"
         case .subscribedAlbums: "收藏专辑"
         case .similar: "相似歌曲"
+        case .search: "搜索"
         }
     }
     var requiresLogin: Bool {

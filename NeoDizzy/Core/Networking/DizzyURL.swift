@@ -5,7 +5,7 @@ nonisolated enum DizzyURL {
     static let site = URL(string: "https://www.dizzylab.net")!
     static let media = URL(string: "https://cdn.dizzylab.net/media/")!
 
-    // MARK: 网页地址（「在网页中打开」）
+    // MARK: 网页地址
 
     static func disc(_ id: String) -> URL { page("/d/\(pathSegment(id))/") }
     static func label(_ name: String) -> URL { page("/l/\(pathSegment(name))/") }

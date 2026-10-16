@@ -5,6 +5,9 @@ struct ModuleID: RawRepresentable, Hashable, Codable, Identifiable, Sendable {
     let rawValue: String
     var id: String { rawValue }
     nonisolated init(rawValue: String) { self.rawValue = rawValue }
+
+    /// 标签栏右侧的统一搜索；它有自己的导航路径，但不是模块。
+    static let search = ModuleID(rawValue: "search")
 }
 
 /// The host transports routes without knowing their module-specific payload types.

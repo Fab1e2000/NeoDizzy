@@ -108,7 +108,9 @@ final class NeteaseDownloadProvider: DownloadProvider {
         try Task.checkCancellation()
         let type = audio.pathExtension
         let title = OfflinePaths.directoryName(metadata.track.title, fallback: String(songID))
-        let filename = String(format: "%02d", metadata.playlistPosition ?? metadata.trackNumber) + " " + title + (metadata.playlistID == nil ? "" : " [\(songID)]") + "." + type
+        // Different discs (or sanitized titles) can share a track number and name.
+        // Keep every remote song distinct when merging files into one collection.
+        let filename = String(format: "%02d", metadata.playlistPosition ?? metadata.trackNumber) + " " + title + " [\(songID)]." + type
         let path = filename
         let destination = try OfflinePaths.file(path, inside: staging)
         try FileManager.default.moveItem(at: audio, to: destination)
@@ -141,7 +143,8 @@ final class NeteaseDownloadProvider: DownloadProvider {
         let manifest = LibraryManifest(source: LibrarySource(provider: id, kind: kind, id: collectionID),
             title: collectionTitle, artist: metadata.albumArtist, artworkURL: metadata.playlistID == nil ? track.coverURL : metadata.playlistArtworkURL,
             entries: [.init(relativePath: path, itemID: String(songID), track: track, quality: level)])
-        let name = (metadata.playlistID == nil ? "" : "歌单/") + OfflinePaths.directoryName(collectionTitle, fallback: collectionID)
+        // 网易云的下载统一放在 netease/ 下，再按专辑、歌单分开。
+        let name = (metadata.playlistID == nil ? "netease/专辑/" : "netease/歌单/") + OfflinePaths.directoryName(collectionTitle, fallback: collectionID)
         let folderName: String
         if let existing = library.collection(provider: id, kind: kind, id: collectionID), let root = library.downloadRoot,
            let relative = try? OfflinePaths.relativePath(of: existing.directoryURL, inside: root) { folderName = relative }

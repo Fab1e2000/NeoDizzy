@@ -19,6 +19,39 @@ import Testing
         for _ in 0..<200 { if test() { return }; try await Task.sleep(for: .milliseconds(10)) }
         Issue.record("Timed out waiting for request")
     }
+    @Test func favoriteSyncUsesOwnedPlaylistAndPreservesItsOrder() async throws {
+        LibraryStub.handler = { request in
+            switch request.url?.path {
+            case "/eapi/user/playlist":
+                return .init(body: #"{"code":200,"playlist":[{"id":8,"name":"Other","specialType":5,"creator":{"userId":2,"nickname":"Other"}},{"id":7,"name":"Renamed","specialType":5,"creator":{"userId":1,"nickname":"Me"}}]}"#)
+            case "/eapi/v6/playlist/detail":
+                let body = try decodeEAPI(request)
+                #expect(body["id"] as? Int == 7)
+                return .init(body: #"{"code":200,"playlist":{"id":7,"name":"Liked","trackCount":2,"trackIds":[{"id":90},{"id":1}],"tracks":[{"id":1,"name":"Stale embedded"}]}}"#)
+            case "/eapi/v3/song/detail":
+                return .init(body: #"{"code":200,"songs":[{"id":1,"name":"One","no":1},{"id":90,"name":"Ninety","no":9}]}"#)
+            default:
+                Issue.record("Unexpected endpoint: \(request.url?.path ?? "")")
+                return .init(body: #"{"code":500}"#)
+            }
+        }
+        let songs = try await api().favoritePlaylistSongs(userID: 1)
+        #expect(songs.map(\.id) == [90, 1])
+    }
+    @Test func favoriteSyncRejectsMissingPlaylistAndIncompleteSongs() async throws {
+        LibraryStub.handler = { _ in .init(body: #"{"code":200,"playlist":[]}"#) }
+        await #expect(throws: (any Error).self) { try await api().favoritePlaylistSongs(userID: 1) }
+        LibraryStub.handler = { request in
+            switch request.url?.path {
+            case "/eapi/user/playlist":
+                return .init(body: #"{"code":200,"playlist":[{"id":7,"name":"Liked","specialType":5,"creator":{"userId":1,"nickname":"Me"}}]}"#)
+            case "/eapi/v6/playlist/detail":
+                return .init(body: #"{"code":200,"playlist":{"id":7,"name":"Liked","trackCount":1,"trackIds":[{"id":90}]}}"#)
+            default: return .init(body: #"{"code":200,"songs":[]}"#)
+            }
+        }
+        await #expect(throws: (any Error).self) { try await api().favoritePlaylistSongs(userID: 1) }
+    }
     @Test func likesCommitOnlyAfterSuccessAndUseOfficialParameters() async throws {
         let succeeds = Mutex(false)
         LibraryStub.handler = { request in

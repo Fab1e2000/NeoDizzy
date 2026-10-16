@@ -69,6 +69,14 @@ final class SavedLibraryStore {
         if items.contains(where: { $0.id == item.id }) { remove(id: item.id) } else { add(item) }
     }
 
+    func removeMigratedSongs(ids: Set<String>) throws {
+        guard !ids.isEmpty else { return }
+        let remaining = items.filter { !ids.contains($0.id) }
+        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(remaining).write(to: fileURL, options: .atomic)
+        items = remaining
+    }
+
     private func save() {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)

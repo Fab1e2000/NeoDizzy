@@ -17,6 +17,15 @@ enum LibraryOrigin: String, CaseIterable, Hashable, Sendable {
         case .dizzylab: "DizzyLab"
         }
     }
+
+    /// 封面右下角的来源图标。
+    var systemImage: String {
+        switch self {
+        case .local: "iphone"
+        case .netease: "cloud"
+        case .dizzylab: "bag"
+        }
+    }
 }
 
 /// 资料库顶部的来源筛选。
@@ -41,12 +50,15 @@ enum LibraryOriginFilter: Hashable, Sendable {
 }
 
 enum LocalLibraryRoute: Hashable {
+    case favorites
     case album(String), playlist(String)
     case albums(LibraryOriginFilter), playlists(LibraryOriginFilter), songs(LibraryOriginFilter)
     case artists(LibraryOriginFilter), artist(String, LibraryOriginFilter)
+    case search(String)
 }
 
 extension AppRoute {
+    static var favorites: Self { Self(moduleID: .localLibrary, destination: LocalLibraryRoute.favorites, title: "喜欢") }
     static func localPlaylist(id: String) -> Self {
         Self(moduleID: .localLibrary, destination: LocalLibraryRoute.playlist(id), title: String(localized: "本地歌单"))
     }
@@ -65,6 +77,10 @@ extension AppRoute {
     }
     static func libraryArtist(_ name: String, filter: LibraryOriginFilter) -> Self {
         Self(moduleID: .localLibrary, destination: LocalLibraryRoute.artist(name, filter), title: name)
+    }
+
+    static func librarySearch(_ query: String) -> Self {
+        Self(moduleID: .localLibrary, destination: LocalLibraryRoute.search(query), title: String(localized: "搜索"))
     }
 
     static func localAlbum(id: String) -> Self {

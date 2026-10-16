@@ -4,26 +4,19 @@ struct DiscoverView: View {
     @Environment(DizzyLabContentCache.self) private var contentCache
     @Environment(AccountStore.self) private var account
     private var model: DiscoverModel { contentCache.discover }
-    @State private var search = SearchModel()
 
     var body: some View {
         @Bindable var model = model
-        MainTabPage(title: "DizzyLab", search: PageSearch(text: $search.query, prompt: "搜索专辑、社团、用户") { search.submit() }, onRefresh: {
-            if let discs = search.discs { await discs.reload(keepingItems: true) }
-            else { await model.refresh() }
-        }) {
-            if search.keyword != nil {
-                DiscoverSearchResults(model: search)
-                    .id(search.keyword)
-            } else {
+        MainTabPage(title: "DizzyLab", onRefresh: { await model.refresh() }) {
+            Group {
                 DizzyLabShortcuts()
                 DiscoveryCategoryPicker(selection: $model.section, options: DiscoverSection.allCases.map { ($0, $0.title) })
                 if let category = model.section.category, let list = model.lists[category] {
-                    PagedContent(list: list, webURL: DizzyURL.site) { discs in
+                    PagedContent(list: list) { discs in
                         DiscGrid(discs: discs)
                     }
                 } else {
-                    LoadableContent(state: model.showcase, webURL: DizzyURL.site) { showcase in
+                    LoadableContent(state: model.showcase) { showcase in
                         if model.section == .packs {
                             LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                                 ForEach(showcase.packs) { PackCard(pack: $0) }
@@ -49,10 +42,6 @@ struct DiscoverView: View {
             }
         }
         .task { contentCache.prewarm(account: account) }
-        .scrollDismissesKeyboard(.interactively)
-        .onChange(of: search.query) { _, query in
-            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { search.clear() }
-        }
     }
 }
 

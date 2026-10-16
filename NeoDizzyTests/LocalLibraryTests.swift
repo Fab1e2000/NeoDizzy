@@ -406,6 +406,23 @@ extension LocalLibraryTests {
 
 
 extension LocalLibraryTests {
+    @Test func fullyManagedAlbumUsesDownloadedTitleInsteadOfDirectoryIdentifier() async throws {
+        let root = try localTestFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = try localTestFile("Site title [site]/01.mp3", in: root)
+        let second = try localTestFile("Site title [site]/02.mp3", in: root)
+        let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { _ in AudioMetadata() })
+        let tracks = [first, second].enumerated().map { index, url in
+            (LocalLibraryScanner.canonical(url), Track(discID: "site", number: String(index + 1),
+                title: "Song", artists: "A", albumTitle: "Site title", coverURL: nil))
+        }
+        let result = try await scanner.scan([OfflineFolderAccess(url: root)], excluding: [], managedTracks: Dictionary(uniqueKeysWithValues: tracks))
+        let album = try #require(result.albums.first)
+        #expect(album.title == "Site title")
+        #expect(album.tracks.count == 2)
+        #expect(album.tracks.allSatisfy { $0.albumTitle == "Site title" })
+    }
+
     @Test func mixedAlbumTagsAndManagedTracksShareOneFolderAlbum() async throws {
         let root = try localTestFolder()
         defer { try? FileManager.default.removeItem(at: root) }

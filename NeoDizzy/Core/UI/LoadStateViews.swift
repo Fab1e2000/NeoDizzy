@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// 加载失败：说明、重试，以及「在网页中打开」的退路（网站改版导致解析失败时仍能看到内容）。
+/// 加载失败：说明与重试。
 struct LoadFailureView: View {
     let message: String
-    var webURL: URL?
     let retry: () async -> Void
 
     var body: some View {
@@ -15,16 +14,12 @@ struct LoadFailureView: View {
                 .font(.subheadline)
                 .foregroundStyle(DizzyPalette.mutedText)
                 .multilineTextAlignment(.center)
-            HStack(spacing: 12) {
-                Button("重试") {
-                    Task { await retry() }
-                }
-                .buttonStyle(.borderedProminent)
-                if let webURL {
-                    Link("在网页中打开", destination: webURL)
-                        .buttonStyle(.bordered)
-                }
+            Button("重试") {
+                Task { await retry() }
             }
+            .buttonStyle(.borderedProminent)
+            .tint(DizzyPalette.accentFill)
+            .foregroundStyle(DizzyPalette.onAccent)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
@@ -166,18 +161,35 @@ struct PaginationFooter<Item: Identifiable & Sendable>: View {
     }
 }
 
+/// 自己管分页的列表（网易云、用户主页）共用的底栏：出现在屏幕上时自动加载下一页，不用点按钮。
+/// `progress` 每加载一页就会变（例如已加载条数），变了之后底栏仍在屏幕上就继续加载。必须放在 Lazy 容器里。
+struct AutoLoadMoreFooter<Placeholder: View>: View {
+    let progress: Int
+    let load: () async -> Void
+    @ViewBuilder var placeholder: Placeholder
+
+    var body: some View {
+        placeholder
+            .task(id: progress) {
+                // 与 PaginationFooter 相同：先等一会儿，滚出屏幕的底栏会在发请求前被取消。
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                await load()
+            }
+    }
+}
+
 /// 分页列表的外壳：首次加载、失败、空列表，内容之后接分页底栏。
 struct PagedContent<Item: Identifiable & Sendable, Content: View>: View {
     let list: PagedList<Item>
     var skeleton: ContentSkeletonLayout = .grid
-    var webURL: URL?
     var emptyMessage: LocalizedStringKey = "这里还没有内容。"
     @ViewBuilder let content: ([Item]) -> Content
 
     var body: some View {
         if list.items.isEmpty {
             if let failure = list.failure {
-                LoadFailureView(message: failure, webURL: webURL) { await list.reload() }
+                LoadFailureView(message: failure) { await list.reload() }
             } else if list.isEmpty {
                 Text(emptyMessage)
                     .font(.subheadline)
@@ -203,7 +215,6 @@ struct LoadableContent<Value, Content: View>: View {
     let state: Loadable<Value>
     var skeleton: ContentSkeletonLayout = .grid
     var skeletonIsPage = false
-    var webURL: URL?
     @ViewBuilder let content: (Value) -> Content
 
     var body: some View {
@@ -211,7 +222,7 @@ struct LoadableContent<Value, Content: View>: View {
             if let value = state.value {
                 content(value)
             } else if let failure = state.failure {
-                LoadFailureView(message: failure, webURL: webURL) { await state.load() }
+                LoadFailureView(message: failure) { await state.load() }
             } else {
                 if skeletonIsPage {
                     ScrollView { ContentSkeleton(layout: skeleton).padding(20) }

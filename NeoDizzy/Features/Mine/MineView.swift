@@ -1,21 +1,39 @@
 import SwiftUI
 
-/// 应用设置与本地存储管理，不展示平台账号。
+/// 应用设置、各平台账号入口与本地存储管理。
 struct AppSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ModuleSettings.self) private var tabs
     @Environment(DownloadStore.self) private var downloads
     @Environment(ModuleRegistry.self) private var modules
+    @Environment(AppSettingsPresentation.self) private var presentation
+    @AppStorage(ImmersiveMode.storageKey) private var isImmersive = false
 
     var body: some View {
         @Bindable var tabs = tabs
         @Bindable var downloads = downloads
         NavigationStack {
             List {
-                Section("外观") {
-                    NavigationLink { AppearanceSettingsView() } label: {
+                Section("账号") {
+                    ForEach(modules.descriptors) { module in
+                        if let entry = modules.accountEntry(for: module.id) {
+                            accountRow(module, entry: entry)
+                        }
+                    }
+                }
+                .listRowBackground(DizzyPalette.surface)
+
+                Section {
+                    NavigationLink(value: AppRoute.page { AppearanceSettingsView() }) {
                         Label("外观与主题", systemImage: "paintpalette")
                     }
+                    Toggle(isOn: $isImmersive) {
+                        Label("沉浸模式", systemImage: "rectangle.dashed")
+                    }
+                } header: {
+                    Text("外观")
+                } footer: {
+                    Text("隐藏屏幕顶部的时间、电量和信号。")
                 }
                 .listRowBackground(DizzyPalette.surface)
 
@@ -27,7 +45,7 @@ struct AppSettingsView: View {
                     } label: {
                         Label("启动页面", systemImage: "house")
                     }
-                    NavigationLink { TabSettingsView() } label: {
+                    NavigationLink(value: AppRoute.page { TabSettingsView() }) {
                         Label("模块管理", systemImage: "rectangle.bottomthird.inset.filled")
                     }
                 } header: {
@@ -36,9 +54,7 @@ struct AppSettingsView: View {
                 .listRowBackground(DizzyPalette.surface)
 
                 Section("音乐库") {
-                    NavigationLink { MusicFolderView() } label: {
-                        Label("音乐文件夹", systemImage: "folder")
-                    }
+                    LibraryExportButton()
                 }
                 .listRowBackground(DizzyPalette.surface)
 
@@ -56,7 +72,7 @@ struct AppSettingsView: View {
                 .listRowBackground(DizzyPalette.surface)
 
                 Section("播放") {
-                    NavigationLink { LyricsSettingsView() } label: {
+                    NavigationLink(value: AppRoute.page { LyricsSettingsView() }) {
                         Label("歌词", systemImage: "text.quote")
                     }
                 }
@@ -65,9 +81,7 @@ struct AppSettingsView: View {
                 Section("关于") {
                     LabeledContent("版本", value: Bundle.main.versionText)
                     LabeledContent("开源许可", value: "GPLv3")
-                    NavigationLink("免责声明") {
-                        DisclaimerView()
-                    }
+                    NavigationLink("免责声明", value: AppRoute.page { DisclaimerView() })
                 }
                 .listRowBackground(DizzyPalette.surface)
             }
@@ -85,6 +99,38 @@ struct AppSettingsView: View {
         }
     }
 
+
+    /// 一个平台的账号：已登录显示头像，点一下收起设置，再打开该平台的账号页或登录页。
+    private func accountRow(_ module: ModuleDescriptor, entry: ModuleAccountEntry) -> some View {
+        Button {
+            presentation.pendingAccount = module.id
+            dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                Group {
+                    if let url = entry.avatarURL {
+                        AvatarImage(url: url, size: 32)
+                    } else {
+                        Image(systemName: module.systemImage)
+                            .font(.body)
+                            .foregroundStyle(DizzyPalette.accent)
+                    }
+                }
+                .frame(width: 32, height: 32)
+                .clipShape(.circle)
+                .accessibilityHidden(true)
+                Text(entry.title).foregroundStyle(DizzyPalette.text)
+                Spacer()
+                Text(entry.isSignedIn ? "已登录" : "登录").foregroundStyle(DizzyPalette.mutedText)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 private extension Bundle {
@@ -93,4 +139,9 @@ private extension Bundle {
         let build = infoDictionary?["CFBundleVersion"] as? String ?? "?"
         return "\(version) (\(build))"
     }
+}
+
+/// 沉浸模式的开关存在 UserDefaults 里，根视图和各个弹层一起读取。
+enum ImmersiveMode {
+    static let storageKey = "appearance.immersive"
 }

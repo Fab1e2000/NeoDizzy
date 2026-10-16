@@ -3,14 +3,14 @@
 import SwiftUI
 import UIKit
 
-/// 曲目的「…」菜单：前往专辑、在网页中打开。
+/// 曲目的「…」菜单：前往专辑、查看歌手或社团。
 struct NowPlayingSongActions: View {
     @Environment(ModuleRegistry.self) private var modules: ModuleRegistry?
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
     @Environment(\.openRoute) private var openRoute
-    @Environment(\.openURL) private var openURL
 
+    @State private var showsPlaylist = false
     let track: Track
     var onImportLyrics: (() -> Void)? = nil
 
@@ -18,21 +18,28 @@ struct NowPlayingSongActions: View {
         if let actions = modules?.songActions(for: track, onImportLyrics: onImportLyrics) {
             actions
         } else {
-            NowPlayingMenuButton {
-                var items = menuItems()
-                if let onImportLyrics {
-                    items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() })
-                }
-                return items
-            }.frame(width: 44, height: 44)
+            HStack(spacing: 10) {
+                FavoriteButton(track: track, playerStyle: true)
+                NowPlayingMenuButton {
+                    var items: [UIMenuElement] = [
+                        UIAction(title: "加入歌单", image: UIImage(systemName: "text.badge.plus")) { _ in showsPlaylist = true }
+                    ] + menuItems()
+                    if let onImportLyrics {
+                        items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() })
+                    }
+                    return items
+                }.frame(width: 44, height: 44)
+            }
+            .songPlaylistSheet(isPresented: $showsPlaylist, track: track)
         }
     }
 
     private func menuItems() -> [UIMenuElement] {
         if let source = track.localSource {
+            let artists = LibraryArtistNames.split(track.artists).map { (name: $0, route: AppRoute.libraryArtist($0, filter: .all)) }
             return [UIAction(title: String(localized: "前往专辑「\(track.albumTitle)」"), image: UIImage(systemName: "music.note.list")) { _ in
                 openRoute(.localAlbum(id: library.localAlbum(for: track)?.id ?? source.albumID))
-            }]
+            }] + ArtistMenu.elements(artists) { openRoute($0) }
         }
         if let source = track.remoteSource {
             guard source.providerID == "netease" else { return [] }
@@ -40,15 +47,22 @@ struct NowPlayingSongActions: View {
             if let albumID = Int(track.discID), albumID > 0 {
                 items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "music.note.list")) { _ in openRoute(.netease(.album(albumID))) })
             }
-            if let url = URL(string: "https://music.163.com/#/song?id=\(source.itemID)") {
-                items.append(UIAction(title: "在网易云网页中打开", image: UIImage(systemName: "safari")) { _ in openURL(url) })
-            }
             return items
         }
         let discID = track.discID
+        let downloadedLabel = library.collection(provider: "dizzylab", kind: "album", id: discID)?.detail.summary.labelName
         var items: [UIMenuElement] = [
             UIAction(title: String(localized: "前往专辑「\(track.albumTitle)」"), image: UIImage(systemName: "music.note.list")) { _ in
                 openRoute(.disc(id: discID))
+            },
+            // DizzyLab 的「歌手」是发行专辑的社团；没下载过的专辑打开菜单时再查一次。
+            UIDeferredMenuElement.uncached { [openRoute] completion in
+                Task { @MainActor in
+                    var label = downloadedLabel
+                    if label == nil { label = try? await DizzyAPI.shared.discDetail(id: discID).summary.labelName }
+                    let artists = label.map { [(name: $0, route: AppRoute.label(name: $0))] } ?? []
+                    completion(ArtistMenu.elements(artists, title: "查看社团") { openRoute($0) })
+                }
             },
         ]
         if player.isPreview {
@@ -56,10 +70,25 @@ struct NowPlayingSongActions: View {
                 openRoute(.disc(id: discID))
             })
         }
-        items.append(UIAction(title: String(localized: "在网页中打开"), image: UIImage(systemName: "safari")) { _ in
-            openURL(DizzyURL.disc(discID))
-        })
         return items
+    }
+}
+
+/// 「查看歌手」菜单项：只有一位时直接打开，多位时展开子菜单再选。
+enum ArtistMenu {
+    @MainActor
+    static func elements(_ artists: [(name: String, route: AppRoute)], title: String = String(localized: "查看歌手"),
+                         open: @escaping (AppRoute) -> Void) -> [UIMenuElement] {
+        switch artists.count {
+        case 0: return []
+        case 1:
+            let artist = artists[0]
+            return [UIAction(title: "\(title)「\(artist.name)」", image: UIImage(systemName: "person")) { _ in open(artist.route) }]
+        default:
+            return [UIMenu(title: title, image: UIImage(systemName: "person.2"), children: artists.map { artist in
+                UIAction(title: artist.name, image: UIImage(systemName: "person")) { _ in open(artist.route) }
+            })]
+        }
     }
 }
 

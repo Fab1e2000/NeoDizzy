@@ -52,13 +52,46 @@ struct NeteaseDownloadTests {
         guard case .collection(let manifest, _, _, _) = prepared.provenance else {
             Issue.record("Missing collection manifest"); return
         }
-        #expect(prepared.folderName == "专辑")
+        #expect(prepared.folderName == "netease/专辑/专辑")
         let entry = try #require(manifest.entries.first)
-        #expect(entry.relativePath == "02 测试歌曲.\(format)")
+        #expect(entry.relativePath == "02 测试歌曲 [42].\(format)")
         let tags = try AudioTagCodec.read(staging.appendingPathComponent(entry.relativePath))
         #expect(tags.text("TITLE") == "测试歌曲")
         #expect(tags.text("LYRICS") == "[00:01]测试歌词")
         #expect(try FileManager.default.contentsOfDirectory(atPath: staging.path) == [entry.relativePath])
+    }
+
+    @Test func albumDownloadsPreserveSameNamedTracksAcrossDiscs() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let suite = "MultiDiscDownload.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let library = OfflineLibraryStore(defaults: defaults,
+            scanner: LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache")), libraryRoot: root)
+        let provider = NeteaseDownloadProvider(api: api([
+            #"{"code":200}"#, #"{"code":200}"#
+        ]), library: library)
+        for disc in [1, 2] {
+            let staging = root.appendingPathComponent(".staging")
+            try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+            let source = root.appendingPathComponent(".download")
+            try Fixture.data("audio-ncm-flac.ncm").write(to: source)
+            let track = Track(discID: "7", number: "1", title: "序曲", artists: "歌手", albumTitle: "多碟专辑",
+                coverURL: nil, remoteSource: RemoteTrackSource(providerID: "netease", itemID: String(disc)))
+            let metadata = NeteaseDownloadMetadata(track: track, albumArtist: "歌手", trackNumber: 1,
+                discNumber: disc, quality: .lossless, actualQuality: "lossless", type: "ncm")
+            let prepared = try await provider.finalize(source, metadata: JSONEncoder().encode(metadata), staging: staging)
+            try await library.commit(staging: staging, folderName: prepared.folderName, provenance: prepared.provenance)
+            try FileManager.default.removeItem(at: staging)
+        }
+        let album = try #require(library.collection(provider: "netease", kind: "album", id: "7"))
+        #expect(Set(album.manifest.entries.map(\.itemID)) == ["1", "2"])
+        #expect(Set(album.manifest.entries.map(\.relativePath)) == ["01 序曲 [1].flac", "01 序曲 [2].flac"])
+        for entry in album.manifest.entries {
+            let file = try #require(album.localFile(for: entry.track))
+            #expect(try AudioTagCodec.read(file).text("DISCNUMBER") == entry.itemID)
+        }
     }
 
     @Test func playlistDownloadsStayTogetherAndRemainPlayableOutsideAlbums() async throws {
@@ -101,7 +134,7 @@ struct NeteaseDownloadTests {
                 #expect(try await downloadProvider.source(transfer) != nil)
             }
             let prepared = try await provider.finalize(source, metadata: JSONEncoder().encode(metadata), staging: staging)
-            #expect(prepared.folderName == "歌单/我的歌单")
+            #expect(prepared.folderName == "netease/歌单/我的歌单")
             try await library.commit(staging: staging, folderName: prepared.folderName, provenance: prepared.provenance)
             try FileManager.default.removeItem(at: staging)
             #expect(library.visibleAlbums.map(\.title) == ["原专辑1"])

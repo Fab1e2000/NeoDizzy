@@ -3,7 +3,7 @@ import SwiftUI
 struct DiscoverSearchResults: View {
     let model: SearchModel
     var body: some View {
-        if let keyword = model.keyword, let discs = model.discs {
+        if model.keyword != nil, let discs = model.discs {
             if !model.labels.isEmpty {
                 SectionHeading(title: "社团")
                 ForEach(model.labels) { label in
@@ -24,7 +24,7 @@ struct DiscoverSearchResults: View {
                 ForEach(model.users) { CommunityUserLink(user: $0) }
             }
             SectionHeading(title: "作品")
-            PagedContent(list: discs, webURL: DizzyURL.search(keyword), emptyMessage: "没有找到相关作品。") { results in
+            PagedContent(list: discs, emptyMessage: "没有找到相关作品。") { results in
                 ForEach(results) { result in
                     NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
                         SearchResultRow(
@@ -82,5 +82,123 @@ private struct SearchResultRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .contentShape(.rect)
+    }
+}
+
+// Adapted from MeloX Features/Search/SearchView.swift (GPL-3.0).
+
+/// 统一搜索里的「DizzyLab」一组：最多两个社团、三张作品。
+struct DizzyLabSearchSection: View {
+    let query: String
+    @State private var model = SearchModel()
+
+    var body: some View {
+        let labels = Array(model.labels.prefix(2))
+        let discs = Array((model.discs?.items ?? []).prefix(3))
+        Group {
+            if let list = model.discs, let failure = list.failure, list.items.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SearchSectionHeader(title: DizzyLabModule.metadata.title)
+                    SearchSectionFailure(title: "DizzyLab 搜索失败", message: failure) { await list.reload() }
+                }
+            } else if let list = model.discs, list.items.isEmpty, list.isLoading || list.loadedPages == 0 {
+                VStack(alignment: .leading, spacing: 4) {
+                    SearchSectionHeader(title: DizzyLabModule.metadata.title)
+                    SearchSectionMessage(text: "正在搜索…", isLoading: true)
+                }
+                .padding(.horizontal, 4)
+            } else if labels.isEmpty && discs.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    SearchSectionHeader(title: DizzyLabModule.metadata.title)
+                    SearchSectionMessage(text: "DizzyLab 没有和「\(query)」相关的作品。")
+                }
+                .padding(.horizontal, 4)
+            } else {
+                SearchGroup(title: DizzyLabModule.metadata.title, allResults: .dizzyLabSearch(query)) {
+                    ForEach(Array(labels.enumerated()), id: \.element.id) { index, label in
+                        SearchCardRow(isLast: discs.isEmpty && index == labels.count - 1, separatorInset: 66) {
+                            NavigationLink(value: AppRoute.label(name: label.name)) {
+                                SearchMediaRow(title: label.name, subtitle: "社团", artworkURL: label.coverURL, circular: true)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    ForEach(Array(discs.enumerated()), id: \.element.id) { index, result in
+                        SearchCardRow(isLast: index == discs.count - 1, separatorInset: 66) {
+                            NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
+                                SearchMediaRow(title: result.disc.title, subtitle: result.disc.labelName, artworkURL: result.disc.coverURL)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+        .task(id: query) {
+            model.query = query
+            model.submit()
+            if let discs = model.discs, discs.loadedPages == 0 { await discs.loadMore() }
+        }
+    }
+}
+
+/// 「查看全部」：照搬 MeloX 的搜索结果，普通列表依次是社团、用户和作品，滚到底继续加载。
+struct DizzyLabSearchPage: View {
+    let query: String
+    @State private var model = SearchModel()
+
+    var body: some View {
+        let discs = model.discs
+        List {
+            if !model.labels.isEmpty {
+                Section("社团") {
+                    ForEach(model.labels) { label in
+                        NavigationLink(value: AppRoute.label(name: label.name)) {
+                            SearchMediaRow(title: label.name, subtitle: label.description, artworkURL: label.coverURL, circular: true)
+                        }
+                    }
+                }
+            }
+            if !model.users.isEmpty {
+                Section("用户") {
+                    ForEach(model.users) { user in
+                        NavigationLink(value: AppRoute.user(id: user.id)) {
+                            SearchMediaRow(title: user.name, subtitle: nil, artworkURL: user.avatarURL, circular: true)
+                        }
+                    }
+                }
+            }
+            if let discs, !discs.items.isEmpty {
+                Section("作品") {
+                    ForEach(discs.items) { result in
+                        NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
+                            SearchMediaRow(title: result.disc.title, subtitle: result.disc.labelName ?? result.excerpt,
+                                           artworkURL: result.disc.coverURL)
+                        }
+                        .onAppear {
+                            if result.id == discs.items.last?.id, discs.hasMore, !discs.isLoading { Task { await discs.loadMore() } }
+                        }
+                    }
+                }
+            }
+            if let discs, let failure = discs.failure {
+                SearchSectionFailure(title: "DizzyLab 搜索失败", message: failure) {
+                    await discs.loadMore()
+                }
+                .listRowSeparator(.hidden)
+            } else if discs == nil || discs?.isLoading == true {
+                HStack { Spacer(); ProgressView("正在搜索…"); Spacer() }.listRowSeparator(.hidden)
+            } else if let discs, discs.isEmpty, model.labels.isEmpty, model.users.isEmpty {
+                ContentUnavailableView.search(text: query).listRowSeparator(.hidden)
+            }
+        }
+        .listStyle(.plain)
+        .navigationTitle("DizzyLab · 「\(query)」")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: query) {
+            model.query = query
+            model.submit()
+            if let discs = model.discs, discs.loadedPages == 0 { await discs.loadMore() }
+        }
     }
 }

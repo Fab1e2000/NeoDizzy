@@ -5,6 +5,7 @@ struct RootView: View {
     let modules: ModuleRegistry
     private var tabSettings: ModuleSettings { host.settings }
     @State private var settingsPresentation = AppSettingsPresentation()
+    @State private var search = SearchPresentation()
     @State private var themeIcon = ThemeIconController()
     private let appearance = AppearanceSettings.shared
     let services: AppServices
@@ -13,6 +14,10 @@ struct RootView: View {
     @State private var nowPlaying = NowPlayingPresentation()
     @State private var pendingPlayerRoute: AppRoute?
     @Namespace private var playerTransition
+    /// 沉浸模式：隐藏屏幕顶部的时间、电量等状态栏信息（设置 › 外观）。
+    /// 与 MeloX 相同：页面可以临时收起迷你播放器（多选时给底部操作栏让位）。
+    @State private var isMiniPlayerSuppressed = false
+    @AppStorage(ImmersiveMode.storageKey) private var isImmersive = false
     @Environment(\.scenePhase) private var scenePhase
 
     init(services: AppServices, modules: ModuleRegistry, settings: ModuleSettings) {
@@ -31,6 +36,9 @@ struct RootView: View {
             .environment(player)
             .environment(offlineLibrary)
             .environment(services.savedLibrary)
+            .environment(services.favorites)
+            .environment(services.accountLibrary)
+            .environment(services.playbackHistory)
             .environment(themeIcon)
             .environment(\.openRoute, OpenRouteAction { route in
                 settingsPresentation.isPresented = false
@@ -54,20 +62,37 @@ struct RootView: View {
                     }
                 }
             }
+            // 一次搜索所有来源，取代各页面自己的搜索框。
+            Tab(value: ModuleID.search, role: .search) {
+                MainNavigationStack(path: path(for: .search)) { UnifiedSearchView() }
+            }
         }
+        .onChange(of: host.selection) { _, selection in
+            if selection == .search { search.isActive = true }
+        }
+        .environment(search)
+        .environment(\.setMiniPlayerSuppressed, SetMiniPlayerSuppressedAction { isMiniPlayerSuppressed = $0 })
         .onChange(of: tabSettings.visibleModules, initial: true) { _, _ in
             host.reconcileSelection()
         }
-        // 标签栏与底部播放器始终保持完整布局，不随滚动收缩。
-        .tabBarMinimizeBehavior(.never)
+        // 与 MeloX 相同：向下滚动时标签栏收起，迷你播放器缩成一行（inline）跟在旁边；往回滚恢复。
+        .tabBarMinimizeBehavior(.onScrollDown)
         // 有曲目时在标签栏上方显示迷你播放器，点击打开播放页。
-        .tabViewBottomAccessory(isEnabled: player.currentTrack != nil) {
+        // 与 MeloX 相同：没有歌曲时不显示迷你播放器；页面要求时临时收起。
+        .tabViewBottomAccessory(isEnabled: player.currentTrack != nil && !isMiniPlayerSuppressed) {
             MiniPlayerView(transitionNamespace: playerTransition) { nowPlaying.isPresented = true }
         }
         // 齿轮始终打开同一个全局设置页；账号由模块呈现。
         .environment(settingsPresentation)
-        .sheet(isPresented: $settingsPresentation.isPresented) {
-            AppSettingsView()
+        .sheet(isPresented: $settingsPresentation.isPresented, onDismiss: {
+            // 设置里点了平台账号：等设置收起后再弹出该平台的登录或账号页。
+            guard let id = settingsPresentation.pendingAccount else { return }
+            settingsPresentation.pendingAccount = nil
+            modules.openAccount(for: id)
+        }) {
+            // 弹层不在上面 .environment 的作用范围内，要单独传入。
+            AppSettingsView().environment(settingsPresentation)
+                .statusBarHidden(isImmersive)
         }
         // 播放页全屏展开：从迷你播放器的封面放大出来，下拉收起。
         .fullScreenCover(isPresented: $nowPlaying.isPresented, onDismiss: finishPlayerNavigation) {
@@ -75,8 +100,14 @@ struct RootView: View {
                 .presentationBackground(.clear)
                 .presentationContentInteraction(.resizes)
                 .navigationTransition(.zoom(sourceID: NowPlayingView.transitionID, in: playerTransition))
+                .statusBarHidden(isImmersive)
         }
+        .statusBarHidden(isImmersive)
         .onOpenURL { modules.handleURL($0, host: host) }
+        // 本机喜欢、收藏后立刻更新资料库；换账号时重新同步。
+        .onChange(of: services.netease.library.revision) { _, _ in services.accountLibrary.rebuildNetease(from: services.netease) }
+        .onChange(of: services.netease.profile?.userId) { _, _ in services.favorites.updateAccounts(); Task { await services.syncAccountLibrary(force: true) } }
+        .onChange(of: services.account.account?.userID) { _, _ in Task { await services.syncAccountLibrary(force: true) } }
         .onChange(of: host.dismissPresentations) { _, shouldDismiss in
             guard shouldDismiss else { return }
             pendingPlayerRoute = nil
@@ -100,6 +131,10 @@ struct RootView: View {
             // 用户可能刚在「文件」App 里往音乐文件夹放了歌。
             if oldPhase == .background, phase == .active {
                 Task { await offlineLibrary.scan(refreshMetadata: false) }
+            }
+            // 资料库只在启动和回到前台时与账号同步一次，浏览时不刷新。
+            if phase == .active, oldPhase == .background || oldPhase == phase {
+                Task { await services.syncAccountLibrary(force: oldPhase == .background) }
             }
             if phase == .background {
                 player.saveState()

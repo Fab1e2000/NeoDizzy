@@ -4,6 +4,8 @@ import SwiftUI
 @Observable
 final class AppSettingsPresentation {
     var isPresented = false
+    /// 在设置里点了某个平台的账号：设置收起后再打开这个模块的登录或账号页。
+    var pendingAccount: ModuleID?
 }
 
 /// A page-owned action grouped with the shared header controls.
@@ -22,14 +24,12 @@ struct PageSearch {
 }
 
 /// 根页面使用系统大标题导航栏：上滑时大标题和搜索框一起收起，变成居中的小标题。
-/// 设置入口在所有模块中一致；只有提供账号能力的模块才显示头像。
+/// 右上角只有设置入口（加上页面自己的操作）；各平台的登录在设置里。
 struct RootPageChrome: ViewModifier {
     let title: String
     var action: PageHeaderAction?
     var search: PageSearch?
     @Environment(AppSettingsPresentation.self) private var settings: AppSettingsPresentation?
-    @Environment(ModuleRegistry.self) private var modules: ModuleRegistry?
-    @Environment(ModuleHost.self) private var host: ModuleHost?
 
     func body(content: Content) -> some View {
         let page = content
@@ -38,17 +38,13 @@ struct RootPageChrome: ViewModifier {
             .toolbar { toolbar }
         if let search {
             page
-                .searchable(text: search.text, placement: .navigationBarDrawer(displayMode: .automatic),
+                // 搜索框始终展开在标题下方，不用先下拉才出现。
+                .searchable(text: search.text, placement: .navigationBarDrawer(displayMode: .always),
                             prompt: Text(search.prompt))
                 .onSubmit(of: .search, search.submit)
         } else {
             page
         }
-    }
-
-    private var accountEntry: ModuleAccountEntry? {
-        guard let host else { return nil }
-        return modules?.accountEntry(for: host.selection)
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -64,29 +60,13 @@ struct RootPageChrome: ViewModifier {
                                     .foregroundStyle(DizzyPalette.onAccent)
                                     .padding(.horizontal, 4)
                                     .frame(minWidth: 16, minHeight: 16)
-                                    .background(DizzyPalette.accent, in: .capsule)
+                                    .background(DizzyPalette.accentFill, in: .capsule)
                                     .offset(x: 8, y: -6)
                             }
                         }
                 }
                 .accessibilityLabel(action.title)
                 .accessibilityValue(action.badge > 0 ? "\(action.badge) 项进行中" : "")
-            }
-        }
-        if let entry = accountEntry, let host {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { modules?.openAccount(for: host.selection) } label: {
-                    Group {
-                        if let url = entry.avatarURL {
-                            AvatarImage(url: url, size: 28)
-                        } else {
-                            Image(systemName: "person.crop.circle")
-                        }
-                    }
-                    .frame(width: 28, height: 28)
-                    .clipShape(.circle)
-                }
-                .accessibilityLabel(entry.title)
             }
         }
         ToolbarItem(placement: .topBarTrailing) {

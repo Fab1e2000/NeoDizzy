@@ -26,7 +26,7 @@ struct PurchaseView: View {
                     } else if let offer = model.offer {
                         priceForm(offer)
                     } else {
-                        LoadFailureView(message: model.failure ?? "暂时无法购买这张专辑。", webURL: DizzyURL.disc(summary.id)) {
+                        LoadFailureView(message: model.failure ?? "暂时无法购买这张专辑。") {
                             await model.load(discID: summary.id, account: account)
                         }
                     }
@@ -116,6 +116,8 @@ struct PurchaseView: View {
                 .foregroundStyle(DizzyPalette.mutedText)
             Button("登录") { showLogin = true }
                 .buttonStyle(.borderedProminent)
+                .tint(DizzyPalette.accentFill)
+                .foregroundStyle(DizzyPalette.onAccent)
         }
     }
 
@@ -182,6 +184,8 @@ struct PurchaseView: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .tint(DizzyPalette.accentFill)
+            .foregroundStyle(DizzyPalette.onAccent)
             .controlSize(.large)
             .disabled(model.isPreparing || validationMessage(offer) != nil)
             .accessibilityIdentifier("purchase.checkout")
@@ -228,6 +232,8 @@ struct PurchaseView: View {
                 }
                 Button("我已付款，重新核验") { Task { await purchases.check() } }
                     .buttonStyle(.borderedProminent)
+                    .tint(DizzyPalette.accentFill)
+                    .foregroundStyle(DizzyPalette.onAccent)
                     .disabled(purchases.state == .checking)
                 Link("查看网站已付订单", destination: DizzyURL.page(pending.attempt.kind == .boost ? "/albums/purchases/boost/" : "/albums/purchases/"))
                 Button("停止跟踪这笔付款", role: .destructive) { showStopConfirmation = true }

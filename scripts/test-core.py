@@ -31,17 +31,26 @@ def main():
         sources.mkdir(parents=True)
         tests.mkdir(parents=True)
         files = []
-        for directory in ("Models", "TagEditing", "Lyrics", "Networking", "OfflineLibrary", "Downloads", "Purchases", "Community"):
+        for directory in ("Models", "TagEditing", "Lyrics", "Networking", "OfflineLibrary", "Downloads", "Purchases", "Community", "Modules/DizzyLab"):
             files.extend((ROOT / "NeoDizzy/Core" / directory).rglob("*.swift"))
         files.extend(ROOT / "NeoDizzy/Core" / name for name in (
             "BrowsingHistory/BrowsingHistoryStore.swift", "DebugLog.swift", "UI/PagedList.swift", "Account/DizzyAuth.swift", "Playback/PlaybackQueue.swift",
             "Playback/PlaybackPersistence.swift", "Playback/StreamResolver.swift", "Account/AccountStore.swift", "Account/KeychainStore.swift",
+        ))
+        # DownloadStore restores provider-specific requests; compile the real providers too.
+        netease = ROOT / "NeoDizzy/Core/Modules/Netease"
+        files.extend(netease.glob("NeteaseAPI*.swift"))
+        files.extend(netease / name for name in (
+            "NeteaseClient.swift", "NeteaseModels.swift", "NeteaseHomeModels.swift",
+            "NeteasePlaybackSettings.swift", "NeteaseCheckToken.swift",
+            "NeteaseDownloadProvider.swift", "NeteaseDownloadedAudio.swift",
         ))
         # iOS 与 macOS 共用的页面状态，同样在 macOS 上编译检查。
         files.extend((ROOT / "NeoDizzy/Shared/ViewModels").glob("*.swift"))
         for source in files:
             shutil.copy2(source, sources / source.name)
         for name in (
+            "NeteaseDownloadTests", "NeteaseDownloadedAudioTests", "GenericDownloadTests",
             "AudioTagEditingTests", "LocalLyricsTests", "LocalLibraryTests", "PlaybackTests", "DownloadTests", "OfflineLibraryTests", "JSONDecodingTests",
             "PageParserTests", "DizzyURLTests", "AccountTests", "PurchaseTests",
             "PurchaseConfirmationTests", "CheckoutNavigationTests", "PurchaseStoreTests",

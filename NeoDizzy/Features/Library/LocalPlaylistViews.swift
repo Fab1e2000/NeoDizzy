@@ -1,6 +1,10 @@
 import SwiftUI
 
+/// 资料库「歌单」：本地歌单（可新建、删除）和账号里的在线歌单放在同一个网格里。
 struct LocalPlaylistsView: View {
+    var online: [LibraryShelfItem] = []
+    var showsLocal = true
+    var showsOrigin = false
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(\.openRoute) private var openRoute
     @State private var creating = false
@@ -10,21 +14,25 @@ struct LocalPlaylistsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Button { name = ""; creating = true } label: {
-                Label("新建歌单", systemImage: "plus")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: 44)
+            if showsLocal {
+                Button { name = ""; creating = true } label: {
+                    Label("新建歌单", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 12))
             }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.roundedRectangle(radius: 12))
-            if library.localPlaylists.isEmpty {
-                ContentUnavailableView("还没有本地歌单", systemImage: "music.note.list", description: Text("新建歌单后，可以从本地专辑的歌曲菜单添加音乐。"))
+            if (!showsLocal || library.localPlaylists.isEmpty) && online.isEmpty {
+                ContentUnavailableView("没有歌单", systemImage: "music.note.list",
+                    description: Text(showsLocal ? "新建一个本地歌单，或登录网易云同步账号里的歌单。" : "这个来源下还没有歌单。"))
             }
             LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                ForEach(library.localPlaylists) { playlist in
+                ForEach(showsLocal ? library.localPlaylists : []) { playlist in
                     VStack(alignment: .leading, spacing: 6) {
                         Button { openRoute(.localPlaylist(id: playlist.id)) } label: {
                             ArtworkImage(url: playlist.coverURL)
+                                .libraryOriginMark(showsOrigin ? .local : nil)
                         }
                         .buttonStyle(.plain)
                         .contentShape(.contextMenuPreview, .rect(cornerRadius: 10))
@@ -44,6 +52,7 @@ struct LocalPlaylistsView: View {
                     }
                     .prefetchAlbumArtwork(url: playlist.coverURL)
                 }
+                ForEach(online) { LibraryShelfCard(item: $0, showsOrigin: showsOrigin) }
             }
             if let failure { Text(failure).font(.caption).foregroundStyle(.red) }
         }

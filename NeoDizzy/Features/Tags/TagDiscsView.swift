@@ -13,7 +13,7 @@ struct TagDiscsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                PagedContent(list: discs, webURL: DizzyURL.tag(tag)) { discs in
+                PagedContent(list: discs) { discs in
                     DiscGrid(discs: discs)
                 }
             }

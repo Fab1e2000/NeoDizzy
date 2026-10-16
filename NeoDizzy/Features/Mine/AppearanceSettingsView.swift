@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 外观（跟随系统、浅色、深色）、专辑页背景遮罩与主题色。换主题色后桌面图标同步更换。
+/// 外观（跟随系统、浅色、深色）与主题色。换主题色后桌面图标同步更换。
 struct AppearanceSettingsView: View {
     @Environment(ThemeIconController.self) private var themeIcon
     private let columns = [GridItem(.adaptive(minimum: 64), spacing: 12)]
@@ -18,33 +18,6 @@ struct AppearanceSettingsView: View {
                 Text("外观")
             } footer: {
                 Text("播放页始终使用深色。")
-            }
-            .listRowBackground(DizzyPalette.surface)
-
-            Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("背景遮罩")
-                        Spacer()
-                        Text("\(settings.albumDimming)%")
-                            .foregroundStyle(DizzyPalette.mutedText)
-                            .monospacedDigit()
-                    }
-                    Slider(value: Binding(get: { Double(settings.albumDimming) },
-                                          set: { settings.albumDimming = Int($0.rounded()) }),
-                           in: 0...100, step: 1)
-                        .accessibilityLabel("背景遮罩")
-                        .accessibilityValue("\(settings.albumDimming)%")
-                }
-                if settings.albumDimming != AppearanceSettings.defaultAlbumDimming {
-                    Button("恢复默认（\(AppearanceSettings.defaultAlbumDimming)%）") {
-                        settings.albumDimming = AppearanceSettings.defaultAlbumDimming
-                    }
-                }
-            } header: {
-                Text("专辑页")
-            } footer: {
-                Text("专辑和歌单背景由封面平均色、模糊封面与明暗渐变组成。此设置调整渐变遮罩的强度，数值越大，背景越接近黑色或白色。")
             }
             .listRowBackground(DizzyPalette.surface)
 

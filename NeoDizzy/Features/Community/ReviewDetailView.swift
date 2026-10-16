@@ -12,7 +12,7 @@ struct ReviewDetailView: View {
         })
     }
     var body: some View {
-        LoadableContent(state: state, skeleton: .article, skeletonIsPage: true, webURL: DizzyURL.page("/review/\(id)/")) { review in
+        LoadableContent(state: state, skeleton: .article, skeletonIsPage: true) { review in
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(review.title).font(.title2.bold()).textSelection(.enabled)

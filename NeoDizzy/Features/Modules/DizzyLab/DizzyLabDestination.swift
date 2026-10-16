@@ -22,6 +22,7 @@ struct DizzyLabDestination: View {
         case .label(let name): LabelDetailView(name: name)
         case .tag(let tag): TagDiscsView(tag: tag)
         case .pack(let id): PackDetailView(id: id)
+        case .search(let query): DizzyLabSearchPage(query: query)
         case .user(let id): CommunityProfileView(userID: id)
         case .review(let id): ReviewDetailView(id: id)
         case .discCommunity(let id): DiscCommunityPage(discID: id)

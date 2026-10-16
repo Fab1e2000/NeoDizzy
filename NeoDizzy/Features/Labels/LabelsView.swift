@@ -6,7 +6,7 @@ struct LabelsView: View {
 
     var body: some View {
         DizzyLabPage(section: .labels, onRefresh: { await labels.reload(keepingItems: true) }) {
-            PagedContent(list: labels, skeleton: .rows, webURL: DizzyURL.page("/label/")) { labels in
+            PagedContent(list: labels, skeleton: .rows) { labels in
                 ForEach(labels) { label in
                     NavigationLink(value: AppRoute.label(name: label.name)) {
                         LabelRow(label: label)

@@ -5,12 +5,14 @@ import Observation
 @MainActor
 final class OfflineLibraryStore {
     private(set) var collections: [LibraryCollection] = [] {
-        didSet { contentRevision += 1; rebuildSourceIndex() }
+        didSet { contentRevision += 1; rebuildSourceIndex(); rebuildAlbumSources() }
     }
     private(set) var localPlaylists: [LocalPlaylist] = []
     private(set) var localAlbums: [LocalAlbum] = [] {
-        didSet { contentRevision += 1 }
+        didSet { contentRevision += 1; rebuildAlbumSources() }
     }
+    /// 下载来的本地专辑在专辑文件夹的 `.neodizzy.json` 里记着平台来源，按本地专辑 ID 查；自己导入的专辑没有。
+    private(set) var albumSources: [String: LibrarySource] = [:]
     /// Keep playlist audio indexed for playback, but out of the album page.
     var visibleAlbums: [LocalAlbum] {
         let directories = Set(collections.filter { $0.manifest.source.kind == "playlist" }.map { LocalLibraryScanner.canonical($0.directoryURL) })
@@ -323,6 +325,22 @@ final class OfflineLibraryStore {
     }
 
     private func rebuildSourceIndex() { sourceFiles = makeSourceIndex(collections) }
+
+    private func rebuildAlbumSources() {
+        let directories = Dictionary(collections.filter { $0.manifest.source.kind == "album" }
+            .map { (LocalLibraryScanner.canonical($0.directoryURL), $0.manifest.source) }, uniquingKeysWith: { first, _ in first })
+        guard !directories.isEmpty else { albumSources = [:]; return }
+        var sources: [String: LibrarySource] = [:]
+        for album in localAlbums {
+            guard let folder = album.entries.first?.fileURL.deletingLastPathComponent() else { continue }
+            // 分碟的专辑把音频放在 CD1、CD2 这样的子文件夹里，也往上找一层。
+            if let source = directories[LocalLibraryScanner.canonical(folder)]
+                ?? directories[LocalLibraryScanner.canonical(folder.deletingLastPathComponent())] {
+                sources[album.id] = source
+            }
+        }
+        albumSources = sources
+    }
 
     private func makeSourceIndex(_ records: [LibraryCollection]) -> [RemoteTrackKey: SourceFile] {
         var index: [RemoteTrackKey: SourceFile] = [:]
