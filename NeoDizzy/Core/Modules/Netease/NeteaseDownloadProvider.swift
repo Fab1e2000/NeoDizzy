@@ -25,8 +25,11 @@ final class NeteaseDownloadProvider: DownloadProvider {
     let id = "netease"
     let api: NeteaseAPI
     let library: OfflineLibraryStore
+    let artworkSession: URLSession
     var playlistCompleted: ((String, String, [Track]) async throws -> Void)?
-    init(api: NeteaseAPI, library: OfflineLibraryStore) { self.api = api; self.library = library }
+    init(api: NeteaseAPI, library: OfflineLibraryStore, artworkSession: URLSession = .shared) {
+        self.api = api; self.library = library; self.artworkSession = artworkSession
+    }
     func title(_ data: Data) -> String { (try? JSONDecoder().decode(DownloadRequest.self, from: data).title) ?? "下载歌曲" }
     func identity(_ data: Data) -> String { (try? JSONDecoder().decode(DownloadRequest.self, from: data).identity) ?? "" }
     func plan(_ data: Data) async throws -> [DownloadTransfer] {
@@ -34,14 +37,12 @@ final class NeteaseDownloadProvider: DownloadProvider {
         let request = try JSONDecoder().decode(NeteaseDownloadRequest.self, from: envelope.payload)
         var playlistArtworkURL = envelope.coverURL
         var songs: [NeteaseSong]
-        var albumSongs: [Int: [NeteaseSong]] = [:]
-        var albumArtists: [Int: String] = [:]
+        var albums: [Int: (NeteaseAlbum, [NeteaseSong])] = [:]
         switch request.kind {
         case "single": songs = try await api.songs([request.id])
         case "album":
             let result = try await api.album(request.id)
-            songs = result.1; albumSongs[request.id] = songs
-            albumArtists[request.id] = result.0.artist?.name
+            songs = result.1; albums[request.id] = result
         case "playlist":
             let playlist = try await api.playlist(request.id)
             playlistArtworkURL = playlist.artworkURL ?? envelope.coverURL
@@ -57,21 +58,20 @@ final class NeteaseDownloadProvider: DownloadProvider {
         default: throw DownloadFailure.songUnavailable
         }
         guard !songs.isEmpty else { throw DownloadFailure.songUnavailable }
+        // 歌曲详情通常已带曲序；只为缺曲序的歌曲补查专辑，避免大歌单逐张串行查询。
+        var missingAlbums: [Int] = []
+        for song in songs where song.trackNumber == nil {
+            if let id = song.album?.id, id > 0, albums[id] == nil, !missingAlbums.contains(id) { missingAlbums.append(id) }
+        }
+        albums.merge(try await fetchAlbums(missingAlbums)) { current, _ in current }
         var result: [DownloadTransfer] = []
         var seen = Set<Int>()
         for (position, song) in songs.enumerated() where seen.insert(song.id).inserted {
             try Task.checkCancellation()
-            if let album = song.album, albumSongs[album.id] == nil {
-                do {
-                    let result = try await api.album(album.id)
-                    albumSongs[album.id] = result.1; albumArtists[album.id] = result.0.artist?.name
-                }
-                catch is CancellationError { throw CancellationError() }
-                catch { albumSongs[album.id] = [] }
-            }
-            let number = max(1, song.trackNumber ?? albumSongs[song.album?.id ?? 0]?.firstIndex(where: { $0.id == song.id }).map { $0 + 1 } ?? 1)
+            let album = song.album.flatMap { albums[$0.id] }
+            let number = max(1, song.trackNumber ?? album?.1.firstIndex(where: { $0.id == song.id }).map { $0 + 1 } ?? 1)
             var metadata = NeteaseDownloadMetadata(track: song.track,
-                albumArtist: albumArtists[song.album?.id ?? 0] ?? song.album?.artist?.name ?? song.track.artists, trackNumber: number,
+                albumArtist: album?.0.artist?.name ?? song.album?.artist?.name ?? song.track.artists, trackNumber: number,
                 discNumber: max(1, Int(song.discNumber ?? "1") ?? 1), quality: request.quality)
             if request.kind == "playlist" {
                 metadata.playlistID = String(request.id)
@@ -84,6 +84,29 @@ final class NeteaseDownloadProvider: DownloadProvider {
         }
         return result
     }
+    /// 并发补查专辑，单张失败只影响该专辑的曲序补全。
+    private func fetchAlbums(_ ids: [Int]) async throws -> [Int: (NeteaseAlbum, [NeteaseSong])] {
+        let api = api
+        var albums: [Int: (NeteaseAlbum, [NeteaseSong])] = [:]
+        try await withThrowingTaskGroup(of: (Int, (NeteaseAlbum, [NeteaseSong])?).self) { group in
+            var pending = ids.makeIterator()
+            func fetch(_ id: Int) {
+                group.addTask {
+                    do { return (id, try await api.album(id)) }
+                    catch is CancellationError { throw CancellationError() }
+                    catch { return (id, nil) }
+                }
+            }
+            for _ in 0..<Self.albumLookupConcurrency { if let id = pending.next() { fetch(id) } }
+            while let (id, album) = try await group.next() {
+                if let album { albums[id] = album }
+                if let id = pending.next() { fetch(id) }
+            }
+        }
+        try Task.checkCancellation()
+        return albums
+    }
+    static let albumLookupConcurrency = 4
     private func localFile(for metadata: NeteaseDownloadMetadata) -> URL? {
         if let playlistID = metadata.playlistID {
             return library.collection(provider: id, kind: "playlist", id: playlistID)?.localFile(for: metadata.track)
@@ -124,10 +147,9 @@ final class NeteaseDownloadProvider: DownloadProvider {
         tags.setText("TRACKNUMBER", String(metadata.trackNumber))
         tags.setText("DISCNUMBER", String(metadata.discNumber))
         if let url = metadata.track.coverURL {
-            let (artwork, response) = try await URLSession.shared.data(from: url)
-            guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
-                  artwork.count <= 20_000_000 else { throw DownloadFailure.invalidResponse }
-            tags.cover = artwork.base64EncodedString()
+            do { tags.cover = try await artwork(url).base64EncodedString() }
+            catch is CancellationError { throw CancellationError() }
+            catch { try Task.checkCancellation() /* 封面是附加信息，取不到也保留已下载的音频。 */ }
         }
         do {
             if let lyrics = try await api.downloadLyrics(songID), !lyrics.isEmpty { tags.setText("LYRICS", lyrics) }
@@ -150,6 +172,12 @@ final class NeteaseDownloadProvider: DownloadProvider {
            let relative = try? OfflinePaths.relativePath(of: existing.directoryURL, inside: root) { folderName = relative }
         else { folderName = name }
         return PreparedDownload(folderName: folderName, provenance: .collection(manifest, merge: true, preserving: [], placeholderMarker: nil))
+    }
+    private func artwork(_ url: URL) async throws -> Data {
+        let (artwork, response) = try await artworkSession.data(for: URLRequest(url: url, timeoutInterval: 20))
+        guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
+              artwork.count <= 20_000_000 else { throw DownloadFailure.invalidResponse }
+        return artwork
     }
     func completed(_ data: Data, transfers: [DownloadTransfer]) async throws {
         let envelope = try JSONDecoder().decode(DownloadRequest.self, from: data)

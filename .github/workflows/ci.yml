@@ -3,7 +3,10 @@ on:
   # 代码经 PR 合入 main，PR 里已测过同一份代码；合并后推送 main 不再重复跑。发布由 v* 标签触发。
   push:
     tags: ['v*']
+  # 只测合入 main 的 PR。所有 PR（包括仓库所有者自己的）都要先过 approve 审批才会跑测试，见下方 approve job；
+  # fork PR 另受仓库设置 Actions › Require approval for all external contributors 约束。
   pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,7 +14,17 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 jobs:
+  # PR 需管理员在运行页面点 Review deployments 批准后才继续。环境 pr-ci 在仓库 Settings › Environments
+  # 中配置了 Required reviewers；等待审批不占用 runner。标签发布和手动触发本身已由管理员发起，不再审批。
+  approve:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    environment: pr-ci
+    steps:
+      - run: echo "Approved by ${{ github.triggering_actor }}"
   test-build:
+    needs: approve
+    if: ${{ !cancelled() && (needs.approve.result == 'success' || needs.approve.result == 'skipped') }}
     runs-on: xcode-27
     timeout-minutes: 45
     steps:
@@ -67,7 +80,8 @@ jobs:
           path: build/Tests.xcresult
           if-no-files-found: ignore
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    # approve 在标签构建里被跳过；显式判断 test-build 结果，避免跳过状态沿依赖链传下来。
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.test-build.result == 'success' }}
     needs: test-build
     runs-on: ubuntu-latest
     permissions:

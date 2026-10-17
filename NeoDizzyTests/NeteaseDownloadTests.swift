@@ -61,6 +61,72 @@ struct NeteaseDownloadTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: staging.path) == [entry.relativePath])
     }
 
+    private func plannedPlaylist(_ provider: NeteaseDownloadProvider) async throws -> [NeteaseDownloadMetadata] {
+        let payload = try JSONEncoder().encode(NeteaseDownloadRequest(kind: "playlist", id: 99, quality: .standard))
+        let request = DownloadRequest(title: "歌单", identity: "playlist/99", coverURL: nil, payload: payload)
+        return try await provider.plan(JSONEncoder().encode(request)).map { try JSONDecoder().decode(NeteaseDownloadMetadata.self, from: $0.metadata) }
+    }
+    private func song(_ id: Int, album: Int, number: Int?) -> String {
+        #"{"id":\#(id),"name":"歌\#(id)","ar":[{"id":1,"name":"歌手"}],"al":{"id":\#(album),"name":"专辑\#(album)"}"#
+            + (number.map { #","no":\#($0)}"# } ?? "}")
+    }
+    private var playlistResponse: String { #"{"code":200,"playlist":{"id":99,"name":"歌单","trackIds":[{"id":1},{"id":2},{"id":3}]}}"# }
+
+    @Test func playlistPlanReusesSongDetailTrackNumbers() async throws {
+        let suite = "PlaylistPlan.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let songs = [song(1, album: 7, number: 4), song(2, album: 8, number: 2), song(3, album: 9, number: 1)]
+        let provider = NeteaseDownloadProvider(api: api([playlistResponse, #"{"code":200,"songs":[\#(songs.joined(separator: ","))]}"#]),
+                                              library: OfflineLibraryStore(defaults: defaults))
+        let metadata = try await plannedPlaylist(provider)
+        #expect(metadata.map(\.trackNumber) == [4, 2, 1])
+        #expect(metadata.map(\.playlistPosition) == [1, 2, 3])
+        #expect(DownloadSourceStub.queue.withLock { $0.1.filter { $0.contains("album") } }.isEmpty)
+    }
+
+    @Test func playlistPlanLooksUpEachMissingAlbumOnce() async throws {
+        let suite = "PlaylistPlanLookup.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let songs = [song(1, album: 7, number: nil), song(2, album: 7, number: nil), song(3, album: 8, number: 5)]
+        let album = #"{"code":200,"album":{"id":7,"name":"专辑7","artist":{"id":5,"name":"专辑歌手"}},"songs":[\#(song(2, album: 7, number: nil)),\#(song(1, album: 7, number: nil))]}"#
+        let provider = NeteaseDownloadProvider(api: api([playlistResponse, #"{"code":200,"songs":[\#(songs.joined(separator: ","))]}"#, album]),
+                                              library: OfflineLibraryStore(defaults: defaults))
+        let metadata = try await plannedPlaylist(provider)
+        #expect(metadata.map(\.trackNumber) == [2, 1, 5])
+        #expect(metadata.map(\.albumArtist) == ["专辑歌手", "专辑歌手", "歌手"])
+        #expect(DownloadSourceStub.queue.withLock { $0.1.filter { $0.contains("album") } } .count == 1)
+    }
+
+    @Test func artworkFailureKeepsDownloadedAudio() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let staging = root.appendingPathComponent("staging")
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("download.archive")
+        try Fixture.data("audio-ncm-mp3.ncm").write(to: source)
+        let suite = "ArtworkFailure.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ArtworkFailureStub.self]
+        let provider = NeteaseDownloadProvider(api: api([#"{"code":200}"#]), library: OfflineLibraryStore(defaults: defaults),
+                                              artworkSession: URLSession(configuration: configuration))
+        let track = Track(discID: "7", number: "2", title: "测试歌曲", artists: "歌手", albumTitle: "专辑",
+                          coverURL: URL(string: "https://p1.music.126.net/cover.jpg"),
+                          remoteSource: RemoteTrackSource(providerID: "netease", itemID: "42"))
+        let metadata = NeteaseDownloadMetadata(track: track, albumArtist: "歌手", trackNumber: 2,
+                                               discNumber: 1, quality: .standard, actualQuality: "standard", type: "ncm")
+        let prepared = try await provider.finalize(source, metadata: JSONEncoder().encode(metadata), staging: staging)
+        guard case .collection(let manifest, _, _, _) = prepared.provenance else {
+            Issue.record("Missing collection manifest"); return
+        }
+        let entry = try #require(manifest.entries.first)
+        let tags = try AudioTagCodec.read(staging.appendingPathComponent(entry.relativePath))
+        #expect(tags.text("TITLE") == "测试歌曲")
+    }
+
     @Test func albumDownloadsPreserveSameNamedTracksAcrossDiscs() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -200,6 +266,16 @@ nonisolated private final class DownloadSourceStub: URLProtocol, @unchecked Send
         }
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+nonisolated private final class ArtworkFailureStub: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 503, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
