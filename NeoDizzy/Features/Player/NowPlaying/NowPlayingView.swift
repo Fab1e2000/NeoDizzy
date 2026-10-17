@@ -28,24 +28,15 @@ struct NowPlayingView: View {
         _pageTransition = State(initialValue: NowPlayingTransitionCoordinator(initialPage: initialPage))
     }
     var body: some View {
-        GeometryReader { proxy in
+        GeometryReader { _ in
             ZStack {
                 NowPlayingBackground(
                     artworkURL: player.currentTrack?.coverURL,
                     isBehindLyrics: page == .lyrics
                 )
+                // iPhone 只支持竖屏（见 project.yml 的 UISupportedInterfaceOrientations），不保留横屏布局。
                 if let song = player.currentTrack {
-                    if proxy.size.width > proxy.size.height {
-                        NowPlayingLandscapeView(
-                            page: pageSelection, pageTransition: pageTransition,
-                            showsLyricsControls: showsLyricsControls, song: song,
-                            lyrics: lyricsModel.lyrics, lyricError: lyricsModel.error,
-                            playerFrame: playerFrame, artworkNamespace: pageArtworkNamespace,
-                            onDismiss: { dismiss() }, onInterfaceInteraction: handleLyricsInterfaceInteraction,
-                            onInterfaceVisibilityChange: setAppleMusicLyricsControlsVisible,
-                            onLyricsContentPrepared: { markLyricsContentPrepared(for: song.id) }
-                        )
-                    } else { portraitContent(for: song) }
+                    portraitContent(for: song)
                 } else {
                     ContentUnavailableView("当前没有播放歌曲", systemImage: "music.note").foregroundStyle(.white)
                 }

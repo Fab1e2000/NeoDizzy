@@ -132,7 +132,6 @@
 				Features/Player/NowPlaying/NowPlayingControls.swift,
 				Features/Player/NowPlaying/NowPlayingInterfaceTransition.swift,
 				Features/Player/NowPlaying/NowPlayingInterruptibleProgress.swift,
-				Features/Player/NowPlaying/NowPlayingLandscapeView.swift,
 				Features/Player/NowPlaying/NowPlayingLyricsModel.swift,
 				Features/Player/NowPlaying/NowPlayingLyricsPage.swift,
 				Features/Player/NowPlaying/NowPlayingLyricsPagePresentation.swift,
