@@ -108,16 +108,33 @@ final class NeteaseDownloadProvider: DownloadProvider {
     }
     static let albumLookupConcurrency = 4
     private func localFile(for metadata: NeteaseDownloadMetadata) -> URL? {
-        if let playlistID = metadata.playlistID {
-            return library.collection(provider: id, kind: "playlist", id: playlistID)?.localFile(for: metadata.track)
-        }
-        return library.collection(provider: id, kind: "album", id: metadata.track.discID)?.localFile(for: metadata.track)
+        let record = library.collection(provider: id, kind: metadata.playlistID == nil ? "album" : "playlist", id: metadata.playlistID ?? metadata.track.discID)
+        guard record?.manifest.entries.contains(where: { $0.itemID == metadata.track.remoteSource?.itemID && ($0.requestedQuality ?? $0.quality) == metadata.quality.rawValue }) == true else { return nil }
+        return record?.localFile(for: metadata.track)
     }
+
     func source(_ transfer: DownloadTransfer) async throws -> DownloadSource? {
         var metadata = try JSONDecoder().decode(NeteaseDownloadMetadata.self, from: transfer.metadata)
         if localFile(for: metadata) != nil { return nil }
         guard let songID = (metadata.track.remoteSource?.itemID).flatMap(Int.init),
               let albumID = Int(metadata.track.discID), albumID > 0 else { throw DownloadFailure.songUnavailable }
+        if let file = library.localFile(for: metadata.track, quality: metadata.quality.rawValue) {
+            for record in library.collections {
+                if let entry = record.manifest.entries.first(where: { $0.itemID == metadata.track.remoteSource?.itemID && ($0.requestedQuality ?? $0.quality) == metadata.quality.rawValue }),
+                   let actual = entry.quality, record.localFile(for: metadata.track) == file {
+                    metadata.actualQuality = actual; metadata.type = file.pathExtension; metadata.bitrate = 0
+                    return DownloadSource(url: file, metadata: try JSONEncoder().encode(metadata))
+                }
+            }
+        }
+        let key = api.cacheKey(for: metadata.track.id, quality: metadata.quality)
+        if let entry = AudioPlaybackCache.shared.entry(for: key) {
+            let file = AudioPlaybackCache.shared.directory.appendingPathComponent(entry.filename)
+            if AudioFileMatcher.extensions.contains(file.pathExtension) {
+                metadata.actualQuality = entry.actualQuality; metadata.type = file.pathExtension; metadata.bitrate = 0
+                return DownloadSource(url: file, metadata: try JSONEncoder().encode(metadata))
+            }
+        }
         let source = try await api.downloadSource(songID, quality: metadata.quality)
         metadata.actualQuality = source.level; metadata.type = source.type; metadata.bitrate = source.bitrate
         return DownloadSource(url: source.url, metadata: try JSONEncoder().encode(metadata))
@@ -164,7 +181,7 @@ final class NeteaseDownloadProvider: DownloadProvider {
         let collectionTitle = metadata.playlistTitle ?? track.albumTitle
         let manifest = LibraryManifest(source: LibrarySource(provider: id, kind: kind, id: collectionID),
             title: collectionTitle, artist: metadata.albumArtist, artworkURL: metadata.playlistID == nil ? track.coverURL : metadata.playlistArtworkURL,
-            entries: [.init(relativePath: path, itemID: String(songID), track: track, quality: level)])
+            entries: [.init(relativePath: path, itemID: String(songID), track: track, quality: level, requestedQuality: metadata.quality.rawValue)])
         // 网易云的下载统一放在 netease/ 下，再按专辑、歌单分开。
         let name = (metadata.playlistID == nil ? "netease/专辑/" : "netease/歌单/") + OfflinePaths.directoryName(collectionTitle, fallback: collectionID)
         let folderName: String
@@ -182,6 +199,11 @@ final class NeteaseDownloadProvider: DownloadProvider {
     func completed(_ data: Data, transfers: [DownloadTransfer]) async throws {
         let envelope = try JSONDecoder().decode(DownloadRequest.self, from: data)
         let request = try JSONDecoder().decode(NeteaseDownloadRequest.self, from: envelope.payload)
+        for transfer in transfers where transfer.state == .completed {
+            if let metadata = try? JSONDecoder().decode(NeteaseDownloadMetadata.self, from: transfer.metadata) {
+                AudioPlaybackCache.shared.remove(api.cacheKey(for: metadata.track.id, quality: metadata.quality))
+            }
+        }
         if request.kind == "playlist", let playlistCompleted,
            !transfers.contains(where: { (try? JSONDecoder().decode(NeteaseDownloadMetadata.self, from: $0.metadata).playlistID) != nil }) {
             let tracks = try transfers.filter { $0.state == .completed }.map { try JSONDecoder().decode(NeteaseDownloadMetadata.self, from: $0.metadata).track }
@@ -194,5 +216,10 @@ extension DownloadStore {
     func enqueueNetease(kind: String, id: Int, title: String, coverURL: URL?, quality: NeteaseQuality) async {
         guard let payload = try? JSONEncoder().encode(NeteaseDownloadRequest(kind: kind, id: id, quality: quality)) else { return }
         await enqueue(providerID: "netease", request: DownloadRequest(title: title, identity: "\(kind)/\(id)", coverURL: coverURL, payload: payload))
+    }
+    /// 下载一首网易云歌曲；已缓存时直接用缓存文件，不再联网。
+    func enqueueNeteaseSong(_ track: Track, quality: NeteaseQuality) async {
+        guard track.remoteSource?.providerID == "netease", let id = (track.remoteSource?.itemID).flatMap(Int.init) else { return }
+        await enqueueNetease(kind: "single", id: id, title: track.title, coverURL: track.coverURL, quality: quality)
     }
 }

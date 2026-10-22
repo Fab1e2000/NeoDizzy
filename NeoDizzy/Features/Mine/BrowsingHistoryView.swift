@@ -32,8 +32,7 @@ struct BrowsingHistoryView: View {
                     .onDelete { offsets in
                         history.remove(ids: Set(offsets.map { history.entries[$0].id }))
                     }
-                } footer: {
-                    Text("仅保存在本机，保留最近 200 张专辑。")
+                    .listRowSeparator(.hidden)
                 }
                 .listRowBackground(DizzyPalette.surface)
             }

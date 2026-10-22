@@ -6,6 +6,8 @@ struct NeteasePlayerActions: View {
     let track: Track
     var onImportLyrics: (() -> Void)?
     @Environment(NeteaseStore.self) private var store
+    @Environment(DownloadStore.self) private var downloads
+    @Environment(OfflineLibraryStore.self) private var library
     @Environment(\.openRoute) private var openRoute
     @State private var showsPicker = false
     var body: some View {
@@ -26,6 +28,13 @@ struct NeteasePlayerActions: View {
                     }
                     if let albumID = Int(track.discID), albumID > 0 {
                         items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "square.stack")) { _ in openRoute(.netease(.album(albumID))) })
+                    }
+                    // 听完缓存好的歌可以直接存成下载，不再联网。
+                    if library.localFile(for: track) == nil, player.cachedQuality(for: track) != nil {
+                        let quality = store.playbackSettings.quality
+                        items.append(UIAction(title: "转为下载", image: UIImage(systemName: "arrow.down.circle")) { [downloads, track] _ in
+                            Task { await downloads.enqueueNeteaseSong(track, quality: quality) }
+                        })
                     }
                     // 播放中的曲目只记着歌手名字；打开菜单时查一次歌曲详情拿到歌手 ID。
                     let api = store.api

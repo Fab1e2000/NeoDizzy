@@ -8,7 +8,7 @@ struct ModuleSettingsTests {
     }
 
     private func clear(_ store: UserDefaults) {
-        for key in ["mainModules.v1", "mainTabs.v1", "mainTabs.startup"] { store.removeObject(forKey: key) }
+        for key in ["mainModules.v1", "search.moduleOrder.v1", "mainTabs.v1", "mainTabs.startup"] { store.removeObject(forKey: key) }
     }
 
     @Test func mergesLegacyPagesWithoutHidingAnEnabledSource() throws {
@@ -93,4 +93,32 @@ struct ModuleSettingsTests {
         let modules = AppComposition.settings(defaults: store)
         #expect(modules.visibleModules.contains(.netease))
     }
+    @Test func searchOrderPersistsIndependentlyAndRetainsHiddenPositions() throws {
+        let store = try defaults()
+        defer { clear(store) }
+        let settings = AppComposition.settings(defaults: store)
+        let originalModules = settings.order
+        settings.reorderSearch([.netease, .dizzyLab, .localLibrary])
+        settings.setVisible(false, for: .dizzyLab)
+        let restored = AppComposition.settings(defaults: store)
+        #expect(restored.order == originalModules)
+        #expect(restored.visibleSearchModules == [.netease, .localLibrary])
+        restored.setVisible(true, for: .dizzyLab)
+        #expect(restored.visibleSearchModules == [.netease, .dizzyLab, .localLibrary])
+        restored.reorderSearch([.netease, .netease, .localLibrary])
+        #expect(restored.searchOrder == [.netease, .dizzyLab, .localLibrary])
+        restored.resetSearchOrder()
+        #expect(restored.searchOrder.first == .localLibrary)
+    }
+
+    @Test func searchOrderRepairsUnknownAndDuplicateIDs() throws {
+        let store = try defaults()
+        defer { clear(store) }
+        store.set(["removed", "netease", "netease"], forKey: "search.moduleOrder.v1")
+        let settings = AppComposition.settings(defaults: store)
+        #expect(settings.searchOrder.first == .netease)
+        #expect(Set(settings.searchOrder) == Set(settings.order))
+        #expect(settings.searchOrder.count == settings.order.count)
+    }
+
 }

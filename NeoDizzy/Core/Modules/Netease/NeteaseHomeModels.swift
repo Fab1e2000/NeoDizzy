@@ -10,6 +10,8 @@ nonisolated struct NeteaseHomeBlock: Decodable, Identifiable {
     let blockCode: String
     let uiElement: NeteaseHomeElement?
     let creatives: [NeteaseHomeCreative]?
+    // Verified from the physical device home feed: titles include the account name.
+    var isRadarPlaylistBlock: Bool { blockCode == "HOMEPAGE_BLOCK_MGC_PLAYLIST" }
     var id: String { blockCode + "/" + (resources.first?.id ?? "") }
     var title: String { uiElement?.subTitle?.title ?? uiElement?.mainTitle?.title ?? "为你推荐" }
     var resources: [NeteaseHomeResource] {

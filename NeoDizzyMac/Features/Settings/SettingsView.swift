@@ -120,6 +120,7 @@ private struct PlaybackSettings: View {
 
     var body: some View {
         Form {
+            AudioCacheSettingsSection()
             Section {
                 LabeledContent("高亮行位置") {
                     HStack {
@@ -138,7 +139,7 @@ private struct PlaybackSettings: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 220)
+        .frame(height: 420)
     }
 }
 

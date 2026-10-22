@@ -90,13 +90,8 @@ struct DizzyLabAccountSettings: View {
                         .resizable()
                         .foregroundStyle(DizzyPalette.mutedText)
                         .frame(width: 52, height: 52)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("未登录")
-                            .font(.headline)
-                        Text("登录后可以收听已购专辑的完整版，查看已购专辑和关注动态。")
-                            .font(.footnote)
-                            .foregroundStyle(DizzyPalette.mutedText)
-                    }
+                    Text("未登录")
+                        .font(.headline)
                 }
                 .padding(.vertical, 4)
                 NavigationLink("登录 DizzyLab 账号", value: AppRoute.page { LoginView() })

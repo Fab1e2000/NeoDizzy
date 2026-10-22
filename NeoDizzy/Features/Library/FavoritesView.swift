@@ -47,6 +47,9 @@ struct FavoriteButton: View {
 struct FavoritesPage: View {
     @Environment(FavoritesStore.self) private var favorites
     @Environment(PlayerStore.self) private var player
+    @Environment(OfflineLibraryStore.self) private var library
+    @Environment(DownloadStore.self) private var downloads
+    @Environment(NeteaseStore.self) private var netease: NeteaseStore?
     var body: some View {
         let songs = favorites.songs
         let tracks = songs.map(\.track)
@@ -70,9 +73,10 @@ struct FavoritesPage: View {
                         description: Text("在歌曲菜单或播放器中选择「喜欢」，就会出现在这里。"))
                 }
                 ForEach(songs.enumerated(), id: \.element.id) { index, song in
-                    AlbumTrackRow(track: song.track, displayNumber: String(index + 1)) {
+                    let downloaded = library.localFile(for: song.track) != nil
+                    SongRow(track: song.track, isDownloaded: downloaded, actions: actions(song.track, downloaded: downloaded)) {
                         player.play(tracks, startAt: index)
-                    }.padding(.horizontal, -20)
+                    }
                 }
                 ForEach(favorites.errors.keys.sorted(), id: \.self) { key in
                     Text("\(LibraryOrigin(providerID: key)?.label ?? key)：\(favorites.errors[key] ?? "")")
@@ -89,5 +93,14 @@ struct FavoritesPage: View {
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .refreshable { await favorites.refresh() }
+    }
+
+    /// 已缓存的网易云歌曲可以直接转为下载。
+    private func actions(_ track: Track, downloaded: Bool) -> [SongRowAction] {
+        guard !downloaded, let netease, track.remoteSource?.providerID == "netease",
+              player.cachedQuality(for: track) != nil else { return [] }
+        return [.init(id: "download", title: "转为下载", systemImage: "arrow.down.circle") {
+            Task { await downloads.enqueueNeteaseSong(track, quality: netease.playbackSettings.quality) }
+        }]
     }
 }

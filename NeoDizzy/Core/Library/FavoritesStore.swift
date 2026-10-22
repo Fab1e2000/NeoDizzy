@@ -115,6 +115,25 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
             try saved.removeMigratedSongs(ids: removeIDs)
         } catch { errors["storage"] = error.localizedDescription }
     }
+    /// 从配置文件恢复本机喜欢（本地与 DizzyLab）：只补上没有的，保留现有顺序与时间。
+    /// 返回新增数量。
+    func importDeviceSongs(_ songs: [FavoriteSong]) throws -> Int {
+        let existing = records["device"] ?? []
+        let known = Set(existing.map(\.id))
+        var seen = known
+        let added = songs.filter { seen.insert($0.id).inserted }
+        guard !added.isEmpty else { return 0 }
+        let merged = (existing + added).sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+        try replace(scope: "device", values: merged)
+        return added.count
+    }
+    /// 导入备份时没对上音乐文件的本地喜欢：不显示，但继续写进之后的备份，放回音乐再导入时还能恢复。
+    static let unmatchedLocalScope = "restore/unmatched-local"
+    var unmatchedLocal: [FavoriteSong] { records[Self.unmatchedLocalScope] ?? [] }
+    func setUnmatchedLocal(_ songs: [FavoriteSong]) throws {
+        guard !(songs.isEmpty && records[Self.unmatchedLocalScope] == nil) else { return }
+        try replace(scope: Self.unmatchedLocalScope, values: songs)
+    }
     func contains(_ track: Track) -> Bool { songs.contains { $0.id == FavoriteSong(track: track).id } }
     func register(_ id: String, provider: FavoritesProvider) {
         providers[id] = provider

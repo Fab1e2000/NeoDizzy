@@ -32,8 +32,6 @@ struct AppSettingsView: View {
                     }
                 } header: {
                     Text("外观")
-                } footer: {
-                    Text("隐藏屏幕顶部的时间、电量和信号。")
                 }
                 .listRowBackground(DizzyPalette.surface)
 
@@ -45,6 +43,9 @@ struct AppSettingsView: View {
                     } label: {
                         Label("启动页面", systemImage: "house")
                     }
+                    NavigationLink(value: AppRoute.page { SearchOrderSettingsView() }) {
+                        Label("搜索板块排序", systemImage: "arrow.up.arrow.down")
+                    }
                     NavigationLink(value: AppRoute.page { TabSettingsView() }) {
                         Label("模块管理", systemImage: "rectangle.bottomthird.inset.filled")
                     }
@@ -53,10 +54,8 @@ struct AppSettingsView: View {
                 }
                 .listRowBackground(DizzyPalette.surface)
 
-                Section("音乐库") {
-                    LibraryExportButton()
-                }
-                .listRowBackground(DizzyPalette.surface)
+                LibraryBackupSection()
+                    .listRowBackground(DizzyPalette.surface)
 
                 Section {
                     Picker("并行下载数量", selection: $downloads.concurrentDownloadCount) {
@@ -66,10 +65,11 @@ struct AppSettingsView: View {
                     }
                 } header: {
                     Text("下载")
-                } footer: {
-                    Text("下载与音频处理同时进行。调低数量后，已开始的下载会继续，后续按新数量调度。")
                 }
                 .listRowBackground(DizzyPalette.surface)
+
+                AudioCacheSettingsSection()
+                    .listRowBackground(DizzyPalette.surface)
 
                 Section("播放") {
                     NavigationLink(value: AppRoute.page { LyricsSettingsView() }) {
@@ -79,6 +79,7 @@ struct AppSettingsView: View {
                 .listRowBackground(DizzyPalette.surface)
 
                 Section("关于") {
+                    NavigationLink("使用说明", value: AppRoute.page { ManualView() })
                     LabeledContent("版本", value: Bundle.main.versionText)
                     LabeledContent("开源许可", value: "GPLv3")
                     NavigationLink("免责声明", value: AppRoute.page { DisclaimerView() })

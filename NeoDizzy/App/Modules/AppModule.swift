@@ -61,12 +61,9 @@ final class ModuleRegistry {
         modules.lazy.compactMap { $0.songActions(for: track, onImportLyrics: onImportLyrics) }.first
     }
     func descriptor(for id: ModuleID) -> ModuleDescriptor? { descriptors.first { $0.id == id } }
-    /// 统一搜索的各组结果：资料库在最前，其余按模块顺序；只包含 `ids` 里的模块。
+    /// 统一搜索的各组结果：按传入的搜索板块顺序显示；只包含 `ids` 里的模块。
     func searchSections(query: String, in ids: [ModuleID]) -> [(id: ModuleID, view: AnyView)] {
-        Self.searchOrder(ids).compactMap { id in module(for: id)?.searchSection(query: query).map { (id, $0) } }
-    }
-    static func searchOrder(_ ids: [ModuleID]) -> [ModuleID] {
-        ids.filter { $0 == .localLibrary } + ids.filter { $0 != .localLibrary }
+        ids.compactMap { id in module(for: id)?.searchSection(query: query).map { (id, $0) } }
     }
     func accountEntry(for id: ModuleID) -> ModuleAccountEntry? { module(for: id)?.accountEntry }
     func openAccount(for id: ModuleID) { module(for: id)?.openAccount() }

@@ -7,36 +7,31 @@ struct NeteaseHomeSections: View {
     private var visibleBlocks: [NeteaseHomeBlock] {
         var seen = Set<String>()
         return personal.blocks.filter { block in
-            let hiddenTitles = ["猜你喜欢", "热门歌手", "新歌推荐", "黑胶vip专享", "推荐歌单", "新碟上架", "精品歌单"]
-            let normalizedTitle = block.title.components(separatedBy: .whitespacesAndNewlines).joined().lowercased()
-            // Style recommendations use changing editorial titles, so exclude the section by its stable code.
-            return block.blockCode != "HOMEPAGE_BLOCK_STYLE_RCMD"
-                && block.blockCode != "HOMEPAGE_BLOCK_PLAYLIST_RCMD"
-                && !hiddenTitles.contains(where: { normalizedTitle.contains($0) })
-                && (!block.playlists.isEmpty || !block.songs.isEmpty)
+            // Keep the radar shelf by its observed code, not its personalized title.
+            // Recommended playlists and charts are rendered by their existing sections below.
+            return block.isRadarPlaylistBlock && !block.playlists.isEmpty
                 && seen.insert(block.id).inserted
         }
     }
     var body: some View {
         if store.profile != nil {
-            ForEach(visibleBlocks.prefix(5)) { block in
+            ForEach(visibleBlocks) { block in
                 VStack(alignment: .leading, spacing: 14) {
                     Text(block.title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
                     if !block.playlists.isEmpty { NeteaseCoverShelf(playlists: Array(block.playlists.prefix(8))) }
-                    if !block.songs.isEmpty { NeteaseSongRows(songs: Array(block.songs.prefix(3))) }
                 }
             }
             if personal.showsInitialSkeleton {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("个性化推荐").font(.title2.bold()).redacted(reason: .placeholder)
+                    Text("雷达歌单").font(.title2.bold()).redacted(reason: .placeholder)
                     NeteaseSkeleton(layout: .shelf)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("正在加载个性化推荐")
+                .accessibilityLabel("正在加载雷达歌单")
             }
             if let error = personal.error {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("个性化推荐暂不可用：\(error)").font(.footnote).foregroundStyle(.secondary)
+                    Text("雷达歌单暂不可用：\(error)").font(.footnote).foregroundStyle(.secondary)
                     Button("重试") { Task { await personal.load(api: store.api, userID: store.profile?.userId, kind: 0, refresh: true) } }
                 }
             }
@@ -144,17 +139,7 @@ struct NeteaseSkeleton: View {
                 }
             case .songs:
                 VStack(spacing: 0) {
-                    ForEach(0..<6) { _ in
-                        HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: 3).fill(.gray.opacity(0.18))
-                                .frame(width: 18, height: 18)
-                            Text("歌曲名称正在载入").font(.body).redacted(reason: .placeholder)
-                            Spacer(minLength: 12)
-                            Capsule().fill(.gray.opacity(0.18)).frame(width: 22, height: 6)
-                                .frame(width: 42, height: 44)
-                        }
-                        .padding(.leading, 20).padding(.trailing, 8).padding(.vertical, 11)
-                    }
+                    ForEach(0..<6) { _ in SongRowPlaceholder() }
                 }
             }
         }

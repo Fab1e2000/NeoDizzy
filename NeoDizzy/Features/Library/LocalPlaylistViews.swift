@@ -32,7 +32,7 @@ struct LocalPlaylistsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Button { openRoute(.localPlaylist(id: playlist.id)) } label: {
                             ArtworkImage(url: playlist.coverURL)
-                                .libraryOriginMark(showsOrigin ? .local : nil)
+                                .libraryOriginMark(showsOrigin ? .local : nil, tracks: playlist.tracks)
                         }
                         .buttonStyle(.plain)
                         .contentShape(.contextMenuPreview, .rect(cornerRadius: 10))
@@ -97,8 +97,7 @@ struct LocalPlaylistDetailView: View {
                         }
                     }
                     ForEach(Array(playlist.tracks.enumerated()), id: \.offset) { index, track in
-                        AlbumTrackRow(track: track, displayNumber: String(index + 1)) { player.play(playlist.tracks, startAt: index) }
-                            .padding(.horizontal, -20)
+                        SongRow(track: track) { player.play(playlist.tracks, startAt: index) }
                     }
                     if playlist.tracks.isEmpty {
                         ContentUnavailableView("歌单还是空的", systemImage: "music.note.list",

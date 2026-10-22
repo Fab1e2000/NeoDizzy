@@ -1,5 +1,6 @@
-// 挤出的 D：沿用 NeoBili 图标的做法，白底上只用一种主题色——挤出的侧面和字母的细边
-// 是主题色，字母正面镂空露出底色，字腔露出后面的主题色。深色图标由系统自动生成
+// 互扣双环：白底上两只主题色圆环，上方交叉左环压右环、下方右环压左环。被压住的一段
+// 真正切开（不是用底色描边盖住），这样 Liquid Glass 的高光和深色图标里都不会露出接缝。
+// 两只环各占一层，Icon Composer 会分别给它们加玻璃质感。深色图标由系统自动生成
 // （底色变黑、主题色保留），不另画一版。
 // 按 AppTheme.swift 里的主题表为每个主题输出一个 Icon Composer 图标：默认主题是主图标，
 // 其余是 iOS 的备选图标。同时输出可编辑 SVG、不带 alpha 的 1024px PNG（README 用），
@@ -22,7 +23,7 @@ try fileManager.createDirectory(at: design, withIntermediateDirectories: true)
 
 struct Theme { let id: String; let name: String; let dark: UInt32; let light: UInt32 }
 let themeSource = try String(contentsOf: root.appending(path: "NeoDizzy/Core/UI/AppTheme.swift"), encoding: .utf8)
-let themePattern = try NSRegularExpression(pattern: #"\.init\(id: "([^"]+)", name: "([^"]+)", dark: 0x([0-9A-F]{6}), light: 0x([0-9A-F]{6})\)"#)
+let themePattern = try NSRegularExpression(pattern: #"\.init\(id: "([^"]+)", name: "([^"]+)", dark: 0x([0-9A-F]{6}), light: 0x([0-9A-F]{6})[,)]"#)
 let themes: [Theme] = themePattern.matches(in: themeSource, range: NSRange(themeSource.startIndex..., in: themeSource)).map { match in
     func group(_ i: Int) -> String { String(themeSource[Range(match.range(at: i), in: themeSource)!]) }
     return Theme(id: group(1), name: group(2), dark: UInt32(group(3), radix: 16)!, light: UInt32(group(4), radix: 16)!)
@@ -33,25 +34,27 @@ guard let defaultMatch = defaultPattern.firstMatch(in: themeSource, range: NSRan
     fatalError("没有从 AppTheme.swift 读到主题表")
 }
 let defaultID = String(themeSource[Range(defaultMatch.range(at: 1), in: themeSource)!])
+// 主图标（默认主题用的那个）不跟默认主题的金色，用白底青瓷双环。
+let primaryIconTheme = themes.first { $0.id == "teal" }!
 
 // MARK: 字形
 
-// Canvas coordinates use SVG's downward y axis. A circular right bowl keeps D legible at small sizes.
-let extrusion = CGMutablePath()
-extrusion.move(to: CGPoint(x: 362, y: 194)); extrusion.addLine(to: CGPoint(x: 600, y: 194))
-extrusion.addCurve(to: CGPoint(x: 772.534, y: 610.534), control1: CGPoint(x: 817.38, y: 194), control2: CGPoint(x: 926.24, y: 456.83))
-extrusion.addLine(to: CGPoint(x: 622.534, y: 760.534))
-extrusion.addCurve(to: CGPoint(x: 450, y: 832), control1: CGPoint(x: 576.78, y: 806.29), control2: CGPoint(x: 514.72, y: 832))
-extrusion.addLine(to: CGPoint(x: 212, y: 832)); extrusion.addLine(to: CGPoint(x: 212, y: 344)); extrusion.closeSubpath()
-func bowl(left: CGFloat, top: CGFloat, stem: CGFloat, radius: CGFloat) -> CGPath {
-    let p = CGMutablePath(); let k: CGFloat = 0.5522847498
-    p.move(to: CGPoint(x: left, y: top)); p.addLine(to: CGPoint(x: stem, y: top))
-    p.addCurve(to: CGPoint(x: stem + radius, y: top + radius), control1: CGPoint(x: stem + k * radius, y: top), control2: CGPoint(x: stem + radius, y: top + radius * (1-k)))
-    p.addCurve(to: CGPoint(x: stem, y: top + 2 * radius), control1: CGPoint(x: stem + radius, y: top + radius * (1+k)), control2: CGPoint(x: stem + k * radius, y: top + 2 * radius))
-    p.addLine(to: CGPoint(x: left, y: top + 2 * radius)); p.closeSubpath(); return p
+// Canvas coordinates use SVG's downward y axis; angles therefore run clockwise on screen.
+// Two rings whose centres sit one radius apart, so each passes through the other's centre.
+let ringRadius: CGFloat = 194.56, ringWidth: CGFloat = 71.68, gapWidth: CGFloat = 112.64
+let leftCentre = CGPoint(x: 414.72, y: 512), rightCentre = CGPoint(x: 609.28, y: 512)
+func ring(_ centre: CGPoint) -> CGPath {
+    CGPath(ellipseIn: CGRect(x: centre.x - ringRadius, y: centre.y - ringRadius, width: 2 * ringRadius, height: 2 * ringRadius), transform: nil)
+        .copy(strokingWithWidth: ringWidth, lineCap: .butt, lineJoin: .miter, miterLimit: 10)
 }
-let face = bowl(left: 378, top: 210, stem: 600, radius: 228)
-let counter = bowl(left: 498, top: 320, stem: 580, radius: 118)
+/// 交叉处上层环的一小段，加宽后从下层环里减掉，留出两侧的缝。
+func crossing(_ centre: CGPoint, from start: CGFloat, to end: CGFloat) -> CGPath {
+    let arc = CGMutablePath()
+    arc.addArc(center: centre, radius: ringRadius, startAngle: start * .pi / 180, endAngle: end * .pi / 180, clockwise: false)
+    return arc.copy(strokingWithWidth: gapWidth, lineCap: .butt, lineJoin: .miter, miterLimit: 10)
+}
+let leftRing = ring(leftCentre).subtracting(crossing(rightCentre, from: 100, to: 140))
+let rightRing = ring(rightCentre).subtracting(crossing(leftCentre, from: -80, to: -40))
 func color(_ value: UInt32) -> CGColor {
     CGColor(srgbRed: CGFloat((value >> 16) & 255) / 255, green: CGFloat((value >> 8) & 255) / 255, blue: CGFloat(value & 255) / 255, alpha: 1)
 }
@@ -87,14 +90,9 @@ func iconColor(_ theme: Theme) -> UInt32 { mix(theme.dark, theme.light, 0.5) }
 func hex(_ value: UInt32) -> String { String(format: "#%06X", value) }
 
 let opening = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1024\" height=\"1024\" viewBox=\"0 0 1024 1024\">"
-/// 奇偶填充：挤出轮廓减去字母正面，再补回字腔。
-let markPath: CGPath = {
-    let path = CGMutablePath()
-    path.addPath(extrusion); path.addPath(face); path.addPath(counter)
-    return path
-}()
-func mark(_ fill: UInt32) -> String {
-    "<g transform=\"translate(-16 0)\"><path d=\"\(svgPath(markPath))\" fill-rule=\"evenodd\" fill=\"\(hex(fill))\"/></g>"
+let layers = [("RingLeft.svg", "左环", leftRing), ("RingRight.svg", "右环", rightRing)]
+func shape(_ path: CGPath, _ fill: UInt32) -> String {
+    "<path d=\"\(svgPath(path))\" fill-rule=\"evenodd\" fill=\"\(hex(fill))\"/>"
 }
 
 // MARK: 输出
@@ -120,15 +118,18 @@ try fileManager.createDirectory(at: dockFolder, withIntermediateDirectories: tru
 try writeJSON(["info": ["author": "xcode", "version": 1]], to: dockFolder.appending(path: "Contents.json"))
 
 for theme in themes {
-    let fill = iconColor(theme)
+    let colorTheme = theme.id == defaultID ? primaryIconTheme : theme
+    let fill = iconColor(colorTheme)
     let iconName = theme.id == defaultID ? "NeoDizzyIcon" : "NeoDizzyIcon-\(theme.id)"
     let icon = iconsFolder.appending(path: "\(iconName).icon")
     let assets = icon.appending(path: "Assets")
     try fileManager.createDirectory(at: assets, withIntermediateDirectories: true)
-    try (opening + mark(fill) + "</svg>\n").write(to: assets.appending(path: "Mark.svg"), atomically: true, encoding: .utf8)
+    for (file, _, path) in layers {
+        try (opening + shape(path, fill) + "</svg>\n").write(to: assets.appending(path: file), atomically: true, encoding: .utf8)
+    }
     let document: [String: Any] = [
         "fill": ["solid": "srgb:1.00000,1.00000,1.00000,1.00000"],
-        "groups": [["layers": [["image-name": "Mark.svg", "name": "\(theme.name) D"]]]],
+        "groups": [["layers": layers.map { file, name, _ in ["image-name": file, "name": "\(colorTheme.name)\(name)"] }]],
         "supported-platforms": ["squares": "shared"],
     ]
     try writeJSON(document, to: icon.appending(path: "icon.json"))
@@ -144,12 +145,13 @@ for theme in themes {
     }
 
     guard theme.id == defaultID else { continue }
-    try (opening + "<rect width=\"1024\" height=\"1024\" fill=\"#FFFFFF\"/>" + mark(fill) + "</svg>\n")
+    try (opening + "<rect width=\"1024\" height=\"1024\" fill=\"#FFFFFF\"/>" + layers.map { shape($0.2, fill) }.joined() + "</svg>\n")
         .write(to: design.appending(path: "AppIcon.svg"), atomically: true, encoding: .utf8)
     let context = CGContext(data: nil, width: 1024, height: 1024, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
     context.setFillColor(color(0xFFFFFF)); context.fill(CGRect(x: 0, y: 0, width: 1024, height: 1024))
-    context.translateBy(x: -16, y: 1024); context.scaleBy(x: 1, y: -1)
-    context.addPath(markPath); context.setFillColor(color(fill)); context.fillPath(using: .evenOdd)
+    context.translateBy(x: 0, y: 1024); context.scaleBy(x: 1, y: -1)
+    context.setFillColor(color(fill))
+    for (_, _, path) in layers { context.addPath(path); context.fillPath(using: .evenOdd) }
     let output = root.appending(path: "NeoDizzy/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png")
     let destination = CGImageDestinationCreateWithURL(output as CFURL, UTType.png.identifier as CFString, 1, nil)!
     CGImageDestinationAddImage(destination, context.makeImage()!, nil)

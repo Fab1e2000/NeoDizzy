@@ -373,6 +373,17 @@ import Testing
         #expect(model.libraryRevision == library.contentRevision(for: .liked))
     }
 
+    @Test func deviceRadarBlockSurvivesPersonalizedTitleAndRejectsOtherSections() throws {
+        // Reduced from the physical iPhone response; account title anonymized.
+        let json = #"{"blocks":[{"blockCode":"HOMEPAGE_BLOCK_MGC_PLAYLIST","creatives":[{"creativeId":"5320167908","creativeType":"list","resources":[{"resourceId":"5320167908","resourceType":"list","uiElement":{"mainTitle":{"title":"还在听《Distance》吗|时光雷达"}}}]},{"creativeId":"2829883282","creativeType":"list","resources":[{"resourceId":"2829883282","resourceType":"list","uiElement":{"mainTitle":{"title":"可我已忘记怎样唱歌和更多好听的|华语私人雷达"}}}]},{"creativeId":"5362359247","creativeType":"list","resources":[{"resourceId":"5362359247","resourceType":"list","uiElement":{"mainTitle":{"title":"从《束花线》开启宝藏音乐环游|宝藏雷达"}}}]},{"creativeId":"5327906368","creativeType":"list","resources":[{"resourceId":"5327906368","resourceType":"list","uiElement":{"mainTitle":{"title":"DOUDOU和更多好听的|乐迷雷达"}}}]},{"creativeId":"5300458264","creativeType":"list","resources":[{"resourceId":"5300458264","resourceType":"list","uiElement":{"mainTitle":{"title":"WOVOP新歌快递请查收|新歌雷达"}}}]},{"creativeId":"2829896389","creativeType":"list","resources":[{"resourceId":"2829896389","resourceType":"list","uiElement":{"mainTitle":{"title":"日系私人雷达 | 最懂你的日系推荐 每日更新35首"}}}]}],"uiElement":{"mainTitle":{"title":""},"subTitle":{"title":"测试用户的雷达歌单"}}},{"blockCode":"HOMEPAGE_BLOCK_STYLE_RCMD","uiElement":{"subTitle":{"title":"雷达歌单"}}},{"blockCode":"HOMEPAGE_BLOCK_OLD_SUBSCRIBE_ARTIST_NEW"},{"blockCode":"FUTURE_UNKNOWN_BLOCK"}]}"#
+        let feed = try JSONDecoder().decode(NeteaseHomeFeed.self, from: Data(json.utf8))
+        let visible = feed.blocks.filter(\.isRadarPlaylistBlock)
+        #expect(visible.count == 1)
+        let radar = try #require(visible.first)
+        #expect(radar.title == "测试用户的雷达歌单")
+        #expect(radar.playlists.map(\.id) == [5320167908, 2829883282, 5362359247, 5327906368, 5300458264, 2829896389])
+    }
+
     @Test func homepageMapsSupportedResourcesAndIgnoresUnsupportedContent() throws {
         let json = #"{"blocks":[{"blockCode":"MIXED","uiElement":{"subTitle":{"title":"为你精选"}},"creatives":[{"resources":[{"resourceType":"list","resourceId":7,"uiElement":{"mainTitle":{"title":"List"}}},{"resourceType":"list","resourceId":"7"},{"resourceType":"playlist","resourceId":"7"},{"resourceType":"song","resourceId":"42","resourceExtInfo":{"songData":{"id":42,"name":"Song","ar":[]}}},{"resourceType":"video","resourceId":"8"}]}]}]}"#
         let feed = try JSONDecoder().decode(NeteaseHomeFeed.self, from: Data(json.utf8))
@@ -394,8 +405,8 @@ import Testing
         }
         let api = api()
         let defaults = try #require(UserDefaults(suiteName: "quality.\(UUID())"))
-        let settings = NeteasePlaybackSettings(defaults: defaults, monitorsNetwork: false)
-        settings.wifi = .immersive
+        let settings = NeteasePlaybackSettings(defaults: defaults)
+        settings.quality = .immersive
         let source = try await NeteaseAPI(client: api.client, playbackSettings: settings).stream("42")
         #expect(calls.withLock { $0 } == ["sky", "jyeffect", "lossless"])
         #expect(source.url.scheme == "https" && source.isPreview)

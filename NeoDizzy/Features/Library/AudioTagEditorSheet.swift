@@ -63,14 +63,11 @@ struct AudioTagEditorSheet: View {
                     .disabled(busy || loadingCover)
                     if player.holdsFile(target.url) {
                         Section {
-                            Text("播放器仍持有此文件，暂停后也需要停止才能保存。")
                             Button("停止播放以保存") { player.stopForTagEditing(target.url) }
                         }
                     }
                     Section {
                         Button("重新读取文件标签") { reloadPrompt = true }.disabled(busy)
-                    } footer: {
-                        Text("只修改当前音频的内嵌标签；专辑仍按文件夹归类。空白字段会删除相应标签。")
                     }
                 } else if busy { Section("音乐标签") { ContentSkeleton(layout: .rows) } }
                 else { Button("重新读取") { Task { await load() } } }

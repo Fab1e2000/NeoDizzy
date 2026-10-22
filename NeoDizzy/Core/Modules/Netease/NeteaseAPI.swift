@@ -9,6 +9,11 @@ final class NeteaseAPI {
         self.playbackSettings = playbackSettings
     }
 
+    func cacheKey(for trackID: String, quality: NeteaseQuality? = nil) -> AudioPlaybackCache.Key {
+        .init(trackID: trackID, scope: AudioPlaybackCache.digest(client.cookie),
+              quality: (quality ?? playbackSettings.selected).rawValue)
+    }
+
     func recommended() async throws -> [NeteasePlaylist] {
         struct Response: Decodable { let result: [NeteasePlaylist] }
         let response: Response = try await client.request("/api/personalized/playlist", data: ["limit": 30, "total": true, "n": 1000])
@@ -113,7 +118,7 @@ final class NeteaseAPI {
     }
     func stream(_ id: String) async throws -> RemotePlaybackSource {
         struct Trial: Decodable { let start: Double?; let end: Double? }
-        struct Source: Decodable { let id: Int; let url: String?; let expi: Double?; let freeTrialInfo: Trial? }
+        struct Source: Decodable { let id: Int; let url: String?; let expi: Double?; let freeTrialInfo: Trial?; let level: String?; let type: String? }
         struct Response: Decodable { let data: [Source] }
         guard let number = Int(id) else { throw NeteaseError.unavailable }
         for quality in playbackSettings.selected.fallbacks {
@@ -125,7 +130,7 @@ final class NeteaseAPI {
                   ["http", "https"].contains(scheme), url.host != nil else { continue }
             url.scheme = "https"
             guard let secureURL = url.url else { continue }
-            return RemotePlaybackSource(url: secureURL, expiresAt: Date().addingTimeInterval(max(0, (source.expi ?? 300) - 30)), isPreview: source.freeTrialInfo != nil)
+            return RemotePlaybackSource(url: secureURL, expiresAt: Date().addingTimeInterval(max(0, (source.expi ?? 300) - 30)), isPreview: source.freeTrialInfo != nil, actualQuality: source.level, fileExtension: source.type)
         }
         throw NeteaseError.unavailable
     }

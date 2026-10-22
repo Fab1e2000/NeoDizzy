@@ -110,14 +110,19 @@ final class PlayerStore {
         let track: Track
         let url: URL
         let item: AVPlayerItem
+        var cacheJob: UUID?
         private let staging: AVPlayer
         private var observation: NSKeyValueObservation?
         private var beganPreroll = false
 
-        init(track: Track, url: URL, staging: AVPlayer) {
+        init(track: Track, url: URL, staging: AVPlayer, resolver: StreamResolver) {
             self.track = track
             self.url = url
-            item = AVPlayerItem(url: url)
+            if !url.isFileURL, !resolver.isPreview(for: track, url: url),
+               let key = resolver.audioCacheKey(for: track), let actual = resolver.actualQuality(for: track),
+               let cached = AudioPlaybackCache.shared.makeItem(url: url, key: key, actualQuality: actual) {
+                item = cached.0; cacheJob = cached.1
+            } else { item = AVPlayerItem(url: url) }
             item.preferredForwardBufferDuration = 8
             self.staging = staging
             staging.replaceCurrentItem(with: item)
@@ -131,6 +136,10 @@ final class PlayerStore {
             }
         }
 
+        deinit {
+            let id = cacheJob
+            Task { @MainActor in AudioPlaybackCache.shared.leave(id, listened: 0, duration: 0) }
+        }
         func takePlayer() -> AVPlayer {
             observation = nil
             staging.cancelPendingPrerolls()
@@ -160,6 +169,9 @@ final class PlayerStore {
 
     @ObservationIgnored private var player: AVPlayer
     @ObservationIgnored private var standbyPlayer: AVPlayer
+    @ObservationIgnored private var bypassCacheForRetry = false
+    @ObservationIgnored private var cacheListenedAtEnd: TimeInterval = 0
+    @ObservationIgnored private var audioCacheJob: UUID?
     @ObservationIgnored private let resolver: StreamResolver
     @ObservationIgnored private let persistence: PlaybackPersistence
     @ObservationIgnored private let nowPlaying: NowPlayingSession
@@ -266,7 +278,7 @@ final class PlayerStore {
             try Task.checkCancellation()
             guard self?.discoveryGeneration == generation else { throw CancellationError() }
             guard let self else { throw CancellationError() }
-            let prepared = PreparedDiscovery(track: track, url: url, staging: self.standbyPlayer)
+            let prepared = PreparedDiscovery(track: track, url: url, staging: self.standbyPlayer, resolver: resolver)
             self.preparedDiscovery = prepared
             return prepared
         }
@@ -329,6 +341,11 @@ final class PlayerStore {
     func estimatedProgress(at date: Date = .now) -> TimeInterval {
         guard isPlaying, !isLoading else { return progress }
         return progress + max(date.timeIntervalSince(progressUpdatedAt), 0)
+    }
+
+    /// 这首歌在播放缓存里时返回缓存的实际音质；换了账号或音质对不上就是 nil。
+    func cachedQuality(for track: Track) -> String? {
+        resolver.audioCacheKey(for: track).flatMap(AudioPlaybackCache.shared.cachedQuality)
     }
 
     func togglePlayback() {
@@ -417,6 +434,9 @@ final class PlayerStore {
     func remoteQualityDidChange(providerID: String) {
         resolver.invalidateRemote(providerID)
         if currentTrack?.remoteSource?.providerID == providerID {
+            // Keep the next song's identity, but discard an in-flight old-quality transfer.
+            AudioPlaybackCache.shared.leave(preparedDiscovery?.cacheJob, listened: 0, duration: 0)
+            preparedDiscovery?.cacheJob = nil
             load(autoplay: isPlaying, startAt: estimatedProgress(), continuing: true)
         }
     }
@@ -471,9 +491,13 @@ final class PlayerStore {
     // MARK: - 加载
 
     private func load(autoplay: Bool, startAt position: TimeInterval = 0, preferLocal: Bool = true, prepared: PreparedDiscovery? = nil, continuing: Bool = false) {
+        AudioPlaybackCache.shared.leave(audioCacheJob, listened: continuing ? 0 : max(cacheListenedAtEnd, reporting.listenedSeconds),
+                                        duration: duration > 0 ? duration : currentTrack?.duration ?? 0)
+        audioCacheJob = nil; cacheListenedAtEnd = 0
+        AudioPlaybackCache.shared.protect(nil)
         loadTask?.cancel()
         guard let track = queue.currentTrack else { return }
-        if !continuing { reporting.begin(track, sourceID: queueSourceID) }
+        if !continuing { bypassCacheForRetry = false; reporting.begin(track, sourceID: queueSourceID) }
         else { reporting.setPlaying(false) }
         if let url = resolver.localURL(for: track), tagWritePaths.contains(LocalLibraryScanner.canonical(url)) {
             loadGeneration += 1
@@ -519,6 +543,7 @@ final class PlayerStore {
         saveState()
 
         if let prepared {
+            audioCacheJob = prepared.cacheJob; prepared.cacheJob = nil
             start(url: prepared.url, generation: generation, preparedPlayer: prepared.takePlayer())
             prepareNextDiscovery()
             return
@@ -558,7 +583,14 @@ final class PlayerStore {
             #endif
             installPlayerObservers()
         }
-        let item = preparedPlayer?.currentItem ?? AVPlayerItem(url: url)
+        AudioPlaybackCache.shared.protect(url.isFileURL ? url : nil)
+        let item: AVPlayerItem
+        if let existing = preparedPlayer?.currentItem { item = existing }
+        else if !bypassCacheForRetry, !url.isFileURL, !isPreview, let track = currentTrack,
+                let key = resolver.audioCacheKey(for: track), let actual = resolver.actualQuality(for: track),
+                let cached = AudioPlaybackCache.shared.makeItem(url: url, key: key, actualQuality: actual) {
+            item = cached.0; audioCacheJob = cached.1
+        } else { item = AVPlayerItem(url: url) }
         itemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] _, _ in
             guard let self else { return }
             Task { @MainActor in self.handleItemStatusChange(generation: generation) }
@@ -719,6 +751,7 @@ final class PlayerStore {
 
     private func handleItemEnded(_ object: Any?) {
         guard (object as AnyObject?) === player.currentItem else { return }
+        cacheListenedAtEnd = max(cacheListenedAtEnd, reporting.listenedSeconds)
         reporting.finish()
         if isDiscovery {
             if remoteDiscoveryID != nil {
@@ -755,6 +788,11 @@ final class PlayerStore {
         guard let track = currentTrack else { return }
         if retriedTrackID != track.id {
             retriedTrackID = track.id
+            if audioCacheJob != nil {
+                bypassCacheForRetry = true
+                AudioPlaybackCache.shared.discard(audioCacheJob)
+            }
+            if loadedLocalFile || audioCacheJob != nil, let key = resolver.audioCacheKey(for: track) { AudioPlaybackCache.shared.remove(key) }
             resolver.invalidate(for: track)
             // 本地文件可能被外部移走或损坏，只回退一次到串流，避免不断加载同一坏文件。
             load(autoplay: isPlaying, startAt: progress, preferLocal: !loadedLocalFile, continuing: true)

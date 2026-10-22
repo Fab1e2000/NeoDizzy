@@ -6,8 +6,12 @@
     {
       "layers" : [
         {
-          "image-name" : "Mark.svg",
-          "name" : "樱花粉 D"
+          "image-name" : "RingLeft.svg",
+          "name" : "樱花粉左环"
+        },
+        {
+          "image-name" : "RingRight.svg",
+          "name" : "樱花粉右环"
         }
       ]
     }

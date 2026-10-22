@@ -7,7 +7,7 @@ import SwiftUI
 struct AppleMusicLocalLyricsView: View {
     let lyrics: LocalLyrics
     let playerFrame: CGRect
-    @AppStorage("lyrics.focusPosition") private var focusPosition = 0.5
+    @AppStorage(LyricsFocus.storageKey) private var focusPosition = 0.5
     let activeID: Int?
     let bottomOverlayHeight: CGFloat
     let isActive: Bool

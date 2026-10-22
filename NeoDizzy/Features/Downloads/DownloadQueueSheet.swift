@@ -37,7 +37,7 @@ struct NeteaseDownloadButton: View {
     var body: some View {
         Button("下载", systemImage: "arrow.down.circle") {
             Task {
-                await downloads.enqueueNetease(kind: kind, id: id, title: title, coverURL: coverURL, quality: store.playbackSettings.download)
+                await downloads.enqueueNetease(kind: kind, id: id, title: title, coverURL: coverURL, quality: store.playbackSettings.quality)
                 showsQueue = true
             }
         }

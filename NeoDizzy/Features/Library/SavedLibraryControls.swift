@@ -52,8 +52,6 @@ private struct LibraryRemovalModifier: ViewModifier {
                 .confirmationDialog("删除「\(title)」的下载？", isPresented: $confirmingDeletion, titleVisibility: .visible) {
                     Button("删除下载", role: .destructive, action: deleteDownload)
                     Button("取消", role: .cancel) { }
-                } message: {
-                    Text("只删除这台设备上的音频文件，账号里的收藏不受影响。此操作无法撤销。")
                 }
                 .alert("删除失败", item: $deletionFailure) { _ in
                     Button("好", role: .cancel) { }

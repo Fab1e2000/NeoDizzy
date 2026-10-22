@@ -45,12 +45,14 @@ nonisolated struct LibraryManifest: Codable, Sendable {
         let itemID: String
         let track: Track
         let quality: String?
+        var requestedQuality: String? = nil
 
-        init(relativePath: String, itemID: String, track: Track, quality: String? = nil) {
+        init(relativePath: String, itemID: String, track: Track, quality: String? = nil, requestedQuality: String? = nil) {
             self.relativePath = relativePath
             self.itemID = itemID
             self.track = track
             self.quality = quality
+            self.requestedQuality = requestedQuality
         }
     }
 
@@ -118,7 +120,7 @@ nonisolated struct LibraryManifest: Codable, Sendable {
         var resolved = self
         resolved.entries = try entries.map { entry in
             guard let path = matches[entry.track.number] else { throw OfflineLibraryError.missingTrack(entry.track.title) }
-            return Entry(relativePath: path, itemID: entry.itemID, track: entry.track, quality: entry.quality)
+            return Entry(relativePath: path, itemID: entry.itemID, track: entry.track, quality: entry.quality, requestedQuality: entry.requestedQuality)
         }
         try resolved.validate(in: directory)
         return resolved

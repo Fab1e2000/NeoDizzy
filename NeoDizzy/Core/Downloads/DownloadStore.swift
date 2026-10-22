@@ -259,7 +259,15 @@ import Observation
             updateTransfer(jobID, file.id) { $0.metadata = source.metadata; $0.state = .downloading }
             update(jobID) { $0.state = .downloading }
             save()
-            transport.start(url: source.url, id: file.id, headers: source.headers)
+            if source.url.isFileURL {
+                let archive = transport.archiveURL(file.id)
+                try FileManager.default.createDirectory(at: archive.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? FileManager.default.removeItem(at: archive)
+                try FileManager.default.copyItem(at: source.url, to: archive)
+                updateTransfer(jobID, file.id) { $0.state = .downloaded }
+            } else {
+                transport.start(url: source.url, id: file.id, headers: source.headers)
+            }
         } catch is CancellationError { }
         catch {
             updateTransfer(jobID, file.id) { $0.state = .failed; $0.failure = DownloadTransport.message(for: error) }

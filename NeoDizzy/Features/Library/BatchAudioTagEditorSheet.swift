@@ -87,13 +87,8 @@ struct BatchAudioTagEditorSheet: View {
                             if let coverFailure { Text(coverFailure).foregroundStyle(.red) }
                         }
                     }.disabled(busy || !completed.isEmpty || loadingCover)
-                    if !completed.isEmpty {
-                        Text("已成功保存的曲目不会重复写入。若要修改其他字段，请关闭后重新打开批量编辑。")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
                     if !held.isEmpty {
                         Section {
-                            Text("播放器仍持有所选文件，暂停也需要先停止才能保存。")
                             Button("停止播放以保存") { for entry in held { player.stopForTagEditing(entry.fileURL) } }
                         }.disabled(busy)
                     }

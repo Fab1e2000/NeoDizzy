@@ -29,7 +29,7 @@ struct LoadFailureView: View {
 
 /// Content placeholders are immediate and static; progress indicators are reserved for operations.
 enum ContentSkeletonLayout {
-    case grid, rows, songs, comments, article, lyrics, profile, pack
+    case grid, rows, songs, numberedSongs, comments, article, lyrics, profile, pack
 }
 
 struct ContentSkeleton: View {
@@ -47,17 +47,9 @@ struct ContentSkeleton: View {
                 VStack(alignment: .leading, spacing: 20) {
                     ForEach(0..<count, id: \.self) { _ in row }
                 }
-            case .songs:
+            case .songs, .numberedSongs:
                 VStack(spacing: 0) {
-                    ForEach(0..<count, id: \.self) { _ in
-                        HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: 3).fill(.gray.opacity(0.18)).frame(width: 18, height: 18)
-                            Text("歌曲名称正在载入").font(.body).redacted(reason: .placeholder)
-                            Spacer(minLength: 12)
-                            Capsule().fill(.gray.opacity(0.18)).frame(width: 22, height: 6)
-                                .frame(width: 42, height: 44)
-                        }.padding(.leading, 20).padding(.trailing, 8).padding(.vertical, 11)
-                    }
+                    ForEach(0..<count, id: \.self) { _ in SongRowPlaceholder(numbered: layout == .numberedSongs) }
                 }
             case .comments:
                 VStack(alignment: .leading, spacing: 20) {
