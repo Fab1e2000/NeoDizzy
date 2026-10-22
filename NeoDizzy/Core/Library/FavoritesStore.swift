@@ -134,6 +134,31 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
         guard !(songs.isEmpty && records[Self.unmatchedLocalScope] == nil) else { return }
         try replace(scope: Self.unmatchedLocalScope, values: songs)
     }
+    /// 账号喜欢的已知时间。平台的喜欢列表不带时间，重装、换号后重新同步会把整个列表记成「刚刚」，
+    /// 把本机的喜欢挤到最后；这里记下备份里的时间，同步时沿用。
+    static let knownTimesScope = "restore/account-times"
+    /// 从备份恢复账号喜欢的时间：记下来供之后同步使用，已经同步过的列表取较早的时间。
+    func restoreAccountTimes(_ songs: [FavoriteSong]) throws {
+        var known = Dictionary((records[Self.knownTimesScope] ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var times: [String: Date] = [:]
+        for song in songs {
+            guard let time = song.addedAt else { continue }
+            times[song.id] = min(time, times[song.id] ?? time)
+            if (known[song.id]?.addedAt ?? .distantFuture) > time { known[song.id] = song }
+        }
+        guard !times.isEmpty else { return }
+        try replace(scope: Self.knownTimesScope, values: known.values.sorted { $0.id < $1.id })
+        for scope in records.keys where scope.contains("/") && !scope.hasPrefix("restore/") && !scope.hasPrefix("migration/") {
+            guard var values = records[scope] else { continue }
+            var changed = false
+            for index in values.indices {
+                if let time = times[values[index].id], time < (values[index].addedAt ?? .distantFuture) {
+                    values[index].addedAt = time; changed = true
+                }
+            }
+            if changed { try replace(scope: scope, values: values) }
+        }
+    }
     func contains(_ track: Track) -> Bool { songs.contains { $0.id == FavoriteSong(track: track).id } }
     func register(_ id: String, provider: FavoritesProvider) {
         providers[id] = provider
@@ -204,13 +229,16 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
     private func replace(scope: String, values: [FavoriteSong]) throws {
         var seen = Set<String>()
         let previous = Dictionary((records[scope] ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let timestamp = Date.now
-        let unique = values.filter { seen.insert($0.id).inserted }.enumerated().map { index, value in
+        let known = Dictionary((records[Self.knownTimesScope] ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // 列表按喜欢的先后排列：时间未知的歌紧跟在前一首后面，而不是一律记成现在。
+        var last = Date.now
+        let unique = values.filter { seen.insert($0.id).inserted }.map { value in
             var result = value
             if result.addedAt == nil {
                 result.addedAt = previous[value.id].map { $0.addedAt ?? .distantPast }
-                    ?? timestamp.addingTimeInterval(-Double(index) / 1000)
+                    ?? known[value.id]?.addedAt ?? last.addingTimeInterval(-0.001)
             }
+            last = min(last, result.addedAt ?? last)
             return result
         }
         try database { db in try persist(scope: scope, values: unique, db: db) }

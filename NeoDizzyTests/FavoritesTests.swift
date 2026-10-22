@@ -10,6 +10,46 @@ import Testing
     private func directory() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
     private enum Failure: Error { case network }
 
+    @Test func accountLikesKeepRestoredTimesAfterResync() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FavoritesStore(directory: folder)
+        let now = Date.now
+        let dizzy = Track(discID: "disc", number: "1", title: "Dizzy", artists: "", albumTitle: "", coverURL: nil)
+        _ = try store.importDeviceSongs([FavoriteSong(track: dizzy, addedAt: now.addingTimeInterval(-3600))])
+        // 备份里网易云喜欢的时间：重装后账号列表还没同步。
+        try store.restoreAccountTimes([FavoriteSong(track: track("netease", "a"), addedAt: now.addingTimeInterval(-7200)),
+                                       FavoriteSong(track: track("netease", "b"), addedAt: now.addingTimeInterval(-10800))])
+        // 平台列表不带时间；新喜欢的 c 在最前，d 备份里没有。
+        store.register("netease", provider: FavoritesProvider(account: { "u" }, load: {
+            [self.track("netease", "c"), self.track("netease", "a"), self.track("netease", "b"), self.track("netease", "d")]
+        }, setLiked: { _, _ in }))
+        await store.refresh("netease")
+        #expect(store.songs.map(\.itemID) == ["c", "disc/1", "a", "b", "d"])
+        #expect(store.songs.first { $0.itemID == "a" }?.addedAt == now.addingTimeInterval(-7200))
+
+        // 再同步一次：已有时间保持不变。
+        await store.refresh("netease")
+        #expect(store.songs.map(\.itemID) == ["c", "disc/1", "a", "b", "d"])
+        #expect(FavoritesStore(directory: folder).records["netease/u"]?.first { $0.itemID == "b" }?.addedAt == now.addingTimeInterval(-10800))
+    }
+
+    @Test func restoringTimesFixesListsAlreadySyncedAsNew() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FavoritesStore(directory: folder)
+        let old = Date.now.addingTimeInterval(-86400)
+        let dizzy = Track(discID: "disc", number: "1", title: "Dizzy", artists: "", albumTitle: "", coverURL: nil)
+        _ = try store.importDeviceSongs([FavoriteSong(track: dizzy, addedAt: Date.now.addingTimeInterval(-60))])
+        store.register("netease", provider: FavoritesProvider(account: { "u" }, load: { [self.track("netease", "a")] }, setLiked: { _, _ in }))
+        await store.refresh("netease")
+        #expect(store.songs.first?.itemID == "a")
+        // 导入备份：较早的真实时间替换同步时记下的「刚刚」，本机的喜欢回到前面。
+        try store.restoreAccountTimes([FavoriteSong(track: track("netease", "a"), addedAt: old)])
+        #expect(store.songs.map(\.itemID) == ["disc/1", "a"])
+        // 备份时间更晚时不覆盖。
+        try store.restoreAccountTimes([FavoriteSong(track: track("netease", "a"), addedAt: .now)])
+        #expect(store.songs.last?.addedAt == old)
+    }
+
     @Test func legacySavedSongsMigrateOnceWithoutLosingCollectionsOrRevivingUnlikes() async throws {
         let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
         let saved = SavedLibraryStore(directory: folder)

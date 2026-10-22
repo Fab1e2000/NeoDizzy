@@ -77,6 +77,7 @@ import Foundation
         let byTitle = Dictionary(localTracks.map { (Self.matchKey($0.title, $0.artists, nil), $0) }, uniquingKeysWith: { first, _ in first })
 
         var deviceSongs: [FavoriteSong] = []
+        var accountSongs: [FavoriteSong] = []
         var unmatched: [FavoriteSong] = []
         let pending = favorites.unmatchedLocal.map { LibraryExport.Song($0.track, addedAt: $0.addedAt) }
         for song in export.favorites + pending {
@@ -90,6 +91,8 @@ import Foundation
             case "dizzylab":
                 deviceSongs.append(FavoriteSong(track: Self.track(song, remote: false), addedAt: song.addedAt))
             default:
+                // 账号喜欢登录后自动同步回来，这里只恢复它们的喜欢时间，免得同步后全部排在最前。
+                accountSongs.append(FavoriteSong(track: Self.track(song, remote: true), addedAt: song.addedAt))
                 report.accountFavorites += 1
             }
         }
@@ -98,6 +101,7 @@ import Foundation
             deviceSongs.append(FavoriteSong(track: Self.track(song, remote: false), addedAt: song.addedAt))
         }
         report.favoritesAdded = try favorites.importDeviceSongs(deviceSongs)
+        try favorites.restoreAccountTimes(accountSongs)
         var seen = Set<String>()
         let stillUnmatched = unmatched.filter { seen.insert($0.id).inserted }
         try favorites.setUnmatchedLocal(stillUnmatched)
