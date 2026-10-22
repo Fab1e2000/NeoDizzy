@@ -28,7 +28,7 @@ struct NeteaseDownloadTests {
         let data = try Fixture.data("audio-local-tags.mp3")
         try data.write(to: file)
         defer { AudioPlaybackCache.shared.remove(key); try? FileManager.default.removeItem(at: file) }
-        try AudioPlaybackCache.shared.commit(file, key: key, actualQuality: "exhigh", bytes: Int64(data.count), fileExtension: "mp3")
+        try await AudioPlaybackCache.shared.commit(file, key: key, actualQuality: "exhigh", bytes: Int64(data.count), fileExtension: "mp3")
         let provider = NeteaseDownloadProvider(api: api, library: OfflineLibraryStore(defaults: defaults))
         let metadata = NeteaseDownloadMetadata(track: track, albumArtist: "", trackNumber: 1, discNumber: 1, quality: .hiResolution)
         let transfer = DownloadTransfer(id: UUID(), metadata: try JSONEncoder().encode(metadata))

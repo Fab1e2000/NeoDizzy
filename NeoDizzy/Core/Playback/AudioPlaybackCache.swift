@@ -95,7 +95,7 @@ import Observation
                     defer { if let file { try? FileManager.default.removeItem(at: file) } }
                     guard let self else { return }
                     if self.discarded.remove(id) == nil, self.generation == generation, let file {
-                        do { try self.commit(file, key: key, actualQuality: actualQuality, bytes: size, fileExtension: ext) }
+                        do { try await self.commit(file, key: key, actualQuality: actualQuality, bytes: size, fileExtension: ext) }
                         catch { self.issue = "音频缓存保存失败，请检查可用空间。" }
                     }
                     guard self.jobs[id] != nil else { return }
@@ -124,13 +124,18 @@ import Observation
             while detached.count > 2 { let oldest = detached.removeFirst(); jobs.removeValue(forKey: oldest)?.cancel() }
         } else { jobs[id] = nil; job.cancel() }
     }
-    func commit(_ file: URL, key: Key, actualQuality: String, bytes: Int64, fileExtension: String) throws {
-        guard bytes > 0, bytes <= capacity,
-              (try file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) == bytes else { throw PlaybackError.failed }
+    /// 复制可能有几百 MB，放到后台执行；复制期间清理过缓存就丢弃这份。
+    func commit(_ file: URL, key: Key, actualQuality: String, bytes: Int64, fileExtension: String) async throws {
+        guard bytes > 0, bytes <= capacity else { throw PlaybackError.failed }
         let ext = AudioFileMatcher.extensions.contains(fileExtension.lowercased()) ? fileExtension.lowercased() : "audio"
         let filename = UUID().uuidString + "." + ext
         let target = directory.appendingPathComponent(filename)
-        try FileManager.default.copyItem(at: file, to: target)
+        let generation = generation
+        try await Task.detached(priority: .utility) {
+            guard (try file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) == bytes else { throw PlaybackError.failed }
+            try FileManager.default.copyItem(at: file, to: target)
+        }.value
+        guard self.generation == generation else { try? FileManager.default.removeItem(at: target); return }
         if let old = entries[key.name], !activeFiles.contains(directory.appendingPathComponent(old.filename)) {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(old.filename))
         }

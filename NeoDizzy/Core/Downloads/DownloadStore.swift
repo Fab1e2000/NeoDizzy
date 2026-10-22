@@ -260,10 +260,14 @@ import Observation
             update(jobID) { $0.state = .downloading }
             save()
             if source.url.isFileURL {
-                let archive = transport.archiveURL(file.id)
-                try FileManager.default.createDirectory(at: archive.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try? FileManager.default.removeItem(at: archive)
-                try FileManager.default.copyItem(at: source.url, to: archive)
+                // 「转为下载」复制缓存文件，大文件放到后台复制，避免卡住界面。
+                let archive = transport.archiveURL(file.id), sourceURL = source.url
+                try await Task.detached(priority: .utility) {
+                    try FileManager.default.createDirectory(at: archive.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try? FileManager.default.removeItem(at: archive)
+                    try FileManager.default.copyItem(at: sourceURL, to: archive)
+                }.value
+                try Task.checkCancellation()
                 updateTransfer(jobID, file.id) { $0.state = .downloaded }
             } else {
                 transport.start(url: source.url, id: file.id, headers: source.headers)

@@ -18,15 +18,15 @@ import XCTest
         #expect(!AudioPlaybackCache.mayContinue(listened: .infinity, duration: 100))
         #expect(!AudioPlaybackCache.mayContinue(listened: 99, duration: .nan))
     }
-    @Test func onlyCompleteFilesPersistAndQualityAndAccountAreIsolated() throws {
+    @Test func onlyCompleteFilesPersistAndQualityAndAccountAreIsolated() async throws {
         let root = try root(); defer { try? FileManager.default.removeItem(at: root) }
         let cache = AudioPlaybackCache(directory: root.appendingPathComponent("cache"))
         let source = root.appendingPathComponent("test.mp3")
         try Data(repeating: 1, count: 100).write(to: source)
         let key = AudioPlaybackCache.Key(trackID: "a", scope: "account-a", quality: "hires")
-        #expect(throws: (any Error).self) { try cache.commit(source, key: key, actualQuality: "exhigh", bytes: 101, fileExtension: "mp3") }
+        await #expect(throws: (any Error).self) { try await cache.commit(source, key: key, actualQuality: "exhigh", bytes: 101, fileExtension: "mp3") }
         #expect(cache.file(for: key) == nil)
-        try cache.commit(source, key: key, actualQuality: "exhigh", bytes: 100, fileExtension: "mp3")
+        try await cache.commit(source, key: key, actualQuality: "exhigh", bytes: 100, fileExtension: "mp3")
         #expect(cache.entry(for: key)?.actualQuality == "exhigh")
         #expect(cache.file(for: .init(trackID: "a", scope: "account-b", quality: "hires")) == nil)
         #expect(cache.file(for: .init(trackID: "a", scope: "account-a", quality: "lossless")) == nil)
@@ -36,15 +36,15 @@ import XCTest
         try Data([1]).write(to: file)
         #expect(restored.file(for: key) == nil)
     }
-    @Test func capacityEvictsLeastRecentlyUsedAndClearPreservesActivePlayback() throws {
+    @Test func capacityEvictsLeastRecentlyUsedAndClearPreservesActivePlayback() async throws {
         let root = try root(); defer { try? FileManager.default.removeItem(at: root) }
         let cache = AudioPlaybackCache(directory: root.appendingPathComponent("cache"), capacity: 20)
         let source = root.appendingPathComponent("source.mp3")
         try Data(repeating: 0, count: 10).write(to: source)
         func key(_ id: String) -> AudioPlaybackCache.Key { .init(trackID: id, scope: "a", quality: "high") }
-        for id in ["1", "2"] { try cache.commit(source, key: key(id), actualQuality: "high", bytes: 10, fileExtension: "mp3") }
+        for id in ["1", "2"] { try await cache.commit(source, key: key(id), actualQuality: "high", bytes: 10, fileExtension: "mp3") }
         _ = cache.file(for: key("1"))
-        try cache.commit(source, key: key("3"), actualQuality: "high", bytes: 10, fileExtension: "mp3")
+        try await cache.commit(source, key: key("3"), actualQuality: "high", bytes: 10, fileExtension: "mp3")
         #expect(cache.file(for: key("2")) == nil)
         let playing = try #require(cache.file(for: key("1")))
         cache.protect(playing); cache.clear()
