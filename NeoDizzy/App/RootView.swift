@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @State private var host: ModuleHost
@@ -7,6 +8,7 @@ struct RootView: View {
     @State private var settingsPresentation = AppSettingsPresentation()
     @State private var search = SearchPresentation()
     @State private var themeIcon = ThemeIconController()
+    @State private var libraryBackup = LibraryBackup()
     private let appearance = AppearanceSettings.shared
     let services: AppServices
     private var player: PlayerStore { services.player }
@@ -40,6 +42,7 @@ struct RootView: View {
             .environment(services.accountLibrary)
             .environment(services.playbackHistory)
             .environment(themeIcon)
+            .environment(libraryBackup)
             .environment(\.openRoute, OpenRouteAction { route in
                 settingsPresentation.isPresented = false
                 modules.dismissAccounts()
@@ -139,7 +142,20 @@ struct RootView: View {
             if phase == .background {
                 player.saveState()
             }
+            // 自动备份到期就覆盖上次导出的文件；进入后台时向系统多要一点时间写完。
+            if phase != .inactive, libraryBackup.isDue {
+                let task = UIApplication.shared.beginBackgroundTask(withName: "LibraryBackup")
+                Task {
+                    await libraryBackup.runIfDue(libraryContext)
+                    if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+                }
+            }
         }
+    }
+
+    private var libraryContext: LibraryContext {
+        LibraryContext(favorites: services.favorites, mirror: services.accountLibrary, saved: services.savedLibrary,
+                       offline: offlineLibrary, netease: services.netease, modules: tabSettings, downloads: services.downloads)
     }
 
     // Finish dismissal before pushing the destination.

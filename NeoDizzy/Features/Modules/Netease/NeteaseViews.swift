@@ -69,6 +69,7 @@ struct NeteaseCollectionView: View {
     private var model: NeteasePageModel { contentCache.page(.route(route), revision: store.revision) }
     private var needsLogin: Bool { route.requiresLogin && store.profile == nil }
     private var isSongCollection: Bool { route.isSongCollection }
+    private var isAlbum: Bool { if case .album = route { true } else { false } }
     private var contentRevision: Int { store.library.contentRevision(for: route) }
     private var artwork: URL? { model.artwork ?? model.songs.first?.album?.artworkURL }
     private var tracks: [Track] { model.songs.map(\.track) }
@@ -121,14 +122,15 @@ struct NeteaseCollectionView: View {
                             AlbumDescriptionExcerpt(text: model.detailDescription)
                                 .padding(.horizontal, 20).padding(.bottom, 20)
                         }
-                        NeteaseSongRows(songs: model.songs, sourceID: sourceID)
+                        NeteaseSongRows(songs: model.songs, sourceID: sourceID, numbered: isAlbum)
+                            .padding(.horizontal, 20)
                         if !model.songs.isEmpty {
                             Text(trackSummary)
                                 .font(.footnote).foregroundStyle(.secondary)
                                 .padding(.horizontal, 20).padding(.top, 12)
                         }
                         if model.showsInitialSkeleton {
-                            NeteaseSkeleton(layout: .songs)
+                            NeteaseSkeleton(layout: .songs).padding(.horizontal, 20)
                         } else {
                             NeteaseResultStatus(model: model, retry: { await load(append: model.more) })
                                 .padding(20)
@@ -151,7 +153,6 @@ struct NeteaseCollectionView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             if let collectionID, model.hasLoaded {
-                let isAlbum: Bool = { if case .album = route { return true }; return false }()
                 let title = model.title
                 ToolbarItem(placement: .topBarTrailing) {
                     NeteaseDownloadButton(kind: isAlbum ? "album" : "playlist", id: collectionID,
@@ -170,6 +171,12 @@ struct NeteaseCollectionView: View {
             if !needsLogin && (!model.hasLoaded || (route.respondsToLibraryChanges && model.libraryRevision != contentRevision)) { await load() }
         }
         .refreshable { if !needsLogin { await load(refresh: true) } }
+        // 歌单分页读完后记下完整曲目，资料库卡片靠它判断整张是否已缓存或已下载。
+        .onChange(of: "\(model.songs.count)/\(model.more)/\(model.loading)", initial: true) {
+            guard let collectionID, model.hasLoaded, !model.more, !model.loading else { return }
+            CollectionTrackIndex.shared.record(CollectionTrackIndex.key(provider: "netease", kind: isAlbum ? "album" : "playlist",
+                                                                       id: String(collectionID)), tracks: tracks)
+        }
     }
     private var trackSummary: String {
         let durations = tracks.compactMap(\.duration)
@@ -250,7 +257,8 @@ struct NeteaseResults: View {
 struct NeteaseSongRows: View {
     let songs: [NeteaseSong]
     var sourceID: Int? = nil
-    var compact = false
+    /// 网易云专辑用序号式，其他列表用封面式。
+    var numbered = false
     @Environment(PlayerStore.self) private var player
     @Environment(NeteaseStore.self) private var store
     @Environment(\.openRoute) private var openRoute
@@ -263,7 +271,8 @@ struct NeteaseSongRows: View {
     var body: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                AlbumTrackRow(track: song.track, displayNumber: String(index + 1), isDownloaded: song.track.remoteKey.map(downloadedKeys.contains) == true, additionalActions: actions(song), compact: compact) {
+                SongRow(track: song.track, style: numbered ? .numbered(String(index + 1)) : .artwork,
+                        isDownloaded: song.track.remoteKey.map(downloadedKeys.contains) == true, actions: actions(song)) {
                     player.play(songs.map(\.track), startAt: index, sourceID: sourceID)
                 }
             }
@@ -282,18 +291,21 @@ struct NeteaseSongRows: View {
             Button("好", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
     }
-    private func actions(_ song: NeteaseSong) -> [AlbumRowAction] {
-        var actions: [AlbumRowAction] = [
+    private func actions(_ song: NeteaseSong) -> [SongRowAction] {
+        var actions: [SongRowAction] = [
             .init(id: "similar", title: "相似歌曲", systemImage: "music.note.list") { openRoute(.netease(.similar(song.id))) }
         ]
-        let downloaded = song.track.remoteKey.map(downloadedKeys.contains) == true
-        actions.append(.init(id: "download", title: downloaded ? "已下载" : "下载", systemImage: downloaded ? "checkmark.circle" : "arrow.down.circle", disabled: downloaded) {
-            Task {
-                await downloads.enqueueNetease(kind: "single", id: song.id, title: song.name, coverURL: song.album?.artworkURL,
-                                               quality: store.playbackSettings.download)
-                showsDownloads = true
-            }
-        })
+        // 已下载由行尾图标表示，菜单里不再列出；已缓存的歌下载时直接用缓存文件。
+        if song.track.remoteKey.map(downloadedKeys.contains) != true {
+            let title = player.cachedQuality(for: song.track) != nil ? "转为下载" : "下载"
+            actions.append(.init(id: "download", title: title, systemImage: "arrow.down.circle") {
+                Task {
+                    await downloads.enqueueNetease(kind: "single", id: song.id, title: song.name, coverURL: song.album?.artworkURL,
+                                                   quality: store.playbackSettings.quality)
+                    showsDownloads = true
+                }
+            })
+        }
         for artist in song.artists where artist.id > 0 {
             actions.append(.init(id: "artist/\(artist.id)", title: "歌手：\(artist.name)", systemImage: "person") { openRoute(.netease(.artist(artist.id))) })
         }
@@ -339,8 +351,6 @@ struct NeteaseResultStatus: View {
 struct NeteaseTrackRow: View {
     let song: NeteaseSong
     let songs: [NeteaseSong]
-    var index: Int?
-    var showsArtwork = true
     var sourceID: Int?
     @Environment(PlayerStore.self) private var player
     @Environment(NeteaseStore.self) private var store
@@ -351,26 +361,25 @@ struct NeteaseTrackRow: View {
     var body: some View {
         let track = song.track
         let downloaded = library.localFile(for: track) != nil
-        Button {
+        SongRow(track: track, isDownloaded: downloaded,
+                actions: actions(downloaded: downloaded)) {
             player.play(songs.map(\.track), startAt: songs.firstIndex(of: song) ?? 0, sourceID: sourceID)
-        } label: {
-            TrackListRow(track: track, index: index, showsArtwork: showsArtwork, isDownloaded: downloaded,
-                         additionalActions: actions(downloaded: downloaded))
         }
-        .buttonStyle(.plain)
     }
 
-    private func actions(downloaded: Bool) -> [AlbumRowAction] {
-        var actions: [AlbumRowAction] = [
+    private func actions(downloaded: Bool) -> [SongRowAction] {
+        var actions: [SongRowAction] = [
             .init(id: "similar", title: "相似歌曲", systemImage: "music.note.list") { openRoute(.netease(.similar(song.id))) },
-            .init(id: "download", title: downloaded ? "已下载" : "下载", systemImage: downloaded ? "checkmark.circle" : "arrow.down.circle",
-                  disabled: downloaded) {
+        ]
+        if !downloaded {
+            actions.append(.init(id: "download", title: player.cachedQuality(for: song.track) != nil ? "转为下载" : "下载",
+                                 systemImage: "arrow.down.circle") {
                 Task {
                     await downloads.enqueueNetease(kind: "single", id: song.id, title: song.name, coverURL: song.album?.artworkURL,
-                                                   quality: store.playbackSettings.download)
+                                                   quality: store.playbackSettings.quality)
                 }
-            },
-        ]
+            })
+        }
         for artist in song.artists where artist.id > 0 {
             actions.append(.init(id: "artist/\(artist.id)", title: "歌手：\(artist.name)", systemImage: "person") {
                 openRoute(.netease(.artist(artist.id)))
@@ -396,7 +405,7 @@ struct NeteaseSearchSection: View {
             SearchGroup(title: NeteaseModule.metadata.title,
                         allResults: model.songs.isEmpty ? nil : .netease(.search(query, 1))) {
                 if store.profile == nil {
-                    SearchCardRow(isLast: false, separatorInset: 0) {
+                    SearchCardRow {
                         HStack(spacing: 4) {
                             Text("未登录 · 部分歌曲只能试听 ·").foregroundStyle(.secondary)
                             Button("登录") { store.showsLogin = true }.fontWeight(.semibold)
@@ -405,16 +414,16 @@ struct NeteaseSearchSection: View {
                     }
                 }
                 if let error = model.error, model.songs.isEmpty {
-                    SearchCardRow(isLast: true) {
+                    SearchCardRow {
                         SearchSectionFailure(title: "网易云搜索失败", message: error) { await load() }
                     }
                 } else if model.songs.isEmpty && (!model.hasLoaded || model.loading) {
-                    SearchCardRow(isLast: true) { SearchSectionMessage(text: "正在搜索…", isLoading: true) }
+                    SearchCardRow { SearchSectionMessage(text: "正在搜索…", isLoading: true) }
                 } else if model.songs.isEmpty {
-                    SearchCardRow(isLast: true) { SearchSectionMessage(text: "网易云没有和「\(query)」相关的歌曲。") }
+                    SearchCardRow { SearchSectionMessage(text: "网易云没有和「\(query)」相关的歌曲。") }
                 } else {
-                    ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                        SearchCardRow(isLast: index == songs.count - 1) { NeteaseTrackRow(song: song, songs: model.songs) }
+                    ForEach(songs) { song in
+                        NeteaseTrackRow(song: song, songs: model.songs)
                     }
                 }
             }
@@ -473,31 +482,41 @@ struct NeteaseSearchPage: View {
             }
             .pickerStyle(.segmented)
             .listRowSeparator(.hidden)
-            switch kind {
-            case 1:
-                ForEach(model.songs) { song in NeteaseTrackRow(song: song, songs: model.songs).onAppear { loadMore(after: song.id, in: model.songs.map(\.id)) } }
-            case 10:
-                ForEach(model.albums) { album in
-                    NavigationLink(value: AppRoute.netease(.album(album.id))) {
-                        SearchMediaRow(title: album.name, subtitle: album.artist?.name, artworkURL: album.artworkURL)
+            Group {
+                switch kind {
+                case 1:
+                    ForEach(model.songs) { song in
+                        NeteaseTrackRow(song: song, songs: model.songs)
+                            .songListRow()
+                            .onAppear { loadMore(after: song.id, in: model.songs.map(\.id)) }
                     }
-                    .onAppear { loadMore(after: album.id, in: model.albums.map(\.id)) }
-                }
-            case 100:
-                ForEach(model.artists) { artist in
-                    NavigationLink(value: AppRoute.netease(.artist(artist.id))) {
-                        SearchMediaRow(title: artist.name, subtitle: artist.alias?.first, artworkURL: artist.artworkURL, circular: true)
+                case 10:
+                    ForEach(model.albums) { album in
+                        NavigationLink(value: AppRoute.netease(.album(album.id))) {
+                            SearchMediaRow(title: album.name, subtitle: album.artist?.name, artworkURL: album.artworkURL, showsChevron: false)
+                        }
+                        .songListRow()
+                        .onAppear { loadMore(after: album.id, in: model.albums.map(\.id)) }
                     }
-                    .onAppear { loadMore(after: artist.id, in: model.artists.map(\.id)) }
-                }
-            default:
-                ForEach(model.playlists) { playlist in
-                    NavigationLink(value: AppRoute.netease(.playlist(playlist.id))) {
-                        SearchMediaRow(title: playlist.name, subtitle: playlist.trackCount.map { "\($0) 首" }, artworkURL: playlist.artworkURL)
+                case 100:
+                    ForEach(model.artists) { artist in
+                        NavigationLink(value: AppRoute.netease(.artist(artist.id))) {
+                            SearchMediaRow(title: artist.name, subtitle: artist.alias?.first, artworkURL: artist.artworkURL, circular: true, showsChevron: false)
+                        }
+                        .songListRow()
+                        .onAppear { loadMore(after: artist.id, in: model.artists.map(\.id)) }
                     }
-                    .onAppear { loadMore(after: playlist.id, in: model.playlists.map(\.id)) }
+                default:
+                    ForEach(model.playlists) { playlist in
+                        NavigationLink(value: AppRoute.netease(.playlist(playlist.id))) {
+                            SearchMediaRow(title: playlist.name, subtitle: playlist.trackCount.map { "\($0) 首" }, artworkURL: playlist.artworkURL, showsChevron: false)
+                        }
+                        .songListRow()
+                        .onAppear { loadMore(after: playlist.id, in: model.playlists.map(\.id)) }
+                    }
                 }
             }
+            .listRowSeparator(.hidden)
             // 状态放在结果区，避免空结果或失败时遮住上方的类型切换。
             if let error = model.error {
                 SearchSectionFailure(title: "网易云搜索失败", message: error) {
@@ -576,6 +595,7 @@ struct NeteaseArtistDetailView: View {
                         NeteaseArtistSongsPage(name: artist.name, artistID: artist.id, songs: songs)
                     }
                     NeteaseSongRows(songs: Array(songs.prefix(5)), sourceID: artist.id)
+                        .padding(.horizontal, 20)
                 }
             }
             if !albums.isEmpty {
@@ -615,12 +635,15 @@ struct NeteaseArtistSongsPage: View {
     let songs: [NeteaseSong]
 
     var body: some View {
-        List {
-            ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                NeteaseTrackRow(song: song, songs: songs, index: index, showsArtwork: false, sourceID: artistID)
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(songs) { song in
+                    NeteaseTrackRow(song: song, songs: songs, sourceID: artistID)
+                }
             }
+            .padding(.horizontal, 20).padding(.vertical, 8)
         }
-        .listStyle(.plain)
+        .dizzyPageBackground()
         .navigationTitle("\(name) · 热门歌曲")
         .navigationBarTitleDisplayMode(.inline)
     }

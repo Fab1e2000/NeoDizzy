@@ -331,6 +331,7 @@ private struct DiscCommunityList: View {
 
     var body: some View {
         List {
+            Group {
             SwiftUI.Section {
                 DiscLikeSummary(model: model)
                     .padding(.vertical, 4)
@@ -357,6 +358,8 @@ private struct DiscCommunityList: View {
             case .comments: comments
             case .reviews: reviews
             }
+            }
+            .listRowSeparator(.hidden)
         }
         .scrollContentBackground(.hidden)
         .dizzyPageBackground()
@@ -503,7 +506,6 @@ struct ReviewRow: View {
                     if let date = review.date { Text(date).font(.caption).foregroundStyle(DizzyPalette.mutedText) }
                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(.rect)
             }.buttonStyle(.plain)
-            Divider()
         }
     }
 }

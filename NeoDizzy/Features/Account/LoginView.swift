@@ -36,8 +36,6 @@ struct LoginView: View {
                     .submitLabel(.go)
                     .focused($focusedField, equals: .password)
                     .onSubmit(submit)
-            } footer: {
-                Text("密码只用于这一次登录，不会保存。登录后的会话保存在本机钥匙串中，只发送给 DizzyLab。")
             }
             .listRowBackground(DizzyPalette.surface)
 

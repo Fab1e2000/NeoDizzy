@@ -14,6 +14,8 @@ final class PlaybackReportingSession {
 
     init(now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) { self.now = now }
 
+    var listenedSeconds: TimeInterval { elapsed + (playingSince.map { max(0, now() - $0) } ?? 0) }
+
     func begin(_ track: Track, sourceID: Int?) {
         finish()
         self.track = track

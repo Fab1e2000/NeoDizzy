@@ -42,10 +42,12 @@ final class AppServices {
                                            source: LibrarySource(provider: "netease", kind: "playlist", id: id))
         }
         dizzyLab.downloads.register(neteaseDownloads)
+        let qualitySettings = netease.playbackSettings
+        let apiQuality = { qualitySettings.selected.rawValue }
         let resolver = StreamResolver(localFile: { [weak library] track in
-            library?.localFile(for: track)
+            library?.localFile(for: track, quality: track.remoteSource?.providerID == "netease" ? apiQuality() : nil)
         }, localAccess: { [weak library] track in
-            library?.access(for: track)
+            library?.access(for: track, quality: track.remoteSource?.providerID == "netease" ? apiQuality() : nil)
         })
         let likesStore = netease
         let accountMirror = accountLibrary
@@ -67,7 +69,7 @@ final class AppServices {
                 try await likesStore.library.setSongLiked(id, liked)
             }))
         let api = netease.api
-        resolver.register("netease", stream: { try await api.stream($0) }, lyrics: { try await api.lyrics($0) })
+        resolver.register("netease", stream: { try await api.stream($0) }, lyrics: { try await api.lyrics($0) }, cacheKey: { api.cacheKey(for: $0.id) })
         player = PlayerStore(resolver: resolver)
         let reporter = netease.reporter
         let history = playbackHistory

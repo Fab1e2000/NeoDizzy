@@ -4,6 +4,8 @@ nonisolated struct RemotePlaybackSource {
     let url: URL
     let expiresAt: Date
     let isPreview: Bool
+    var actualQuality: String? = nil
+    var fileExtension: String? = nil
 }
 
 /// 本地文件、DizzyLab 专辑地址和注册来源的逐曲播放地址分别解析与缓存。
@@ -11,13 +13,26 @@ final class StreamResolver {
     private var remoteProviders: [String: (String) async throws -> RemotePlaybackSource] = [:]
     private var lyricProviders: [String: (String) async throws -> LocalLyrics] = [:]
     private var remoteCache: [String: RemotePlaybackSource] = [:]
+    private var cacheKeys: [String: (Track) -> AudioPlaybackCache.Key] = [:]
     private var revisions: [String: Int] = [:]
 
     func register(_ provider: String, stream: @escaping (String) async throws -> RemotePlaybackSource,
-                  lyrics: @escaping (String) async throws -> LocalLyrics) {
+                  lyrics: @escaping (String) async throws -> LocalLyrics,
+                  cacheKey: ((Track) -> AudioPlaybackCache.Key)? = nil) {
+        cacheKeys[provider] = cacheKey
         remoteProviders[provider] = stream
         lyricProviders[provider] = lyrics
     }
+    func audioCacheKey(for track: Track) -> AudioPlaybackCache.Key? {
+        if let source = track.remoteSource { return cacheKeys[source.providerID]?(track) }
+        guard track.localSource == nil else { return nil }
+        return .init(trackID: track.id,
+                     scope: AudioPlaybackCache.digest(DizzyHTTPClient.shared.credentials.cookieHeader() ?? ""), quality: "original")
+    }
+    func actualQuality(for track: Track) -> String? {
+        track.remoteSource == nil ? "original" : remoteCache[track.id]?.actualQuality
+    }
+
     func lyrics(for track: Track) async throws -> LocalLyrics? {
         guard let source = track.remoteSource, let fetch = lyricProviders[source.providerID] else { return nil }
         return try await fetch(source.itemID)
@@ -67,10 +82,13 @@ final class StreamResolver {
     func stream(for track: Track, preferLocal: Bool = true, retainAccess: Bool = true) async throws -> URL {
         // 每次换曲目都重新查询：刚下载的曲目立即可播，移走的文件可回退到串流。
         // 本地地址不放入签名地址缓存，也不受登录/退出登录的缓存清理影响。
-        if (preferLocal || track.localSource != nil || track.remoteSource != nil), let url = localFile(track), url.isFileURL,
+        if (preferLocal || track.localSource != nil), let url = localFile(track), url.isFileURL,
            FileManager.default.isReadableFile(atPath: url.path) {
             if retainAccess { retainedAccess = localAccess(track) }
             return url
+        }
+        if preferLocal, let key = audioCacheKey(for: track), let file = AudioPlaybackCache.shared.file(for: key) {
+            return file
         }
         if track.localSource != nil { throw PlaybackError.localUnavailable }
         if retainAccess { retainedAccess = nil }
@@ -120,6 +138,13 @@ final class StreamResolver {
     func clearDizzyLabCache() { dizzyRevision += 1; cache.removeAll() }
 
     func isFresh(_ url: URL, for track: Track) -> Bool {
+        if url.isFileURL {
+            guard FileManager.default.isReadableFile(atPath: url.path) else { return false }
+            if localFile(track) == url { return true }
+            if let key = audioCacheKey(for: track), AudioPlaybackCache.shared.file(for: key) == url { return true }
+            // A remote provider may return a file URL in tests; it still obeys source invalidation.
+            if url.deletingLastPathComponent().standardizedFileURL.path == AudioPlaybackCache.shared.directory.standardizedFileURL.path { return false }
+        }
         if track.remoteSource != nil {
             guard let source = remoteCache[track.id], source.url == url else { return false }
             return source.expiresAt.timeIntervalSince(now()) > Self.refreshMargin

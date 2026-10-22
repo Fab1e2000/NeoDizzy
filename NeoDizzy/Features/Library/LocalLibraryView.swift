@@ -79,11 +79,15 @@ struct LocalLibraryView: View {
                                                coverURL: album.coverURL, addedAt: entry.playedAt, online: albums)
             case .neteaseAlbum:
                 guard let id = Int(entry.itemID) else { return nil }
-                return LibraryShelfItem(id: entry.id, title: entry.title, subtitle: entry.subtitle, coverURL: entry.coverURL,
-                                        origin: .netease, route: .netease(.album(id)), addedAt: entry.playedAt)
+                var item = LibraryShelfItem(id: entry.id, title: entry.title, subtitle: entry.subtitle, coverURL: entry.coverURL,
+                                            origin: .netease, route: .netease(.album(id)), addedAt: entry.playedAt)
+                item.trackKey = CollectionTrackIndex.key(provider: "netease", kind: "album", id: entry.itemID)
+                return item
             case .dizzylabAlbum:
-                return LibraryShelfItem(id: entry.id, title: entry.title, subtitle: entry.subtitle, coverURL: entry.coverURL,
-                                        origin: .dizzylab, route: .disc(id: entry.itemID), addedAt: entry.playedAt)
+                var item = LibraryShelfItem(id: entry.id, title: entry.title, subtitle: entry.subtitle, coverURL: entry.coverURL,
+                                            origin: .dizzylab, route: .disc(id: entry.itemID), addedAt: entry.playedAt)
+                item.trackKey = CollectionTrackIndex.key(provider: "dizzylab", kind: "album", id: entry.itemID)
+                return item
             }
         }
     }
@@ -231,8 +235,10 @@ struct LibraryShelfItem: Identifiable {
     var removal: LibraryRemoval?
     /// 在线条目的「平台/ID」，用来和下载来的本地专辑对上。
     var sourceKey: String?
-    /// 下载来的专辑在本地库里的 ID；有值时卡片显示「已下载」，长按可删除下载。
+    /// 下载来的专辑在本地库里的 ID；有值时长按可删除下载。
     var downloadedAlbumID: String?
+    /// 在 `CollectionTrackIndex` 里查完整曲目列表用的键。
+    var trackKey: String?
 
     /// 下载来的专辑在「本地」筛选下也显示。
     func isShown(in filter: LibraryOriginFilter) -> Bool {
@@ -251,6 +257,7 @@ struct LibraryShelfItem: Identifiable {
         self.init(id: item.id, title: item.title, subtitle: item.subtitle, coverURL: item.coverURL,
                   origin: .dizzylab, route: .disc(id: item.itemID), addedAt: item.addedAt, removal: .saved(item.id))
         sourceKey = "dizzylab/\(item.itemID)"
+        trackKey = CollectionTrackIndex.key(provider: "dizzylab", kind: "album", id: item.itemID)
     }
 
     /// 网易云账号里的歌单、收藏专辑，DizzyLab 已购专辑。
@@ -272,6 +279,7 @@ struct LibraryShelfItem: Identifiable {
         self.init(id: item.id, title: item.title, subtitle: item.subtitle, coverURL: item.coverURL,
                   origin: origin, route: route, addedAt: item.firstSeen, removal: removal)
         sourceKey = "\(item.providerID)/\(item.itemID)"
+        trackKey = CollectionTrackIndex.key(provider: item.providerID, kind: item.kind.rawValue, id: item.itemID)
     }
 }
 
@@ -323,6 +331,7 @@ struct LibraryContents {
         var item = LibraryShelfItem(id: id, title: title, subtitle: subtitle, coverURL: coverURL, origin: origin,
                                     route: .localAlbum(id: id), addedAt: addedAt, removal: online[key]?.removal)
         item.sourceKey = key
+        item.trackKey = CollectionTrackIndex.key(provider: source.provider, kind: "album", id: source.id)
         item.downloadedAlbumID = id
         return item
     }
@@ -425,12 +434,12 @@ struct LibraryOriginBadge: View {
 /// 封面右下角的标记：来源图标，下载过的再加「已下载」图标，放在同一个胶囊里。
 struct LibraryOriginMark: View {
     var origin: LibraryOrigin?
-    var isDownloaded = false
+    var state: CollectionOfflineState?
 
     var body: some View {
         HStack(spacing: 5) {
             if let origin { Image(systemName: origin.systemImage) }
-            if isDownloaded { Image(systemName: "arrow.down.circle") }
+            if let state { Image(systemName: state == .downloaded ? "arrow.down.circle.fill" : "arrow.down.circle") }
         }
         .font(.system(size: 12, weight: .semibold))
         .foregroundStyle(.primary)
@@ -444,17 +453,37 @@ struct LibraryOriginMark: View {
     }
 
     private var accessibilityText: String {
-        [origin.map { String(localized: "来源：\($0.label)") }, isDownloaded ? String(localized: "已下载") : nil]
-            .compactMap(\.self).joined(separator: "，")
+        let status = state.map { $0 == .downloaded ? String(localized: "已下载") : String(localized: "已缓存") }
+        return [origin.map { String(localized: "来源：\($0.label)") }, status].compactMap(\.self).joined(separator: "，")
     }
 }
 
 extension View {
-    /// 在封面右下角叠来源和「已下载」标记；两样都没有时不显示。
-    func libraryOriginMark(_ origin: LibraryOrigin?, isDownloaded: Bool = false) -> some View {
-        overlay(alignment: .bottomTrailing) {
-            if origin != nil || isDownloaded { LibraryOriginMark(origin: origin, isDownloaded: isDownloaded) }
-        }
+    /// 在封面右下角叠来源和离线状态：全部下载是实心箭头，全部下载或缓存是空心箭头。
+    /// 曲目列表未知时（在线专辑、歌单没打开过）只显示来源；`downloaded` 用于整张下载的专辑。
+    func libraryOriginMark(_ origin: LibraryOrigin?, tracks: [Track]? = nil, downloaded: Bool = false) -> some View {
+        overlay(alignment: .bottomTrailing) { CollectionOfflineMark(origin: origin, tracks: tracks, downloaded: downloaded) }
+    }
+
+    func libraryOriginMark(_ origin: LibraryOrigin?, item: LibraryShelfItem) -> some View {
+        libraryOriginMark(origin, tracks: item.trackKey.flatMap(CollectionTrackIndex.shared.tracks(for:)),
+                          downloaded: item.downloadedAlbumID != nil && item.origin == .dizzylab)
+    }
+}
+
+private struct CollectionOfflineMark: View {
+    let origin: LibraryOrigin?
+    let tracks: [Track]?
+    let downloaded: Bool
+    @Environment(PlayerStore.self) private var player
+    @Environment(OfflineLibraryStore.self) private var library
+
+    var body: some View {
+        // DizzyLab 只能整张下载，没有曲目列表时整张已下载即可判断。
+        let state = tracks.flatMap { CollectionOfflineState.resolve($0, isDownloaded: library.hasLocalFile(for:),
+                                                                    isCached: { player.cachedQuality(for: $0) != nil }) }
+            ?? (downloaded ? .downloaded : nil)
+        if origin != nil || state != nil { LibraryOriginMark(origin: origin, state: state) }
     }
 }
 
@@ -470,7 +499,7 @@ struct LibraryShelfCard: View {
         let link = NavigationLink(value: item.route) {
             VStack(alignment: .leading, spacing: 6) {
                 ArtworkImage(url: item.coverURL)
-                    .libraryOriginMark(showsOrigin ? item.origin : nil, isDownloaded: item.downloadedAlbumID != nil)
+                    .libraryOriginMark(showsOrigin ? item.origin : nil, item: item)
                 Text(item.title).font(.subheadline.weight(.semibold)).foregroundStyle(DizzyPalette.text).lineLimit(1)
                 Text(item.subtitle).font(.caption).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
             }
@@ -548,29 +577,22 @@ struct LibrarySearchSection: View {
         let collections = Array(result.collections.prefix(2))
         let songs = Array(result.songs.prefix(3))
         if result.collections.isEmpty && result.songs.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                SearchSectionHeader(title: String(localized: "资料库"))
-                SearchSectionMessage(text: String(localized: "资料库里没有和「\(query)」相关的内容。"))
+            SearchGroup(title: String(localized: "资料库")) {
+                SearchCardRow { SearchSectionMessage(text: String(localized: "资料库里没有和「\(query)」相关的内容。")) }
             }
-            .padding(.horizontal, 4)
         } else {
             SearchGroup(title: String(localized: "资料库"),
                         allResults: result.collections.count > collections.count || result.songs.count > songs.count
                             ? .librarySearch(query) : nil) {
-                ForEach(Array(collections.enumerated()), id: \.element.id) { index, item in
-                    SearchCardRow(isLast: songs.isEmpty && index == collections.count - 1, separatorInset: 66) {
-                        NavigationLink(value: item.route) {
-                            SearchMediaRow(title: item.title, subtitle: "\(item.origin.label) · \(item.subtitle)", artworkURL: item.coverURL)
-                        }
-                        .buttonStyle(.plain)
+                ForEach(collections) { item in
+                    NavigationLink(value: item.route) {
+                        SearchMediaRow(title: item.title, subtitle: "\(item.origin.label) · \(item.subtitle)", artworkURL: item.coverURL)
                     }
+                    .buttonStyle(.plain)
                 }
                 ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                    SearchCardRow(isLast: index == songs.count - 1) {
-                        Button { player.play(result.songs.map(\.track), startAt: index) } label: {
-                            TrackListRow(track: song.track, showsArtwork: true, isDownloaded: song.origin == .local)
-                        }
-                        .buttonStyle(.plain)
+                    SongRow(track: song.track, isDownloaded: song.origin == .local) {
+                        player.play(result.songs.map(\.track), startAt: index)
                     }
                 }
             }
@@ -595,20 +617,26 @@ struct LibrarySearchPage: View {
                 Section("专辑与歌单") {
                     ForEach(result.collections) { item in
                         NavigationLink(value: item.route) {
-                            SearchMediaRow(title: item.title, subtitle: "\(item.origin.label) · \(item.subtitle)", artworkURL: item.coverURL)
+                            SearchMediaRow(title: item.title, subtitle: "\(item.origin.label) · \(item.subtitle)", artworkURL: item.coverURL,
+                                           showsChevron: false)
                         }
+                        .songListRow()
                     }
                 }
+                .listRowSeparator(.hidden)
+                .listSectionSeparator(.hidden)
             }
             if !songs.isEmpty {
                 Section("歌曲") {
                     ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                        Button { player.play(songs.map(\.track), startAt: index) } label: {
-                            TrackListRow(track: song.track, showsArtwork: true, isDownloaded: song.origin == .local)
+                        SongRow(track: song.track, isDownloaded: song.origin == .local) {
+                            player.play(songs.map(\.track), startAt: index)
                         }
-                        .buttonStyle(.plain)
+                        .songListRow()
                     }
                 }
+                .listRowSeparator(.hidden)
+                .listSectionSeparator(.hidden)
             }
         }
         .listStyle(.plain)
@@ -620,47 +648,21 @@ struct LibrarySearchPage: View {
     }
 }
 
-/// 一首资料库歌曲：封面、标题、来源 · 歌手 · 专辑；在线歌曲长按可从资料库移除。
+/// 一首资料库歌曲：封面式歌曲行，加来源标记；在线歌曲的菜单里可从资料库移除。
 struct LibrarySongRow: View {
-    @State private var songActions = SongActionPresentation()
     let song: LibrarySong
     var showsOrigin = true
     let play: () -> Void
-    @Environment(PlayerStore.self) private var player
     @Environment(SavedLibraryStore.self) private var saved
-    @Environment(AccountLibraryMirror.self) private var mirror
-    @Environment(FavoritesStore.self) private var favorites
 
     var body: some View {
-        let track = song.track
-        let row = Button(action: play) {
-            HStack(spacing: 12) {
-                ArtworkImage(url: track.coverURL, cornerRadius: 6).frame(width: 44, height: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(track.title)
-                        .foregroundStyle(player.currentTrack?.id == track.id ? DizzyPalette.accent : DizzyPalette.text)
-                        .lineLimit(1)
-                    HStack(spacing: 6) {
-                        if showsOrigin { LibraryOriginBadge(origin: song.origin) }
-                        Text([track.artists, track.albumTitle].filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.subheadline).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(minHeight: 52)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(track.title)，\(track.artists)")
+        SongRow(track: song.track, origin: showsOrigin ? song.origin : nil,
+                actions: removal, play: play)
+    }
 
-        row.contextMenu {
-            SongLibraryActions(track: track, presentation: songActions)
-            if case .saved(let id) = song.removal {
-                Button("从资料库移除", systemImage: "rectangle.stack.badge.minus", role: .destructive) { saved.remove(id: id) }
-            }
-        }
-        .modifier(SongActionPresentationModifier(track: track, presentation: songActions))
+    private var removal: [SongRowAction] {
+        guard case .saved(let id) = song.removal else { return [] }
+        return [.init(id: "remove", title: "从资料库移除", systemImage: "rectangle.stack.badge.minus", role: .destructive) { saved.remove(id: id) }]
     }
 }
 
@@ -684,7 +686,7 @@ struct LibrarySongsPage: View {
         let songs = artist.map { name in all.filter { LibraryContents.artistNames($0.track).contains(name) } } ?? all
         let tracks = songs.map(\.track)
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 4) {
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if songs.isEmpty {
                     ContentUnavailableView("没有歌曲", systemImage: "music.note",
                                            description: Text("换个来源看看，或在歌曲菜单里选「喜欢」。"))
@@ -695,7 +697,9 @@ struct LibrarySongsPage: View {
                     }
                     .padding(.bottom, 12)
                     ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                        LibrarySongRow(song: song, showsOrigin: filter == .all) { player.play(tracks, startAt: index) }
+                        LibrarySongRow(song: song, showsOrigin: filter == .all) {
+                            player.play(tracks, startAt: index)
+                        }
                     }
                 }
             }
@@ -737,7 +741,6 @@ struct LibraryArtistsPage: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    Divider().padding(.leading, 52)
                 }
             }
             .padding(.horizontal, 20).padding(.vertical, 8)
@@ -836,7 +839,7 @@ struct LocalAlbumsPage: View {
             Button("删除", role: .destructive) { delete(albums) }
             Button("取消", role: .cancel) { }
         } message: { albums in
-            Text("将删除 \(albums.count) 张专辑中的 \(albums.reduce(0) { $0 + $1.count }) 首本地音频文件，此操作无法撤销。")
+            Text("\(albums.count) 张专辑，\(albums.reduce(0) { $0 + $1.count }) 首")
         }
         .alert("删除失败", item: $deletionFailure) { _ in
             Button("好", role: .cancel) { }
@@ -992,7 +995,7 @@ private struct LocalLibraryAlbumCard: View {
                         RoundedRectangle(cornerRadius: 10).strokeBorder(DizzyPalette.accent, lineWidth: 3)
                     }
                 }
-                .libraryOriginMark(showsOrigin ? shelf.origin : nil, isDownloaded: isDownloaded)
+                .libraryOriginMark(showsOrigin ? shelf.origin : nil, item: shelf)
                 .overlay(alignment: .topTrailing) {
                     if selection.isSelecting {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -1045,14 +1048,13 @@ struct LocalAlbumDetailView: View {
                         }
                         let entries = album.entries.filter { $0.discNumber == disc }
                         ForEach(entries, id: \.track.id) { entry in
-                            AlbumTrackRow(track: entry.track, editTags: {
+                            SongRow(track: entry.track, style: .numbered(entry.track.number), editTags: {
                                 editing = AudioTagEditTarget(track: entry.track, url: entry.fileURL)
                             }) {
                                 if let index = album.tracks.firstIndex(where: { $0.id == entry.track.id }) {
                                     player.play(album.tracks, startAt: index)
                                 }
                             }
-                            .padding(.horizontal, -20)
                         }
                     }
                 }

@@ -6,8 +6,12 @@
     {
       "layers" : [
         {
-          "image-name" : "Mark.svg",
-          "name" : "石墨灰 D"
+          "image-name" : "RingLeft.svg",
+          "name" : "石墨灰左环"
+        },
+        {
+          "image-name" : "RingRight.svg",
+          "name" : "石墨灰右环"
         }
       ]
     }

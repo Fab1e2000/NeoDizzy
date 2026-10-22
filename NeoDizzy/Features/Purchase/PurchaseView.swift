@@ -89,8 +89,6 @@ struct PurchaseView: View {
                     purchases.forget()
                     Task { await model.load(discID: summary.id, account: account) }
                 }
-            } message: {
-                Text("这不会取消网站订单或退款。如果已经付款，请先查看全部订单，避免重复支付。")
             }
         }
         .tint(DizzyPalette.accent)
@@ -189,8 +187,6 @@ struct PurchaseView: View {
             .controlSize(.large)
             .disabled(model.isPreparing || validationMessage(offer) != nil)
             .accessibilityIdentifier("purchase.checkout")
-            Text("将打开 DizzyLab 收银台，使用支付宝完成付款。返回后会自动核验结果。")
-                .font(.caption).foregroundStyle(DizzyPalette.mutedText)
         }
         .disabled(model.isPreparing)
     }
@@ -218,11 +214,11 @@ struct PurchaseView: View {
             Text("\(pending.title) · ¥\(pending.attempt.amount.text)")
                 .font(.subheadline)
             if purchases.state == .confirmed {
-                Text(pending.attempt.kind == .boost ? "感谢你对创作者的追加支持。" : "专辑已加入「已购买」，可以收听完整版和下载。")
-                    .foregroundStyle(DizzyPalette.mutedText)
+                if pending.attempt.kind == .boost {
+                    Text("感谢你对创作者的追加支持。")
+                        .foregroundStyle(DizzyPalette.mutedText)
+                }
             } else {
-                Text("如果已完成支付，到账可能稍有延迟。尚未确认前，请勿重复付款；稍后也可从「已购买」继续核验。")
-                    .font(.subheadline).foregroundStyle(DizzyPalette.mutedText)
                 if let failure = purchases.failure {
                     Text(failure).font(.footnote).foregroundStyle(DizzyPalette.accent)
                 }

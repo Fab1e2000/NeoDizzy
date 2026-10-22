@@ -16,8 +16,6 @@ struct AppearanceSettingsView: View {
                 .labelsHidden()
             } header: {
                 Text("外观")
-            } footer: {
-                Text("播放页始终使用深色。")
             }
             .listRowBackground(DizzyPalette.surface)
 
@@ -45,8 +43,6 @@ struct AppearanceSettingsView: View {
                 }
             } header: {
                 Text("主题色 · \(settings.theme.name)")
-            } footer: {
-                Text("桌面图标会换成同色的版本，并跟随主屏幕的浅色、深色外观切换。")
             }
             .listRowBackground(DizzyPalette.surface)
         }

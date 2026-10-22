@@ -259,7 +259,19 @@ import Observation
             updateTransfer(jobID, file.id) { $0.metadata = source.metadata; $0.state = .downloading }
             update(jobID) { $0.state = .downloading }
             save()
-            transport.start(url: source.url, id: file.id, headers: source.headers)
+            if source.url.isFileURL {
+                // 「转为下载」复制缓存文件，大文件放到后台复制，避免卡住界面。
+                let archive = transport.archiveURL(file.id), sourceURL = source.url
+                try await Task.detached(priority: .utility) {
+                    try FileManager.default.createDirectory(at: archive.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try? FileManager.default.removeItem(at: archive)
+                    try FileManager.default.copyItem(at: sourceURL, to: archive)
+                }.value
+                try Task.checkCancellation()
+                updateTransfer(jobID, file.id) { $0.state = .downloaded }
+            } else {
+                transport.start(url: source.url, id: file.id, headers: source.headers)
+            }
         } catch is CancellationError { }
         catch {
             updateTransfer(jobID, file.id) { $0.state = .failed; $0.failure = DownloadTransport.message(for: error) }

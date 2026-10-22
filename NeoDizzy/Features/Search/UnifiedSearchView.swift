@@ -18,7 +18,7 @@ struct UnifiedSearchView: View {
                     recentSearches
                     ContinueListening()
                 } else {
-                    SearchResultsList(query: submitted, modules: tabs.visibleModules).id(submitted)
+                    SearchResultsList(query: submitted, modules: tabs.visibleSearchModules).id(submitted)
                 }
             }
             .padding(.horizontal, 20)
@@ -77,7 +77,7 @@ struct UnifiedSearchView: View {
     }
 }
 
-/// 一次搜索的结果：各来源的分组，资料库在最前。
+/// 一次搜索的结果：按设置中的板块顺序显示各来源的分组。
 private struct SearchResultsList: View {
     let query: String
     let modules: [ModuleID]
@@ -101,13 +101,11 @@ private struct ContinueListening: View {
                 .padding(.top, 40)
         } else {
             SearchGroup(title: String(localized: "接着听")) {
-                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    SearchCardRow(isLast: index == entries.count - 1, separatorInset: 66) {
-                        NavigationLink(value: route(entry)) {
-                            SearchMediaRow(title: entry.title, subtitle: "\(source(entry)) · \(entry.subtitle)", artworkURL: entry.coverURL)
-                        }
-                        .buttonStyle(.plain)
+                ForEach(entries) { entry in
+                    NavigationLink(value: route(entry)) {
+                        SearchMediaRow(title: entry.title, subtitle: "\(source(entry)) · \(entry.subtitle)", artworkURL: entry.coverURL)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }

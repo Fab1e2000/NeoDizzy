@@ -324,6 +324,13 @@ final class OfflineLibraryStore {
         return keys
     }
 
+    /// 只查索引、不碰磁盘，供列表角标批量判断；播放前仍用 `localFile(for:)` 确认文件可读。
+    func hasLocalFile(for track: Track) -> Bool {
+        _ = contentRevision
+        if track.localSource != nil { return true }
+        return track.remoteKey.map { sourceFiles[$0] != nil } ?? false
+    }
+
     private func rebuildSourceIndex() { sourceFiles = makeSourceIndex(collections) }
 
     private func rebuildAlbumSources() {
@@ -354,7 +361,10 @@ final class OfflineLibraryStore {
         return index
     }
 
-    func access(for track: Track) -> OfflineFolderAccess? {
+    func access(for track: Track, quality: String? = nil) -> OfflineFolderAccess? {
+        if track.localSource == nil, let quality, let file = localFile(for: track, quality: quality) {
+            return allFolders.first { contains(file, in: $0) }
+        }
         let url: URL?
         if track.localSource != nil { url = localEntry(for: track)?.fileURL }
         else { url = track.remoteKey.flatMap { sourceFiles[$0]?.directoryURL } }
@@ -362,7 +372,14 @@ final class OfflineLibraryStore {
         return allFolders.first { contains(url, in: $0) }
     }
 
-    func localFile(for track: Track) -> URL? {
+    func localFile(for track: Track, quality: String? = nil) -> URL? {
+        if track.localSource == nil, let quality {
+            for record in collections where record.manifest.source.provider == track.remoteSource?.providerID {
+                if record.manifest.entries.contains(where: { $0.itemID == track.remoteSource?.itemID && ($0.requestedQuality ?? $0.quality) == quality }),
+                   let file = record.localFile(for: track), FileManager.default.isReadableFile(atPath: file.path) { return file }
+            }
+            return nil
+        }
         guard let access = access(for: track) else { return nil }
         let url: URL?
         if track.localSource != nil { url = localEntry(for: track)?.fileURL }

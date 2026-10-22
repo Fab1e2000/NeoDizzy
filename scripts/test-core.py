@@ -36,6 +36,7 @@ def main():
         files.extend(ROOT / "NeoDizzy/Core" / name for name in (
             "BrowsingHistory/BrowsingHistoryStore.swift", "DebugLog.swift", "UI/PagedList.swift", "Account/DizzyAuth.swift", "Playback/PlaybackQueue.swift",
             "Playback/PlaybackPersistence.swift", "Playback/StreamResolver.swift", "Account/AccountStore.swift", "Account/KeychainStore.swift",
+            "Playback/AudioPlaybackCache.swift", "Playback/ProgressiveAudioLoader.swift",
         ))
         # DownloadStore restores provider-specific requests; compile the real providers too.
         netease = ROOT / "NeoDizzy/Core/Modules/Netease"

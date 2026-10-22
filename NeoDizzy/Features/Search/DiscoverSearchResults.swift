@@ -97,39 +97,30 @@ struct DizzyLabSearchSection: View {
         let discs = Array((model.discs?.items ?? []).prefix(3))
         Group {
             if let list = model.discs, let failure = list.failure, list.items.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    SearchSectionHeader(title: DizzyLabModule.metadata.title)
-                    SearchSectionFailure(title: "DizzyLab 搜索失败", message: failure) { await list.reload() }
+                SearchGroup(title: DizzyLabModule.metadata.title) {
+                    SearchCardRow { SearchSectionFailure(title: "DizzyLab 搜索失败", message: failure) { await list.reload() } }
                 }
             } else if let list = model.discs, list.items.isEmpty, list.isLoading || list.loadedPages == 0 {
-                VStack(alignment: .leading, spacing: 4) {
-                    SearchSectionHeader(title: DizzyLabModule.metadata.title)
-                    SearchSectionMessage(text: "正在搜索…", isLoading: true)
+                SearchGroup(title: DizzyLabModule.metadata.title) {
+                    SearchCardRow { SearchSectionMessage(text: "正在搜索…", isLoading: true) }
                 }
-                .padding(.horizontal, 4)
             } else if labels.isEmpty && discs.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    SearchSectionHeader(title: DizzyLabModule.metadata.title)
-                    SearchSectionMessage(text: "DizzyLab 没有和「\(query)」相关的作品。")
+                SearchGroup(title: DizzyLabModule.metadata.title) {
+                    SearchCardRow { SearchSectionMessage(text: "DizzyLab 没有和「\(query)」相关的作品。") }
                 }
-                .padding(.horizontal, 4)
             } else {
                 SearchGroup(title: DizzyLabModule.metadata.title, allResults: .dizzyLabSearch(query)) {
-                    ForEach(Array(labels.enumerated()), id: \.element.id) { index, label in
-                        SearchCardRow(isLast: discs.isEmpty && index == labels.count - 1, separatorInset: 66) {
-                            NavigationLink(value: AppRoute.label(name: label.name)) {
-                                SearchMediaRow(title: label.name, subtitle: "社团", artworkURL: label.coverURL, circular: true)
-                            }
-                            .buttonStyle(.plain)
+                    ForEach(labels) { label in
+                        NavigationLink(value: AppRoute.label(name: label.name)) {
+                            SearchMediaRow(title: label.name, subtitle: "社团", artworkURL: label.coverURL, circular: true)
                         }
+                        .buttonStyle(.plain)
                     }
-                    ForEach(Array(discs.enumerated()), id: \.element.id) { index, result in
-                        SearchCardRow(isLast: index == discs.count - 1, separatorInset: 66) {
-                            NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
-                                SearchMediaRow(title: result.disc.title, subtitle: result.disc.labelName, artworkURL: result.disc.coverURL)
-                            }
-                            .buttonStyle(.plain)
+                    ForEach(discs) { result in
+                        NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
+                            SearchMediaRow(title: result.disc.title, subtitle: result.disc.labelName, artworkURL: result.disc.coverURL)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -154,32 +145,42 @@ struct DizzyLabSearchPage: View {
                 Section("社团") {
                     ForEach(model.labels) { label in
                         NavigationLink(value: AppRoute.label(name: label.name)) {
-                            SearchMediaRow(title: label.name, subtitle: label.description, artworkURL: label.coverURL, circular: true)
+                            SearchMediaRow(title: label.name, subtitle: label.description, artworkURL: label.coverURL, circular: true,
+                                           showsChevron: false)
                         }
+                        .songListRow()
                     }
                 }
+                .listRowSeparator(.hidden)
+                .listSectionSeparator(.hidden)
             }
             if !model.users.isEmpty {
                 Section("用户") {
                     ForEach(model.users) { user in
                         NavigationLink(value: AppRoute.user(id: user.id)) {
-                            SearchMediaRow(title: user.name, subtitle: nil, artworkURL: user.avatarURL, circular: true)
+                            SearchMediaRow(title: user.name, subtitle: nil, artworkURL: user.avatarURL, circular: true, showsChevron: false)
                         }
+                        .songListRow()
                     }
                 }
+                .listRowSeparator(.hidden)
+                .listSectionSeparator(.hidden)
             }
             if let discs, !discs.items.isEmpty {
                 Section("作品") {
                     ForEach(discs.items) { result in
                         NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
                             SearchMediaRow(title: result.disc.title, subtitle: result.disc.labelName ?? result.excerpt,
-                                           artworkURL: result.disc.coverURL)
+                                           artworkURL: result.disc.coverURL, showsChevron: false)
                         }
+                        .songListRow()
                         .onAppear {
                             if result.id == discs.items.last?.id, discs.hasMore, !discs.isLoading { Task { await discs.loadMore() } }
                         }
                     }
                 }
+                .listRowSeparator(.hidden)
+                .listSectionSeparator(.hidden)
             }
             if let discs, let failure = discs.failure {
                 SearchSectionFailure(title: "DizzyLab 搜索失败", message: failure) {

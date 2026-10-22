@@ -1,6 +1,5 @@
 // Quality levels and fallback order adapted from MeloX (GPL-3.0).
 import Foundation
-import Network
 import Observation
 
 nonisolated enum NeteaseQuality: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -32,37 +31,20 @@ nonisolated enum NeteaseQuality: String, CaseIterable, Identifiable, Codable, Se
 }
 
 @Observable final class NeteasePlaybackSettings {
-    var wifi: NeteaseQuality {
-        didSet { defaults.set(wifi.rawValue, forKey: "netease.quality.wifi"); if oldValue != wifi && !isCellular { changed?() } }
+    var quality: NeteaseQuality {
+        didSet {
+            defaults.set(quality.rawValue, forKey: "netease.quality.unified")
+            if oldValue != quality { changed?() }
+        }
     }
-    var cellular: NeteaseQuality {
-        didSet { defaults.set(cellular.rawValue, forKey: "netease.quality.cellular"); if oldValue != cellular && isCellular { changed?() } }
-    }
-    var download: NeteaseQuality {
-        didSet { defaults.set(download.rawValue, forKey: "netease.quality.download") }
-    }
-    private(set) var isCellular = false
-    var selected: NeteaseQuality { isCellular ? cellular : wifi }
+    var selected: NeteaseQuality { quality }
     @ObservationIgnored var changed: (() -> Void)?
     @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private let monitor: NWPathMonitor?
 
-    init(defaults: UserDefaults = .standard, monitorsNetwork: Bool = true) {
+    init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        download = NeteaseQuality(rawValue: defaults.string(forKey: "netease.quality.download") ?? "") ?? .lossless
-        wifi = NeteaseQuality(rawValue: defaults.string(forKey: "netease.quality.wifi") ?? "") ?? .high
-        cellular = NeteaseQuality(rawValue: defaults.string(forKey: "netease.quality.cellular") ?? "") ?? .high
-        monitor = monitorsNetwork ? NWPathMonitor() : nil
-        monitor?.pathUpdateHandler = { [weak self] path in
-            let cellular = path.usesInterfaceType(.cellular)
-            Task { @MainActor [weak self] in self?.updateNetwork(isCellular: cellular) }
-        }
-        monitor?.start(queue: DispatchQueue(label: "NeoDizzy.Netease.Network"))
+        // Preserve the previous Wi-Fi playback choice on upgrade; new installs use high quality.
+        quality = NeteaseQuality(rawValue: defaults.string(forKey: "netease.quality.unified")
+            ?? defaults.string(forKey: "netease.quality.wifi") ?? "") ?? .high
     }
-    func updateNetwork(isCellular: Bool) {
-        guard self.isCellular != isCellular else { return }
-        self.isCellular = isCellular
-        changed?()
-    }
-    deinit { monitor?.cancel() }
 }

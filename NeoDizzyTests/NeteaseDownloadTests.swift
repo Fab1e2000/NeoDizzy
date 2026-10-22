@@ -10,10 +10,34 @@ struct NeteaseDownloadTests {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [DownloadSourceStub.self]
         return NeteaseAPI(client: NeteaseClient(session: URLSession(configuration: configuration)),
-                          playbackSettings: NeteasePlaybackSettings(monitorsNetwork: false))
+                          playbackSettings: NeteasePlaybackSettings())
     }
     private var full: String { #"{"id":42,"url":"http://audio.example/song.mp3","level":"standard","type":"mp3","br":128000}"# }
     private var trial: String { #"{"id":42,"url":"http://audio.example/trial.mp3","level":"standard","type":"mp3","br":128000,"freeTrialInfo":{}}"# }
+
+    @Test func reusesCompleteListeningCacheWithoutRequestingAnotherURL() async throws {
+        let api = api([])
+        api.client.cookie = "test-cache-\(UUID())"
+        let suite = "CacheDownload.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let track = Track(discID: "7", number: "1", title: "Cached", artists: "", albumTitle: "", coverURL: nil,
+                          remoteSource: RemoteTrackSource(providerID: "netease", itemID: "42"))
+        let key = api.cacheKey(for: track.id, quality: .hiResolution)
+        let file = URL.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
+        let data = try Fixture.data("audio-local-tags.mp3")
+        try data.write(to: file)
+        defer { AudioPlaybackCache.shared.remove(key); try? FileManager.default.removeItem(at: file) }
+        try await AudioPlaybackCache.shared.commit(file, key: key, actualQuality: "exhigh", bytes: Int64(data.count), fileExtension: "mp3")
+        let provider = NeteaseDownloadProvider(api: api, library: OfflineLibraryStore(defaults: defaults))
+        let metadata = NeteaseDownloadMetadata(track: track, albumArtist: "", trackNumber: 1, discNumber: 1, quality: .hiResolution)
+        let transfer = DownloadTransfer(id: UUID(), metadata: try JSONEncoder().encode(metadata))
+        let result = try #require(try await provider.source(transfer))
+        #expect(result.url.isFileURL)
+        #expect(try Data(contentsOf: result.url) == data)
+        #expect(try JSONDecoder().decode(NeteaseDownloadMetadata.self, from: result.metadata).actualQuality == "exhigh")
+        #expect(DownloadSourceStub.queue.withLock { $0.1.isEmpty })
+    }
 
     @Test func rejectsTrialOnBothRoutesAndUsesPlaybackFallback() async throws {
         let api = api(["{\"code\":200,\"data\":\(trial)}", "{\"code\":200,\"data\":[\(full)]}"])
@@ -234,13 +258,12 @@ struct NeteaseDownloadTests {
         let suite = "NeteaseDownloadTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let settings = NeteasePlaybackSettings(defaults: defaults, monitorsNetwork: false)
-        #expect(settings.download == .lossless)
-        settings.download = .master
-        settings.updateNetwork(isCellular: true)
-        #expect(settings.download == .master)
-        #expect(NeteasePlaybackSettings(defaults: defaults, monitorsNetwork: false).download == .master)
-        #expect(settings.cellular == .high)
+        let settings = NeteasePlaybackSettings(defaults: defaults)
+        #expect(settings.quality == .high)
+        settings.quality = .master
+        #expect(settings.quality == .master)
+        #expect(NeteasePlaybackSettings(defaults: defaults).quality == .master)
+        #expect(settings.selected == .master)
     }
     @Test(arguments: ["flac", "mp3", "m4a"])
     func writesPortableLyricsTags(_ format: String) throws {

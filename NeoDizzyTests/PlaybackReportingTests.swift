@@ -35,17 +35,20 @@ import Testing
         time = 4; session.finish()
         #expect(starts == 2 && finishes == 2)
     }
-    @Test func qualityPreferencesPersistIndependentlyAndFollowNetwork() throws {
+    @Test func unifiedQualityMigratesAndPersists() throws {
         let name = "NeteaseQuality.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
-        let settings = NeteasePlaybackSettings(defaults: defaults, monitorsNetwork: false)
-        #expect(settings.wifi == .high && settings.cellular == .high)
-        settings.wifi = .master; settings.cellular = .standard
+        defaults.set("hires", forKey: "netease.quality.wifi")
+        defaults.set("standard", forKey: "netease.quality.download")
+        let settings = NeteasePlaybackSettings(defaults: defaults)
+        #expect(settings.quality == .hiResolution)
+        var changes = 0
+        settings.changed = { changes += 1 }
+        settings.quality = .master
+        settings.quality = .master
+        #expect(changes == 1)
         #expect(settings.selected == .master)
-        settings.updateNetwork(isCellular: true)
-        #expect(settings.selected == .standard)
-        let restored = NeteasePlaybackSettings(defaults: defaults, monitorsNetwork: false)
-        #expect(restored.wifi == .master && restored.cellular == .standard)
+        #expect(NeteasePlaybackSettings(defaults: defaults).quality == .master)
     }
 }

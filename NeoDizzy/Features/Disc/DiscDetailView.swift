@@ -43,7 +43,8 @@ struct DiscDetailView: View {
                                     AlbumPlaybackActions(isEmpty: true) { _ in }
                                 }
 
-                                ContentSkeleton(layout: .songs, count: 6)
+                                ContentSkeleton(layout: .numberedSongs, count: 6)
+                                    .padding(.horizontal, 20)
                             }
                         }
                         Color.clear.frame(height: 0).task { await model.detail.loadIfNeeded() }
@@ -128,7 +129,7 @@ private struct DiscDetailContent: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
             }
-            DiscStoreCard(detail: detail, isPreviewOnly: isPreviewOnly, hasMissingLocalFiles: hasMissingLocalFiles) {
+            DiscStoreCard(detail: detail, hasMissingLocalFiles: hasMissingLocalFiles) {
                 purchaseSheet = PurchaseSheet(summary: summary)
             }
             .padding(.horizontal, 20)
@@ -142,6 +143,7 @@ private struct DiscDetailContent: View {
             .padding(.top, 28)
         }
         .padding(.bottom, 32)
+        .onAppear { CollectionTrackIndex.shared.record(CollectionTrackIndex.key(provider: "dizzylab", kind: "album", id: detail.id), tracks: tracks) }
         .task(id: LocalAvailabilityRequest(discID: detail.id, revision: offline.contentRevision)) {
             checkedLocalTrackIDs = nil
             do {
@@ -218,13 +220,14 @@ private struct DiscDetailContent: View {
         LazyVStack(spacing: 0) {
             ForEach(tracks.enumerated(), id: \.element.id) { index, track in
                 // 整张都是试听时由购买卡片统一说明，只在部分曲目可完整播放时逐行标注。
-                AlbumTrackRow(track: track,
-                              isPreview: !isPreviewOnly && !localTrackIDs.contains(track.id)
-                                && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false)) {
+                SongRow(track: track, style: .numbered(track.number), isDownloaded: localTrackIDs.contains(track.id),
+                        isPreview: !isPreviewOnly && !localTrackIDs.contains(track.id)
+                            && (detail.streams[track.number].map(DizzyURL.isPreviewStream) ?? false)) {
                     play(from: index)
                 }
             }
         }
+        .padding(.horizontal, 20)
     }
 
     private func play(from index: Int) {
@@ -241,7 +244,6 @@ private struct LocalAvailabilityRequest: Hashable {
 /// BOOST、特典这类次要操作放在下方的小按钮里。下载队列的变化只刷新这张卡片。
 private struct DiscStoreCard: View {
     let detail: DiscDetail
-    let isPreviewOnly: Bool
     let hasMissingLocalFiles: Bool
     let purchase: () -> Void
     @Environment(OfflineLibraryStore.self) private var offline
@@ -268,11 +270,6 @@ private struct DiscStoreCard: View {
                 status
                 Spacer(minLength: 8)
                 primaryAction
-            }
-            if isPreviewOnly && !summary.isOwned {
-                Text("现在播放的是试听片段，购买后可收听完整版并下载到所选文件夹。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
             if localAlbum != nil && hasMissingLocalFiles {
                 HStack(alignment: .firstTextBaseline) {
