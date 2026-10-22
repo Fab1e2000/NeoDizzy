@@ -74,8 +74,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleLocalizations: [zh-Hans]
         CFBundleDisplayName: NeoDizzy
-        CFBundleShortVersionString: "0.5.0"
-        CFBundleVersion: "6"
+        CFBundleShortVersionString: "0.6.0"
+        CFBundleVersion: "7"
         CFBundleURLTypes:
           - CFBundleURLName: com.elsterlee.NeoDizzy.payment
             CFBundleURLSchemes: [neodizzy-pay]
@@ -138,8 +138,8 @@ targets:
         CFBundleDevelopmentRegion: zh-Hans
         CFBundleDisplayName: NeoDizzy
         # 版本号须与 App 一致，发版时一起改。
-        CFBundleShortVersionString: "0.5.0"
-        CFBundleVersion: "6"
+        CFBundleShortVersionString: "0.6.0"
+        CFBundleVersion: "7"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
