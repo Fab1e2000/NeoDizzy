@@ -7,7 +7,6 @@ struct RootView: View {
     private var tabSettings: ModuleSettings { host.settings }
     @State private var settingsPresentation = AppSettingsPresentation()
     @State private var search = SearchPresentation()
-    @State private var themeIcon = ThemeIconController()
     @State private var libraryBackup = LibraryBackup()
     private let appearance = AppearanceSettings.shared
     let services: AppServices
@@ -41,7 +40,6 @@ struct RootView: View {
             .environment(services.favorites)
             .environment(services.accountLibrary)
             .environment(services.playbackHistory)
-            .environment(themeIcon)
             .environment(libraryBackup)
             .environment(\.openRoute, OpenRouteAction { route in
                 settingsPresentation.isPresented = false
@@ -123,12 +121,6 @@ struct RootView: View {
         .task(id: player.currentTrack?.id) { await NowPlayingWidgetBridge.update(for: player.currentTrack) }
         .onChange(of: appearance.mode, initial: true) { WindowAppearance.apply(appearance) }
         .onChange(of: appearance.themeID) { WindowAppearance.apply(appearance) }
-        .task(id: "\(appearance.themeID)-\(scenePhase == .active)") {
-            guard scenePhase == .active else { return }
-            // 连续点选主题时只提交最后一次，系统每换一次图标都会弹提示。
-            do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
-            await themeIcon.apply(theme: appearance.theme)
-        }
         .onChange(of: scenePhase, initial: true) { oldPhase, phase in
             if phase == .active { WindowAppearance.apply(appearance) }
             // 用户可能刚在「文件」App 里往音乐文件夹放了歌。

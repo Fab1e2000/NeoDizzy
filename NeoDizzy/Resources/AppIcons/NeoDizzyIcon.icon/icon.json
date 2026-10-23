@@ -6,12 +6,8 @@
     {
       "layers" : [
         {
-          "image-name" : "RingLeft.svg",
-          "name" : "青瓷左环"
-        },
-        {
-          "image-name" : "RingRight.svg",
-          "name" : "青瓷右环"
+          "image-name" : "Confluence.svg",
+          "name" : "汇流"
         }
       ]
     }

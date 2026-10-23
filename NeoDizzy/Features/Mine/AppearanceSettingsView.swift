@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// 外观（跟随系统、浅色、深色）与主题色。换主题色后桌面图标同步更换。
+/// 外观（跟随系统、浅色、深色）与主题色。
 struct AppearanceSettingsView: View {
-    @Environment(ThemeIconController.self) private var themeIcon
     private let columns = [GridItem(.adaptive(minimum: 64), spacing: 12)]
 
     var body: some View {
@@ -28,14 +27,6 @@ struct AppearanceSettingsView: View {
                     }
                 }
                 .padding(.vertical, 8)
-                if let message = themeIcon.errorMessage {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(message).font(.footnote).foregroundStyle(DizzyPalette.mutedText)
-                        Button("重试更新桌面图标") {
-                            Task { await themeIcon.apply(theme: settings.theme) }
-                        }
-                    }
-                }
                 if settings.themeID != AppTheme.defaultID {
                     Button("恢复默认（\(AppTheme.selected(AppTheme.defaultID).name)）") {
                         settings.themeID = AppTheme.defaultID

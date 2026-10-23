@@ -43,9 +43,6 @@ struct AppTheme: Identifiable, Equatable {
         presets.first { $0.id == id } ?? presets[0]
     }
 
-    /// 对应的 Icon Composer 图标；默认主题就是主图标。
-    var iconName: String { id == Self.defaultID ? "NeoDizzyIcon" : "NeoDizzyIcon-\(id)" }
-
     var color: Color { .adaptive(light: light, dark: dark) }
 
     /// 主题色铺满的实底：卡片、角标、主要按钮。比文字用的主题色深一些。
