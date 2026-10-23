@@ -6,8 +6,24 @@
     {
       "layers" : [
         {
-          "image-name" : "Confluence.svg",
-          "name" : "汇流"
+          "image-name" : "SleeveFront.svg",
+          "name" : "前 · 红封套"
+        }
+      ]
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "SleeveMiddle.svg",
+          "name" : "中 · 黄封套"
+        }
+      ]
+    },
+    {
+      "layers" : [
+        {
+          "image-name" : "SleeveBack.svg",
+          "name" : "后 · 绿封套"
         }
       ]
     }
