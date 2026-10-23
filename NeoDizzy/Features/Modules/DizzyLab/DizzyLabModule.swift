@@ -2,11 +2,16 @@ import SwiftUI
 
 final class DizzyLabModule: AppModule {
     static var metadata: ModuleDescriptor {
-        ModuleDescriptor(id: .dizzyLab, title: "DizzyLab", systemImage: "opticaldisc.fill")
+        ModuleDescriptor(id: .dizzyLab, title: "DizzyLab", systemImage: "opticaldisc.fill", accent: accent)
     }
+    /// DizzyLab 官网的金色；金底太亮，实底上配深棕字。
+    static let accent = AccentPalette(light: 0x9A6510, dark: 0xF0AD4E, lightFill: 0xF0AD4E, darkFill: 0xF0AD4E,
+                                      lightInk: 0x3D2600, darkInk: 0x3D2600)
     var descriptor: ModuleDescriptor { Self.metadata }
+    var libraryOrigin: LibraryOrigin { .dizzylab }
+    var downloadsWholeAlbums: Bool { true }
     var accountEntry: ModuleAccountEntry? {
-        ModuleAccountEntry(title: "DizzyLab", avatarURL: services.account.account?.avatarURL,
+        ModuleAccountEntry(title: "DizzyLab", avatarURL: DizzyURL.avatar(services.account.account?.avatarURL),
                            isSignedIn: services.account.account != nil)
     }
     func openAccount() {
@@ -24,7 +29,19 @@ final class DizzyLabModule: AppModule {
     let services: DizzyLabServices
     private let presentation = DizzyLabPresentation()
 
-    init(services: DizzyLabServices) { self.services = services }
+    private let onAccountChange: () -> Void
+    private let onLibraryChange: () -> Void
+    init(services: DizzyLabServices, onAccountChange: @escaping () -> Void = {}, onLibraryChange: @escaping () -> Void = {}) {
+        self.services = services; self.onAccountChange = onAccountChange; self.onLibraryChange = onLibraryChange
+    }
+    func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
+        guard track.localSource == nil, track.remoteSource == nil else { return nil }
+        return AnyView(DizzyLabPlayerActions(track: track, onImportLyrics: onImportLyrics))
+    }
+    func collectionRoute(kind: String, itemID: String) -> AppRoute? {
+        kind == "album" ? .disc(id: itemID) : nil
+    }
+    func deactivate() { contentCache.stop() }
     func rootView() -> AnyView { AnyView(DiscoverView()) }
     func searchSection(query: String) -> AnyView? { AnyView(DizzyLabSearchSection(query: query)) }
     func destination(for route: AppRoute) -> AnyView? {
@@ -32,7 +49,7 @@ final class DizzyLabModule: AppModule {
         return AnyView(DizzyLabDestination(route: destination))
     }
     func install(in content: AnyView) -> AnyView {
-        AnyView(DizzyLabScope(services: services, presentation: presentation, content: content).environment(contentCache))
+        AnyView(DizzyLabScope(services: services, presentation: presentation, content: content, onAccountChange: onAccountChange, onLibraryChange: onLibraryChange).environment(contentCache))
     }
     func handleURL(_ url: URL, host: ModuleHost) -> Bool {
         guard AlipayReturnRouter.isCallback(url) else { return false }
@@ -58,6 +75,8 @@ private struct DizzyLabScope: View {
     let services: DizzyLabServices
     @Bindable var presentation: DizzyLabPresentation
     let content: AnyView
+    let onAccountChange: () -> Void
+    let onLibraryChange: () -> Void
     @Environment(\.scenePhase) private var scenePhase
     @Environment(DizzyLabContentCache.self) private var contentCache
 
@@ -75,7 +94,6 @@ private struct DizzyLabScope: View {
             )) { loginSheet }
             .environment(services.account)
             .environment(services.purchases)
-            .environment(services.downloads)
             .environment(services.browsingHistory)
             .onChange(of: scenePhase, initial: true) { _, phase in
                 if phase == .background { services.purchases.pause() }
@@ -83,7 +101,9 @@ private struct DizzyLabScope: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .dizzyPurchaseDidComplete)) { _ in
                 contentCache.purchasesChanged()
+                onLibraryChange()
             }
+            .onChange(of: account.account?.userID) { _, _ in onAccountChange() }
             .onReceive(NotificationCenter.default.publisher(for: .dizzyAccountDidChange)) { _ in
                 contentCache.accountChanged()
                 contentCache.prewarm(account: services.account)

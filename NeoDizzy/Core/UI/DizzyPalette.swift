@@ -10,14 +10,14 @@ enum DizzyPalette {
     static let text = Color.adaptive(light: 0x1A1A1A, dark: 0xFFFFFF)
     /// 官网 `.text-muted`。
     static let mutedText = Color.adaptive(light: 0x6A737B, dark: 0x919AA1)
-    /// 主题色。默认是官网 `--warning` 的金色：「现在购买」按钮和价格。
-    static var accent: Color { AppearanceSettings.shared.theme.color }
-    /// 主题色实底（卡片、角标、主要按钮），比文字用的主题色深一些，白字看得清。
-    static var accentFill: Color { AppearanceSettings.shared.theme.fill }
+    /// 主题色：当前标签页来源的颜色，资料库、搜索等为黑色。
+    static var accent: Color { AppearanceSettings.shared.accent.color }
+    /// 主题色实底（卡片、角标、主要按钮）。
+    static var accentFill: Color { AppearanceSettings.shared.accent.fill }
     /// 实底上的文字和图标。
-    static var onAccent: Color { AppearanceSettings.shared.theme.onFill }
+    static var onAccent: Color { AppearanceSettings.shared.accent.onFill }
     /// 深色底上的主题色（封面上的半透明黑角标等），浅色外观下也用明亮的一档。
-    static var accentOnDark: Color { Color(hex: AppearanceSettings.shared.theme.dark) }
+    static var accentOnDark: Color { Color(hex: AppearanceSettings.shared.accent.dark) }
     /// 官网 `--success`：免费。
     static let success = Color.adaptive(light: 0x2E9A55, dark: 0x4BBF73)
     /// 官网 `--info`：标签、兑换。

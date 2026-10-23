@@ -30,8 +30,10 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
     private(set) var syncing = Set<String>()
     private(set) var errors: [String: String] = [:]
     private var accounts: [String: String] = [:]
+    private var deviceProviders: Set<String> = ["local", "dizzylab"]
     @ObservationIgnored private var providers: [String: FavoritesProvider] = [:]
     @ObservationIgnored private var versions: [String: Int] = [:]
+    @ObservationIgnored private var epochs: [String: Int] = [:]
     @ObservationIgnored private let fileURL: URL
 
     init(directory: URL = URL.applicationSupportDirectory.appendingPathComponent("Library", isDirectory: true)) {
@@ -58,7 +60,9 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
         let scopes = ["device"] + accounts.map { "\($0.key)/\($0.value)" }.sorted()
         // 各来源内部严格保留接口顺序；只比较每个列表的首项来合并来源。
         // 新喜欢插入来源列表首位，其时间也使它成为统一列表的第一项。
-        let lists = scopes.map { records[$0] ?? [] }
+        let lists = scopes.map { scope in
+            (records[scope] ?? []).filter { scope != "device" || deviceProviders.contains($0.providerID) }
+        }
         var offsets = Array(repeating: 0, count: lists.count)
         var result: [FavoriteSong] = []
         while let index = lists.indices.filter({ offsets[$0] < lists[$0].count }).max(by: {
@@ -160,39 +164,58 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
         }
     }
     func contains(_ track: Track) -> Bool { songs.contains { $0.id == FavoriteSong(track: track).id } }
+    func setDeviceProviders(_ ids: Set<String>) { deviceProviders = ids }
+    func registerDeviceProvider(_ id: String) { deviceProviders.insert(id) }
+    private func invalidateSession(_ id: String) {
+        epochs[id, default: 0] += 1
+        versions[id, default: 0] += 1
+        syncing.remove(id)
+        pending = pending.filter { !$0.hasPrefix(id + "/") }
+        errors[id] = nil
+    }
+    func unregister(_ id: String) {
+        invalidateSession(id)
+        providers[id] = nil
+        accounts[id] = nil
+        deviceProviders.remove(id)
+    }
     func register(_ id: String, provider: FavoritesProvider) {
+        invalidateSession(id)
         providers[id] = provider
         updateAccounts()
     }
     func updateAccounts() {
         for (id, provider) in providers {
             let account = provider.account()
-            if accounts[id] != account { versions[id, default: 0] += 1; errors[id] = nil }
-            accounts[id] = account
+            if accounts[id] != account {
+                let wasSyncing = syncing.contains(id)
+                invalidateSession(id)
+                accounts[id] = account
+                if wasSyncing, account != nil { Task { await self.refresh(id) } }
+            }
         }
     }
     func refresh() async {
         updateAccounts()
-        for id in providers.keys.sorted() { await refresh(id) }
+        let tasks = providers.keys.sorted().map { id in Task { await self.refresh(id) } }
+        for task in tasks { await task.value }
     }
     func refresh(_ id: String) async {
         updateAccounts()
         guard let provider = providers[id], let account = accounts[id], !syncing.contains(id) else { return }
+        let epoch = epochs[id, default: 0]
         syncing.insert(id)
         defer {
-            syncing.remove(id)
-            if accounts[id] != account, accounts[id] != nil {
-                Task { await self.refresh(id) }
-            }
+            if epochs[id, default: 0] == epoch { syncing.remove(id) }
         }
         do {
             // 若读列表期间发生写入，丢弃旧读取，再读一次，避免覆盖新喜欢状态。
-            while accounts[id] == account {
+            while accounts[id] == account && epochs[id, default: 0] == epoch {
                 let version = versions[id, default: 0]
                 let tracks = try await provider.load()
                 try Task.checkCancellation()
                 updateAccounts()
-                guard accounts[id] == account else { return }
+                guard accounts[id] == account, epochs[id, default: 0] == epoch else { return }
                 guard versions[id, default: 0] == version else { continue }
                 let values = tracks.map { FavoriteSong(track: $0) }.filter { $0.providerID == id }
                 try replace(scope: "\(id)/\(account)", values: values)
@@ -200,25 +223,27 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
                 return
             }
         } catch is CancellationError {
-        } catch { if accounts[id] == account { errors[id] = error.localizedDescription } }
+        } catch { if accounts[id] == account, epochs[id, default: 0] == epoch { errors[id] = error.localizedDescription } }
     }
     func setLiked(_ track: Track, _ liked: Bool) async throws {
         updateAccounts()
         let song = FavoriteSong(track: track, addedAt: .now)
+        let epoch = epochs[song.providerID, default: 0]
         guard pending.insert(song.id).inserted else { return }
-        defer { pending.remove(song.id) }
+        defer { if epochs[song.providerID, default: 0] == epoch { pending.remove(song.id) } }
         let scope: String
         if let provider = providers[song.providerID] {
             guard let account = accounts[song.providerID] else { throw StorageError.loginRequired }
             let version = versions[song.providerID, default: 0]
             try await provider.setLiked(track, liked)
             updateAccounts()
-            guard accounts[song.providerID] == account else { throw CancellationError() }
+            try Task.checkCancellation()
+            guard accounts[song.providerID] == account, epochs[song.providerID, default: 0] == epoch else { throw CancellationError() }
             // Other writes are allowed, account changes are checked above.
             versions[song.providerID] = max(version, versions[song.providerID, default: 0]) + 1
             scope = "\(song.providerID)/\(account)"
         } else {
-            guard song.providerID == "local" || song.providerID == "dizzylab" else { throw StorageError.unsupported }
+            guard deviceProviders.contains(song.providerID) else { throw StorageError.unsupported }
             scope = "device"
         }
         var values = records[scope] ?? []

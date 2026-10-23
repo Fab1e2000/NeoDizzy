@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 
+#if os(iOS)
 /// 「文件 › 我的 iPhone › NeoDizzy › Backup」里唯一的一份资料库备份。
 /// 重签名的 App 拿不到外部文件的访问权，所以备份只写在自己的文件夹里：
 /// 卸载前把 Backup 文件夹复制出去，重装后放回原处，再点「导入备份」。
@@ -29,8 +30,13 @@ import Observation
     var fileURL: URL { folder.appending(path: Self.fileName) }
 
     var interval: Interval { didSet { defaults.set(interval.rawValue, forKey: Keys.interval) } }
-    /// 备份里带上网易云登录凭据，重装后免登录。
-    var includesNeteaseLogin: Bool { didSet { defaults.set(includesNeteaseLogin, forKey: Keys.login) } }
+    /// 备份里带上已注册平台的登录凭据，重装后恢复。
+    var includesAccountLogin: Bool { didSet { defaults.set(includesAccountLogin, forKey: Keys.login) } }
+    /// Compatibility with the previous preference name.
+    var includesNeteaseLogin: Bool {
+        get { includesAccountLogin }
+        set { includesAccountLogin = newValue }
+    }
     private(set) var lastBackup: Date?
     private(set) var lastError: String?
     private(set) var isRunning = false
@@ -46,7 +52,7 @@ import Observation
         self.folder = folder
         self.defaults = defaults
         interval = defaults.string(forKey: Keys.interval).flatMap(Interval.init(rawValue:)) ?? .daily
-        includesNeteaseLogin = defaults.object(forKey: Keys.login) as? Bool ?? true
+        includesAccountLogin = defaults.object(forKey: Keys.login) as? Bool ?? true
         lastBackup = defaults.object(forKey: Keys.last) as? Date
         // 先建好文件夹，在「文件」App 里一眼就能找到放备份的位置。
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -78,7 +84,7 @@ import Observation
             for index in export.collections.indices where !export.collections[index].songsComplete {
                 export.collections[index].issue = export.collections[index].issue ?? "备份不读取在线歌曲列表。"
             }
-            if includesNeteaseLogin { export.credentials = context.credentials() }
+            if includesAccountLogin { export.credentials = context.credentials() }
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try export.data().write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             lastError = nil
@@ -118,3 +124,5 @@ import Observation
         }
     }
 }
+
+#endif

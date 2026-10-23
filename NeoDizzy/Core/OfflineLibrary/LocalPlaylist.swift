@@ -12,6 +12,10 @@ nonisolated struct LocalPlaylist: Identifiable, Sendable {
 
 /// 歌单只保存引用；所有路径先按根目录归一化，再沿途拒绝符号链接。
 nonisolated enum LocalPlaylistFile {
+    private static func validSourceComponent(_ value: String) -> Bool {
+        !value.isEmpty && !value.contains(where: { $0 == ":" || $0 == "\0" || $0.isNewline })
+    }
+
     static func checked(_ path: String, root: URL) throws -> URL {
         let url = try OfflinePaths.file(path, inside: root)
         var current = root
@@ -57,7 +61,8 @@ nonisolated enum LocalPlaylistFile {
             let line = raw.replacingOccurrences(of: "\u{FEFF}", with: "")
             if line.hasPrefix("#NEODIZZY-SOURCE:") {
                 let parts = line.split(separator: ":", omittingEmptySubsequences: false)
-                if parts.count == 4, parts[1] == "netease", parts[2] == "playlist", !parts[3].isEmpty {
+                if parts.count == 4, validSourceComponent(String(parts[1])), parts[2] == "playlist",
+                   validSourceComponent(String(parts[3])) {
                     source = LibrarySource(provider: String(parts[1]), kind: String(parts[2]), id: String(parts[3]))
                 }
             }
@@ -87,8 +92,8 @@ nonisolated enum LocalPlaylistFile {
         if existing == nil, FileManager.default.fileExists(atPath: target.path) { throw OfflineLibraryError.existingAlbum }
         var lines = ["#EXTM3U"]
         if let source {
-            guard source.provider == "netease", source.kind == "playlist", !source.id.isEmpty,
-                  !source.id.contains(where: { $0 == ":" || $0.isNewline }) else { throw OfflineLibraryError.invalidFolder }
+            guard validSourceComponent(source.provider), source.kind == "playlist",
+                  validSourceComponent(source.id) else { throw OfflineLibraryError.invalidFolder }
             lines.append("#NEODIZZY-SOURCE:\(source.provider):\(source.kind):\(source.id)")
         }
         for (track, file) in entries {

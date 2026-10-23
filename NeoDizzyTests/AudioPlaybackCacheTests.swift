@@ -55,6 +55,26 @@ import XCTest
         cache.protect(nil)
         #expect(!FileManager.default.fileExists(atPath: playing.path))
     }
+    @Test func clearingCachePreservesBothCurrentAndQueuedFilesUntilReleased() async throws {
+        let root = try root(); defer { try? FileManager.default.removeItem(at: root) }
+        let cache = AudioPlaybackCache(directory: root.appendingPathComponent("cache"))
+        let source = root.appendingPathComponent("source.mp3")
+        try Data(repeating: 0, count: 10).write(to: source)
+        var files: [URL] = []
+        for id in ["current", "queued"] {
+            let key = AudioPlaybackCache.Key(trackID: id, scope: "test", quality: "high")
+            try await cache.commit(source, key: key, actualQuality: "high", bytes: 10, fileExtension: "mp3")
+            files.append(try #require(cache.file(for: key)))
+        }
+        cache.protectFiles(files)
+        cache.clear()
+        #expect(files.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        cache.protect(files[1])
+        #expect(!FileManager.default.fileExists(atPath: files[0].path))
+        #expect(FileManager.default.fileExists(atPath: files[1].path))
+        cache.protect(nil)
+        #expect(!FileManager.default.fileExists(atPath: files[1].path))
+    }
     @Test func listeningClockExcludesPauseAndDoesNotUseSeekPosition() {
         var clock = 0.0
         let reporting = PlaybackReportingSession(now: { clock })

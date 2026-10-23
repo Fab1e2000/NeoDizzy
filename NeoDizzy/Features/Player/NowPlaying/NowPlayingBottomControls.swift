@@ -12,6 +12,7 @@ struct NowPlayingBottomControls: View {
 
     let song: Track
     @Binding var page: NowPlayingPage
+    let hasLyrics: Bool
     let showsLyricsUtilities: Bool
     let hasLyricsTranslations: Bool
     let hasLyricsRomanizations: Bool
@@ -52,7 +53,7 @@ struct NowPlayingBottomControls: View {
                 .frame(height: 3)
 
             interfaceLayer(.pageSelector) {
-                NowPlayingPageSelector(page: $page)
+                NowPlayingPageSelector(page: $page, hasLyrics: hasLyrics)
             }
         }
         .frame(height: Self.coreHeight)

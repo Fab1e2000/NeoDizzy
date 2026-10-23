@@ -85,3 +85,20 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+## QQMusicApi
+
+- 来源：<https://github.com/L-1124/QQMusicApi>，参考提交 `27861e51432ea6b6e88dc35c4e8c8e239c0339e8`。
+- 许可证：GNU GPL v3.0 or later，与本项目的 GPLv3 许可兼容；上游完整许可见 <https://github.com/L-1124/QQMusicApi/blob/27861e51432ea6b6e88dc35c4e8c8e239c0339e8/LICENSE>。
+- `Core/Modules/QQMusic/` 将上游 `modules/search.py`、`song.py`、`singer.py`、`user.py`、`album.py`、`songlist.py`、`top.py`、`recommend.py`、`lyric.py`、`login.py` 及 `core/versioning.py` 的 Web 请求契约适配为 Swift。音乐登录 Cookie 与在线会话验证、公共参数和歌曲地址字段沿用上游；扫码授权由官方网页完成；未嵌入 Python 运行时，也不依赖第三方托管服务。
+- NeoDizzy 与 QQ 音乐及腾讯无隶属关系，不包含音乐内容或平台商标素材。
+
+## LX Flow Music 日推请求参考
+
+- 来源：[eohh-zhou/lx-flow-music-desktop](https://github.com/eohh-zhou/lx-flow-music-desktop)，参考提交 `14e254c733789cb1749f006b9da3a34e49fa3032` 的 `src/main/modules/winMain/rendererEvent/qqMusic.ts` 中 `getDailyRecommend`。
+- 上游许可证：[Apache License 2.0](https://github.com/eohh-zhou/lx-flow-music-desktop/blob/14e254c733789cb1749f006b9da3a34e49fa3032/LICENSE)。本项目仅对照每日目录的请求契约，以 Swift 独立实现；未嵌入上游程序。
+
+## Simple Music 搜索请求参考
+
+- 来源：[Yyyangshenghao/simple-music](https://github.com/Yyyangshenghao/simple-music)，参考提交 `b7e1943ceb0cb8861bf3b0f1fa107c84e3a2ec49` 的 [`server/lib/qq-client.ts`](https://github.com/Yyyangshenghao/simple-music/blob/b7e1943ceb0cb8861bf3b0f1fa107c84e3a2ec49/server/lib/qq-client.ts)。
+- 许可证：GNU GPL v3.0。QQ 分类搜索仅对照该项目的 module 键请求信封及省略 `comm` 的协议行为，以 Swift 实现；未嵌入其服务程序。

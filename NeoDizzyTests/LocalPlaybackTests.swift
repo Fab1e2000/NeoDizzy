@@ -25,8 +25,11 @@ final class LocalPlaybackTests: XCTestCase {
         let track = try XCTUnwrap(library.localAlbums.first?.tracks.first)
         weak var access = library.access(for: track)
         var networkCalls = 0
-        let resolver = StreamResolver(fetch: { _ in networkCalls += 1; return [:] },
-                                      localFile: { library.localFile(for: $0) }, localAccess: { library.access(for: $0) })
+        let resolver = StreamResolver(localFile: { library.localFile(for: $0) }, localAccess: { library.access(for: $0) })
+        resolver.register("fixture-network", provider: PlaybackProvider(stream: { _ in
+            networkCalls += 1
+            throw PlaybackError.unavailable
+        }))
         let persistence = PlaybackPersistence(defaults: defaults)
         let player = PlayerStore(resolver: resolver, persistence: persistence)
         defer { player.pause() }

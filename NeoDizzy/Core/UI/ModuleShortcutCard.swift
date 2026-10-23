@@ -1,6 +1,81 @@
 import SwiftUI
 
+/// Two side-by-side entries at the top of a module's home (NetEase, QQ Music).
+/// The one that starts playback sits on the solid theme color; the other (daily picks) on the plain card color.
+struct FeaturedShortcutCard: View {
+    enum Icon { case symbol(String), today }
+
+    let title: String
+    let subtitle: String
+    let icon: Icon
+    var startsPlayback = false
+    var isLoading = false
+    @ScaledMetric(relativeTo: .title2) private var iconSize = 44.0
+
+    private var ink: Color { startsPlayback ? DizzyPalette.onAccent : DizzyPalette.text }
+    private var secondaryInk: Color { startsPlayback ? DizzyPalette.onAccent.opacity(0.85) : DizzyPalette.mutedText }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .top) {
+                iconView.frame(minWidth: iconSize, alignment: .topLeading)
+                Spacer(minLength: 4)
+                trailing
+            }
+            // 两张卡片的图标区等高，标题对齐。
+            .frame(height: iconSize, alignment: .top)
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.title3.bold()).foregroundStyle(ink)
+                Text(subtitle).font(.footnote).foregroundStyle(secondaryInk)
+                    .lineLimit(2, reservesSpace: true)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(startsPlayback ? DizzyPalette.accentFill : DizzyPalette.surface,
+                    in: .rect(cornerRadius: 22, style: .continuous))
+        .contentShape(.rect(cornerRadius: 22))
+    }
+
+    @ViewBuilder private var iconView: some View {
+        switch icon {
+        case .symbol(let name):
+            Image(systemName: name).font(.title.weight(.medium)).foregroundStyle(startsPlayback ? ink : DizzyPalette.accent)
+        case .today:
+            VStack(alignment: .leading, spacing: 0) {
+                Text(Date.now, format: .dateTime.month(.abbreviated))
+                    .font(.system(size: iconSize * 0.27, weight: .semibold))
+                    .foregroundStyle(startsPlayback ? ink : DizzyPalette.accent)
+                Text(verbatim: "\(Calendar.current.component(.day, from: .now))")
+                    .font(.system(size: iconSize * 0.55, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(ink)
+            }
+        }
+    }
+
+    @ViewBuilder private var trailing: some View {
+        if startsPlayback {
+            ZStack {
+                Circle().fill(DizzyPalette.onAccent.opacity(0.2))
+                if isLoading {
+                    ProgressView().controlSize(.small).tint(ink)
+                } else {
+                    Image(systemName: "play.fill").font(.caption.weight(.bold)).foregroundStyle(ink)
+                }
+            }
+            .frame(width: 32, height: 32)
+        } else {
+            Image(systemName: "arrow.up.right").font(.footnote.weight(.semibold)).foregroundStyle(DizzyPalette.mutedText)
+                .frame(width: 32, height: 32)
+        }
+    }
+}
+
 /// The module's most-used entry: a full-width card with an icon tile, a title and a one-line description.
+/// A card that starts playback sits on the solid theme color, like `FeaturedShortcutCard`.
 struct ModulePrimaryShortcut: View {
     enum Trailing { case play, chevron }
 
@@ -12,26 +87,29 @@ struct ModulePrimaryShortcut: View {
     var trailing: Trailing = .chevron
     var isLoading = false
     @ScaledMetric(relativeTo: .title3) private var tileSize = 44.0
+    private var prominent: Bool { trailing == .play }
+    private var ink: Color { prominent ? DizzyPalette.onAccent : DizzyPalette.text }
 
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(DizzyPalette.accent.opacity(0.16))
-                icon.foregroundStyle(DizzyPalette.accent)
+                    .fill(prominent ? DizzyPalette.onAccent.opacity(0.2) : DizzyPalette.accent.opacity(0.16))
+                icon.foregroundStyle(prominent ? ink : DizzyPalette.accent)
             }
             .frame(width: tileSize, height: tileSize)
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline).foregroundStyle(DizzyPalette.text)
-                Text(subtitle).font(.footnote).foregroundStyle(DizzyPalette.mutedText).lineLimit(1)
+                Text(title).font(.headline).foregroundStyle(ink)
+                Text(subtitle).font(.footnote)
+                    .foregroundStyle(prominent ? DizzyPalette.onAccent.opacity(0.85) : DizzyPalette.mutedText).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Group {
                 switch trailing {
-                case .play: Image(systemName: "play.fill").font(.body).foregroundStyle(DizzyPalette.text)
+                case .play: Image(systemName: "play.fill").font(.body).foregroundStyle(ink)
                 case .chevron: Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                 }
             }
@@ -40,13 +118,13 @@ struct ModulePrimaryShortcut: View {
         .padding(.leading, 12)
         .padding(.trailing, 16)
         .padding(.vertical, 12)
-        .background(DizzyPalette.surface, in: .rect(cornerRadius: 18, style: .continuous))
+        .background(prominent ? DizzyPalette.accentFill : DizzyPalette.surface, in: .rect(cornerRadius: 18, style: .continuous))
         .contentShape(.rect(cornerRadius: 18))
     }
 
     @ViewBuilder private var icon: some View {
         if isLoading {
-            ProgressView().tint(DizzyPalette.accent)
+            ProgressView().tint(prominent ? ink : DizzyPalette.accent)
         } else if showsToday {
             VStack(spacing: 0) {
                 Text(Date.now, format: .dateTime.month(.abbreviated))

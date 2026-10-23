@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "composition_root": "NeoDizzy/App/Modules/AppComposition.swift",
+  "local_module_id_source": "NeoDizzy/Shared/Modules/LocalLibraryRoute.swift",
+  "modules": {
+    "dizzylab": {
+      "registration": "DizzyLabModule.registration",
+      "module_id_source": "NeoDizzy/Core/Modules/DizzyLab/Routing/DizzyLabRoute.swift",
+      "source_paths": [
+        "NeoDizzy/Core/Modules/DizzyLab",
+        "NeoDizzy/Features/Modules/DizzyLab"
+      ],
+      "test_paths": [
+        "NeoDizzyTests/Modules/DizzyLab",
+        "NeoDizzyTests/Modules/Integration/IntegrationTransportIsolationTests.swift"
+      ]
+    },
+    "netease": {
+      "registration": "NeteaseModule.registration",
+      "module_id_source": "NeoDizzy/Core/Modules/Netease/NeteaseRoute.swift",
+      "source_paths": [
+        "NeoDizzy/Core/Modules/Netease",
+        "NeoDizzy/Features/Modules/Netease"
+      ],
+      "test_paths": [
+        "NeoDizzyTests/Modules/Netease",
+        "NeoDizzyTests/Modules/Integration/IntegrationTransportIsolationTests.swift",
+        "NeoDizzyTests/Modules/Integration/QQNeteaseIsolationTests.swift"
+      ]
+    },
+    "qqmusic": {
+      "registration": "QQMusicModule.registration",
+      "module_id_source": "NeoDizzy/Core/Modules/QQMusic/QQMusicRoute.swift",
+      "source_paths": [
+        "NeoDizzy/Core/Modules/QQMusic",
+        "NeoDizzy/Features/Modules/QQMusic"
+      ],
+      "test_paths": [
+        "NeoDizzyTests/Modules/QQMusic",
+        "NeoDizzyTests/Modules/Integration/QQNeteaseIsolationTests.swift"
+      ]
+    }
+  }
+}

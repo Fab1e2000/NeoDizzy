@@ -30,6 +30,32 @@ nonisolated enum NeteaseError: LocalizedError {
 final class NeteaseClient {
     var cookie = "" { didSet { if oldValue != cookie { generation += 1 } } }
     private var generation = 0
+    private var isEnabled = true
+    private var requests: [UUID: Task<(Data, URLResponse), Error>] = [:]
+    private var tokenRequests: [UUID: Task<String, Error>] = [:]
+
+    /// Disable transport without deleting credentials or invalidating the reusable session.
+    func setEnabled(_ enabled: Bool) async {
+        guard isEnabled != enabled else { return }
+        isEnabled = enabled
+        generation += 1
+        guard !enabled else { return }
+        let active = Array(requests.values)
+        let tokens = Array(tokenRequests.values)
+        active.forEach { $0.cancel() }
+        tokens.forEach { $0.cancel() }
+        for task in active { _ = await task.result }
+        for task in tokens { _ = await task.result }
+    }
+
+    private func checkToken() async throws -> String {
+        guard isEnabled else { throw CancellationError() }
+        let id = UUID()
+        let task = Task { try await checkTokenProvider() }
+        tokenRequests[id] = task
+        defer { tokenRequests[id] = nil }
+        return try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+    }
     private let session: URLSession
     private let deviceID: String
     private let checkTokenProvider: @MainActor () async throws -> String
@@ -47,22 +73,43 @@ final class NeteaseClient {
         defaults.set(deviceID, forKey: key)
     }
 
+    private init(session: URLSession, deviceID: String,
+                 checkTokenProvider: @escaping @MainActor () async throws -> String) {
+        self.session = session
+        self.deviceID = deviceID
+        self.checkTokenProvider = checkTokenProvider
+    }
+
+    /// Share transport configuration, but never mutable account state.
+    func isolatedClient(cookie: String) -> NeteaseClient {
+        let candidate = NeteaseClient(session: session, deviceID: deviceID, checkTokenProvider: checkTokenProvider)
+        candidate.cookie = cookie
+        return candidate
+    }
+
     func request<Response: Decodable>(_ path: String, data: [String: Any] = [:], authenticated: Bool = false,
                                       requiresCheckToken: Bool = false, acceptedCodes: Set<Int> = [200], clientLog: Bool = false) async throws -> Response {
+        guard isEnabled else { throw CancellationError() }
         let revision = generation
         if authenticated && Self.cookieValues(cookie)["MUSIC_U"] == nil { throw NeteaseError.loginRequired }
-        let token = requiresCheckToken ? try await checkTokenProvider() : nil
+        let token = requiresCheckToken ? try await checkToken() : nil
         try Task.checkCancellation()
-        guard revision == generation else { throw CancellationError() }
+        guard isEnabled && revision == generation else { throw CancellationError() }
         if requiresCheckToken && (token?.isEmpty != false) { throw NeteaseError.checkTokenUnavailable }
         return try await send(makeRequest(path, data: data, authenticated: authenticated, checkToken: token, clientLog: clientLog), acceptedCodes: acceptedCodes)
     }
 
     private func send<Response: Decodable>(_ request: URLRequest, acceptedCodes: Set<Int> = [200]) async throws -> Response {
+        guard isEnabled else { throw CancellationError() }
         let revision = generation
-        let (data, response) = try await session.data(for: request)
+        let id = UUID()
+        let session = session
+        let task = Task { try await session.data(for: request) }
+        requests[id] = task
+        defer { requests[id] = nil }
+        let (data, response) = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
         try Task.checkCancellation()
-        guard revision == generation else { throw CancellationError() }
+        guard isEnabled && revision == generation else { throw CancellationError() }
         guard let http = response as? HTTPURLResponse else { throw NeteaseError.response }
         if http.statusCode == 401 { throw NeteaseError.loginRequired }
         guard (200..<300).contains(http.statusCode) else { throw NeteaseError.httpStatus(http.statusCode) }

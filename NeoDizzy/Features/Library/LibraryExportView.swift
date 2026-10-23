@@ -26,13 +26,13 @@ private struct LibraryContextReader<Content: View>: View {
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(SavedLibraryStore.self) private var saved
     @Environment(OfflineLibraryStore.self) private var offline
-    @Environment(NeteaseStore.self) private var netease
+    @Environment(LibraryProviderRegistry.self) private var providers
     @Environment(ModuleSettings.self) private var modules
     @Environment(DownloadStore.self) private var downloads
     @ViewBuilder var content: (LibraryContext) -> Content
     var body: some View {
         content(LibraryContext(favorites: favorites, mirror: mirror, saved: saved, offline: offline,
-                               netease: netease, modules: modules, downloads: downloads))
+                               providers: providers, modules: modules, downloads: downloads))
     }
 }
 
@@ -129,7 +129,7 @@ struct LibraryBackupSettingsView: View {
                 .listRowBackground(DizzyPalette.surface)
 
                 Section {
-                    Toggle("备份网易云登录", isOn: $backup.includesNeteaseLogin)
+                    Toggle("备份平台登录状态", isOn: $backup.includesAccountLogin)
                 }
                 .listRowBackground(DizzyPalette.surface)
 
@@ -204,7 +204,7 @@ private struct LibraryExportSheet: View {
             defer { preparing = false }
             var snapshot = context.snapshot()
             do {
-                try await snapshot.loadOnlineSongs(netease: context.netease) { current, total in
+                try await snapshot.loadOnlineSongs(providers: context.providers) { current, total in
                     progress = "正在读取歌曲列表 \(current)/\(total)"
                 }
                 try Task.checkCancellation()

@@ -5,7 +5,7 @@ struct FavoriteButton: View {
     var playerStyle = false
     var presentation: SongActionPresentation? = nil
     @Environment(FavoritesStore.self) private var favorites
-    @Environment(NeteaseStore.self) private var netease: NeteaseStore?
+    @Environment(ModuleRegistry.self) private var modules
     @State private var ownPresentation = SongActionPresentation()
     private var actionPresentation: SongActionPresentation { presentation ?? ownPresentation }
     private var liked: Bool { favorites.contains(track) }
@@ -18,7 +18,7 @@ struct FavoriteButton: View {
     }
     private var button: some View {
         Button {
-            if track.remoteSource?.providerID == "netease", netease?.profile == nil {
+            if let provider = track.remoteSource?.providerID, modules.requiresLogin(providerID: provider) {
                 actionPresentation.login = true
                 return
             }
@@ -49,7 +49,7 @@ struct FavoritesPage: View {
     @Environment(PlayerStore.self) private var player
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(DownloadStore.self) private var downloads
-    @Environment(NeteaseStore.self) private var netease: NeteaseStore?
+    @Environment(ModuleRegistry.self) private var modules
     var body: some View {
         let songs = favorites.songs
         let tracks = songs.map(\.track)
@@ -79,7 +79,7 @@ struct FavoritesPage: View {
                     }
                 }
                 ForEach(favorites.errors.keys.sorted(), id: \.self) { key in
-                    Text("\(LibraryOrigin(providerID: key)?.label ?? key)：\(favorites.errors[key] ?? "")")
+                    Text("\(modules.origin(providerID: key)?.label ?? key)：\(favorites.errors[key] ?? "")")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if !favorites.errors.isEmpty {
@@ -97,10 +97,7 @@ struct FavoritesPage: View {
 
     /// 已缓存的网易云歌曲可以直接转为下载。
     private func actions(_ track: Track, downloaded: Bool) -> [SongRowAction] {
-        guard !downloaded, let netease, track.remoteSource?.providerID == "netease",
-              player.cachedQuality(for: track) != nil else { return [] }
-        return [.init(id: "download", title: "转为下载", systemImage: "arrow.down.circle") {
-            Task { await downloads.enqueueNeteaseSong(track, quality: netease.playbackSettings.quality) }
-        }]
+        guard !downloaded, player.cachedQuality(for: track) != nil else { return [] }
+        return modules.cachedSongActions(for: track, downloads: downloads)
     }
 }

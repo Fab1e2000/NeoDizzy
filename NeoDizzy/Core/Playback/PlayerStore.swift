@@ -1,7 +1,7 @@
 import AVFoundation
 import Foundation
 
-/// 播放器：当前播放器和一个静音预缓冲播放器，加一个播放队列。迷你播放器、播放页和系统媒体控制共用这一份状态。
+/// 播放器：AVQueuePlayer 提前排入下一首；发现页另保留一个静音预缓冲播放器。迷你播放器、播放页和系统媒体控制共用这一份状态。
 /// 结构参考 MeloX 的 PlayerStore，去掉了歌词、AutoMix、音质选择等 M1 用不到的部分。
 @Observable
 final class PlayerStore {
@@ -27,7 +27,8 @@ final class PlayerStore {
     var routingPlayer: AVPlayer { player }
     #endif
     let reporting = PlaybackReportingSession()
-    private(set) var isHeartMode = false
+    @ObservationIgnored private let sessionActivation = AudioSessionActivationCoordinator()
+    @ObservationIgnored private let activateSession: AudioSessionActivationCoordinator.Start
     private var queueSourceID: Int?
     private var queue = PlaybackQueue()
     private var loadedFileURL: URL?
@@ -35,6 +36,7 @@ final class PlayerStore {
 
     func holdsFile(_ url: URL) -> Bool {
         let path = LocalLibraryScanner.canonical(url)
+        if let next = queuedNext, next.url.isFileURL, LocalLibraryScanner.canonical(next.url) == path { return true }
         if let loadedFileURL, LocalLibraryScanner.canonical(loadedFileURL) == path { return true }
         return isResolving && currentTrack.flatMap { resolver.localURL(for: $0) }.map { LocalLibraryScanner.canonical($0) == path } == true
     }
@@ -42,6 +44,9 @@ final class PlayerStore {
     func stopForTagEditing(_ url: URL) {
         guard holdsFile(url) else { return }
         pause()
+        cancelQueuedNext()
+        activeItem = nil
+        activeLocalAccess = nil
         loadGeneration += 1
         loadTask?.cancel()
         loadTask = nil
@@ -76,14 +81,23 @@ final class PlayerStore {
     }
 
     private(set) var isDiscovery = false
+    /// Async playback entries capture this before loading, so a newer command
+    /// can supersede them even if the user returns to the same track/play state.
+    @ObservationIgnored private(set) var playbackIntentRevision = 0
     private var remoteDiscoveryID: String?
     private var remoteDiscoverySources: [String: () async throws -> Track] = [:]
+    private var discoverySelections: [String: () async throws -> DiscoverySelection] = [:]
+
+    func registerDiscoverySelection(_ providerID: String, next: @escaping () async throws -> DiscoverySelection) {
+        discoverySelections[providerID] = next
+    }
 
     func registerDiscovery(_ id: String, next: @escaping () async throws -> Track) {
         remoteDiscoverySources[id] = next
     }
     func playRemoteDiscovery(_ track: Track, providerID: String) {
-        isHeartMode = false
+        playbackIntentRevision &+= 1
+        cancelQueuedNext()
         queueSourceID = nil
         cancelDiscoveryRequest()
         remoteDiscoveryID = providerID
@@ -93,6 +107,7 @@ final class PlayerStore {
     }
 
     private var isFetchingDiscovery = false
+    @ObservationIgnored private var remoteTrackTask: Task<Track, Error>?
     @ObservationIgnored private var discoveryTask: Task<Void, Never>?
     @ObservationIgnored private var discoveryGeneration = 0
     @ObservationIgnored private var discoveryPrefetch: Task<PreparedDiscovery, Error>?
@@ -100,6 +115,8 @@ final class PlayerStore {
     /// A silent standby player is promoted intact, preserving its media pipeline.
     @ObservationIgnored private var preparedDiscovery: PreparedDiscovery?
     /// Read-only preparation diagnostic; no timer or additional network requests.
+    var queuedNextTrack: Track? { queuedNext?.track }
+
     var bufferedDiscoveryTrack: Track? {
         guard let next = preparedDiscovery, next.item.status == .readyToPlay,
               next.item.loadedTimeRanges.contains(where: { $0.timeRangeValue.duration.seconds > 0 }) else { return nil }
@@ -111,16 +128,16 @@ final class PlayerStore {
         let url: URL
         let item: AVPlayerItem
         var cacheJob: UUID?
-        private let staging: AVPlayer
+        private let staging: AVQueuePlayer
         private var observation: NSKeyValueObservation?
         private var beganPreroll = false
 
-        init(track: Track, url: URL, staging: AVPlayer, resolver: StreamResolver) {
+        init(track: Track, url: URL, staging: AVQueuePlayer, resolver: StreamResolver) {
             self.track = track
             self.url = url
             if !url.isFileURL, !resolver.isPreview(for: track, url: url),
                let key = resolver.audioCacheKey(for: track), let actual = resolver.actualQuality(for: track),
-               let cached = AudioPlaybackCache.shared.makeItem(url: url, key: key, actualQuality: actual) {
+               let cached = AudioPlaybackCache.shared.makeItem(url: url, key: key, actualQuality: actual, providerID: track.playbackProviderID) {
                 item = cached.0; cacheJob = cached.1
             } else { item = AVPlayerItem(url: url) }
             item.preferredForwardBufferDuration = 8
@@ -140,7 +157,7 @@ final class PlayerStore {
             let id = cacheJob
             Task { @MainActor in AudioPlaybackCache.shared.leave(id, listened: 0, duration: 0) }
         }
-        func takePlayer() -> AVPlayer {
+        func takePlayer() -> AVQueuePlayer {
             observation = nil
             staging.cancelPendingPrerolls()
             item.preferredForwardBufferDuration = 0
@@ -148,7 +165,7 @@ final class PlayerStore {
             return staging
         }
     }
-    @ObservationIgnored private let fetchDiscovery: () async throws -> ShuffleTrack
+    @ObservationIgnored private let fetchDiscovery: () async throws -> DiscoverySelection
     private var isResolving = false
     private var isBuffering = false
 
@@ -167,11 +184,132 @@ final class PlayerStore {
         return queue.upcomingIndices(wraps: repeatMode == .all).map { UpcomingTrack(index: $0, track: queue.tracks[$0]) }
     }
 
-    @ObservationIgnored private var player: AVPlayer
-    @ObservationIgnored private var standbyPlayer: AVPlayer
+    @ObservationIgnored private var player: AVQueuePlayer
+    @ObservationIgnored private var standbyPlayer: AVQueuePlayer
     @ObservationIgnored private var bypassCacheForRetry = false
     @ObservationIgnored private var cacheListenedAtEnd: TimeInterval = 0
     @ObservationIgnored private var audioCacheJob: UUID?
+    @ObservationIgnored private var currentItemObservation: NSKeyValueObservation?
+    @ObservationIgnored private var activeItem: AVPlayerItem?
+    @ObservationIgnored private var nextPreparation: Task<Void, Never>?
+    @ObservationIgnored private var nextGeneration = 0
+    @ObservationIgnored private var queuedNext: QueuedNext?
+    @ObservationIgnored private var activeLocalAccess: OfflineFolderAccess?
+
+    private struct QueuedNext {
+        let track: Track
+        let index: Int?
+        let url: URL
+        let item: AVPlayerItem
+        let cacheJob: UUID?
+        let access: OfflineFolderAccess?
+    }
+
+    private func cancelQueuedNext() {
+        promoteQueuedItem()
+        nextGeneration += 1
+        nextPreparation?.cancel()
+        nextPreparation = nil
+        if let next = queuedNext {
+            if next.item !== player.currentItem { player.remove(next.item) }
+            AudioPlaybackCache.shared.leave(next.cacheJob, listened: 0, duration: 0)
+        }
+        queuedNext = nil
+        player.actionAtItemEnd = .pause
+        AudioPlaybackCache.shared.protect(loadedFileURL)
+    }
+
+    private func prepareQueuedNext() {
+        cancelQueuedNext()
+        guard activeItem != nil, !isDiscovery || remoteDiscoveryID != nil else { return }
+        let generation = nextGeneration
+        if isDiscovery, remoteTrackTask == nil, let id = remoteDiscoveryID, let fetch = remoteDiscoverySources[id] {
+            remoteTrackTask = Task { try await fetch() }
+        }
+        let remoteTask = remoteTrackTask
+        var nextQueue = queue
+        let index: Int?
+        if isDiscovery { index = nil }
+        else if repeatMode == .one { index = queue.currentIndex }
+        else {
+            guard nextQueue.move(by: 1, wraps: repeatMode == .all) else { return }
+            index = nextQueue.currentIndex
+        }
+        let candidate = index.map { queue.tracks[$0] }
+        nextPreparation = Task { [weak self, resolver] in
+            do {
+                let track: Track
+                if let candidate { track = candidate }
+                else if let remoteTask { track = try await remoteTask.value }
+                else { return }
+                try Task.checkCancellation()
+                let access = resolver.independentLocalAccess(for: track)
+                let url = try await resolver.stream(for: track, retainAccess: false)
+                try Task.checkCancellation()
+                guard let self, generation == self.nextGeneration, self.activeItem === self.player.currentItem else { return }
+                if url.isFileURL, self.tagWritePaths.contains(LocalLibraryScanner.canonical(url)) { return }
+                let item: AVPlayerItem
+                var job: UUID?
+                if !url.isFileURL, !resolver.isPreview(for: track, url: url),
+                   let key = resolver.audioCacheKey(for: track), let quality = resolver.actualQuality(for: track),
+                   let cached = AudioPlaybackCache.shared.makeItem(url: url, key: key, actualQuality: quality, providerID: track.playbackProviderID) {
+                    item = cached.0; job = cached.1
+                } else { item = AVPlayerItem(url: url) }
+                guard self.player.canInsert(item, after: self.activeItem) else {
+                    AudioPlaybackCache.shared.leave(job, listened: 0, duration: 0)
+                    return
+                }
+                self.queuedNext = QueuedNext(track: track, index: index, url: url, item: item, cacheJob: job, access: access)
+                AudioPlaybackCache.shared.protectFiles([self.loadedFileURL, url.isFileURL ? url : nil].compactMap { $0 })
+                self.player.insert(item, after: self.activeItem)
+                self.player.actionAtItemEnd = .advance
+            } catch { /* Current playback is unaffected; the end handler can retry resolution. */ }
+        }
+    }
+
+    /// AVQueuePlayer has already handed audio to the next item. Only move ownership/state here.
+    private func promoteQueuedItem() {
+        guard let next = queuedNext, player.currentItem === next.item else { return }
+        queuedNext = nil
+        if isDiscovery { remoteTrackTask = nil }
+        nextGeneration += 1
+        nextPreparation?.cancel(); nextPreparation = nil
+        AudioPlaybackCache.shared.leave(audioCacheJob, listened: max(cacheListenedAtEnd, reporting.listenedSeconds),
+                                        duration: duration > 0 ? duration : currentTrack?.duration ?? 0)
+        reporting.finish()
+        if let index = next.index { _ = queue.select(index: index) }
+        else {
+            var history = Array(queue.tracks.prefix(queue.currentIndex + 1))
+            history.append(next.track)
+            if history.count > 200 { history.removeFirst(history.count - 200) }
+            queue.restore(tracks: history, currentIndex: history.count - 1, isShuffled: false, shuffledOrder: [])
+        }
+        currentTrack = queue.currentTrack
+        audioCacheJob = next.cacheJob
+        activeLocalAccess = next.access
+        resolver.releaseLocalAccess()
+        loadedFileURL = next.url.isFileURL ? next.url : nil
+        loadedLocalFile = next.url.isFileURL
+        AudioPlaybackCache.shared.protect(loadedFileURL)
+        cacheListenedAtEnd = 0
+        retriedTrackID = nil; bypassCacheForRetry = false
+        loadGeneration += 1
+        let generation = loadGeneration
+        activeItem = next.item
+        progress = max(0, next.item.currentTime().seconds)
+        progressUpdatedAt = .now
+        pendingSeek = 0; duration = 0; isSeeking = false; isResolving = false; issue = nil
+        isPreview = resolver.isPreview(for: next.track, url: next.url)
+        reporting.begin(next.track, sourceID: queueSourceID)
+        nowPlaying.setTrack(next.track, duration: next.track.duration ?? 0, queueIndex: queue.position, queueCount: queue.tracks.count)
+        itemStatusObservation = next.item.observe(\.status, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in self?.handleItemStatusChange(generation: generation) }
+        }
+        handleItemStatusChange(generation: generation)
+        handleTimeControlStatusChange()
+        saveState()
+        prepareQueuedNext()
+    }
     @ObservationIgnored private let resolver: StreamResolver
     @ObservationIgnored private let persistence: PlaybackPersistence
     @ObservationIgnored private let nowPlaying: NowPlayingSession
@@ -196,11 +334,17 @@ final class PlayerStore {
     @ObservationIgnored private var progressUpdatedAt = Date.now
 
     init(resolver: StreamResolver = StreamResolver(), persistence: PlaybackPersistence = PlaybackPersistence(),
-         fetchDiscovery: @escaping () async throws -> ShuffleTrack = { try await DizzyCommunity.shared.shuffle() }) {
+         activation: AudioSessionActivationCoordinator.Start? = nil, playbackPlayer: AVQueuePlayer? = nil,
+         fetchDiscovery: @escaping () async throws -> DiscoverySelection = { throw PlaybackError.unavailable }) {
         self.fetchDiscovery = fetchDiscovery
-        let player = AVPlayer()
+        #if os(iOS)
+        self.activateSession = activation ?? { completion in AudioSessionConfigurator.activate(completion: completion) }
+        #else
+        self.activateSession = activation ?? { $0(.success(())) }
+        #endif
+        let player = playbackPlayer ?? AVQueuePlayer()
         self.player = player
-        let standbyPlayer = AVPlayer()
+        let standbyPlayer = AVQueuePlayer()
         self.standbyPlayer = standbyPlayer
         self.resolver = resolver
         self.persistence = persistence
@@ -215,33 +359,34 @@ final class PlayerStore {
     // MARK: - 播放控制
 
     /// 播放一组曲目。`streams` 是专辑页已经拿到的播放地址，可以省掉一次请求。
-    func play(_ tracks: [Track], startAt index: Int, streams: [String: URL] = [:], sourceID: Int? = nil, heartMode: Bool = false) {
+    func play(_ tracks: [Track], startAt index: Int, streams: [String: URL] = [:], sourceID: Int? = nil) {
         guard !tracks.isEmpty else { return }
-        isHeartMode = heartMode
+        playbackIntentRevision &+= 1
+        cancelQueuedNext()
         queueSourceID = sourceID
         cancelDiscoveryRequest()
         isDiscovery = false
         remoteDiscoveryID = nil
-        if tracks.first?.remoteSource == nil, let discID = tracks.first?.discID {
-            resolver.store(streams, for: discID)
-        }
+        if let track = tracks.first { resolver.prime(streams, for: track) }
         queue.replace(with: tracks, startingAt: index)
         load(autoplay: true)
     }
 
     /// A discovery session keeps only track metadata; expiring stream URLs stay in the resolver.
-    func playDiscovery(_ selection: ShuffleTrack, autoplay: Bool = true) {
-        isHeartMode = false
+    func playDiscovery(_ selection: DiscoverySelection, autoplay: Bool = true) {
+        playbackIntentRevision &+= 1
+        cancelQueuedNext()
         queueSourceID = nil
         cancelDiscoveryRequest()
         isDiscovery = true
         remoteDiscoveryID = nil
         queue.restore(tracks: [selection.track], currentIndex: 0, isShuffled: false, shuffledOrder: [])
-        resolver.store([selection.track.number: selection.stream], for: selection.track.discID)
+        resolver.prime([selection.track.number: selection.stream], for: selection.track)
         load(autoplay: autoplay)
     }
 
     private func cancelDiscoveryRequest() {
+        remoteTrackTask?.cancel(); remoteTrackTask = nil
         discoveryGeneration += 1
         discoveryPrefetch?.cancel()
         discoveryPrefetch = nil
@@ -255,20 +400,21 @@ final class PlayerStore {
 
     /// Coalesced between background preparation and the next button; never advance twice.
     private func prepareNextDiscovery() {
-        guard isDiscovery, discoveryPrefetch == nil else { return }
+        guard isDiscovery, remoteDiscoveryID == nil, discoveryPrefetch == nil else { return }
         let generation = discoveryGeneration
         let remoteID = remoteDiscoveryID
         let remoteNext = remoteID.flatMap { remoteDiscoverySources[$0] }
-        discoveryPrefetch = Task { [weak self, fetchDiscovery, resolver] in
+        let selectionNext = (currentTrack?.playbackProviderID).flatMap { discoverySelections[$0] } ?? fetchDiscovery
+        discoveryPrefetch = Task { [weak self, resolver] in
             let track: Track
             if remoteID != nil {
                 guard let remoteNext else { throw PlaybackError.unavailable }
                 track = try await remoteNext()
             } else {
-                let selection = try await fetchDiscovery()
+                let selection = try await selectionNext()
                 try Task.checkCancellation()
                 guard self?.discoveryGeneration == generation else { throw CancellationError() }
-                resolver.store([selection.track.number: selection.stream], for: selection.track.discID)
+                resolver.prime([selection.track.number: selection.stream], for: selection.track)
                 track = selection.track
             }
             try Task.checkCancellation()
@@ -285,6 +431,40 @@ final class PlayerStore {
     }
 
     private func requestNextDiscovery() {
+        if remoteDiscoveryID != nil {
+            if let next = queuedNext, resolver.isFresh(next.url, for: next.track), next.item.status != .failed {
+                player.advanceToNextItem()
+                promoteQueuedItem()
+                if isPlaying { activateAndPlay() }
+            } else {
+                guard let id = remoteDiscoveryID, let fetch = remoteDiscoverySources[id], !isFetchingDiscovery else { return }
+                if remoteTrackTask == nil { remoteTrackTask = Task { try await fetch() } }
+                let trackTask = remoteTrackTask!
+                cancelQueuedNext()
+                isFetchingDiscovery = true
+                let generation = discoveryGeneration
+                discoveryTask = Task { [weak self] in
+                    do {
+                        let track = try await trackTask.value
+                        try Task.checkCancellation()
+                        guard let self, generation == self.discoveryGeneration else { return }
+                        self.isFetchingDiscovery = false
+                        self.remoteTrackTask = nil
+                        var history = Array(self.queue.tracks.prefix(self.queue.currentIndex + 1))
+                        history.append(track)
+                        if history.count > 200 { history.removeFirst(history.count - 200) }
+                        self.queue.restore(tracks: history, currentIndex: history.count - 1, isShuffled: false, shuffledOrder: [])
+                        self.load(autoplay: self.isPlaying)
+                    } catch {
+                        guard let self, generation == self.discoveryGeneration else { return }
+                        self.isFetchingDiscovery = false
+                        self.remoteTrackTask = nil
+                        if !(error is CancellationError) { self.issue = error.localizedDescription }
+                    }
+                }
+            }
+            return
+        }
         guard !isFetchingDiscovery else { return }
         prepareNextDiscovery()
         guard let prepared = discoveryPrefetch else { return }
@@ -326,13 +506,17 @@ final class PlayerStore {
 
     /// 播放队列里的某一首（播放页的「继续播放」列表）。
     func playFromQueue(at index: Int) {
-        guard queue.select(index: index) else { return }
+        playbackIntentRevision &+= 1
+        cancelQueuedNext()
+        guard queue.select(index: index) else { prepareQueuedNext(); return }
         load(autoplay: true)
     }
 
     func moveUpcomingQueueItems(fromOffsets source: IndexSet, toOffset destination: Int) {
+        cancelQueuedNext()
         guard !isDiscovery else { return }
         queue.moveUpcomingSongs(fromOffsets: source, toOffset: destination, wraps: repeatMode == .all)
+        prepareQueuedNext()
         saveState()
     }
 
@@ -353,6 +537,8 @@ final class PlayerStore {
     }
 
     func resume() {
+        playbackIntentRevision &+= 1
+        promoteQueuedItem()
         guard currentTrack != nil else { return }
         reporting.resumeIfNeeded(currentTrack, sourceID: queueSourceID)
         // 刚恢复的队列还没加载音频，或上次播放失败：重新获取地址。
@@ -361,11 +547,18 @@ final class PlayerStore {
             return
         }
         isPlaying = true
+        if let next = queuedNext, !resolver.isFresh(next.url, for: next.track) { prepareQueuedNext() }
         activateAndPlay()
         updateNowPlaying()
     }
 
     func pause() {
+        sessionActivation.cancel()
+        #if os(iOS)
+        resumeAfterInterruption = false
+        #endif
+        playbackIntentRevision &+= 1
+        promoteQueuedItem()
         reporting.setPlaying(false)
         isPlaying = false
         player.pause()
@@ -374,13 +567,18 @@ final class PlayerStore {
     }
 
     func next() {
+        playbackIntentRevision &+= 1
+        promoteQueuedItem()
         if isDiscovery { requestNextDiscovery(); return }
-        guard queue.move(by: 1, wraps: repeatMode == .all) else { return }
+        cancelQueuedNext()
+        guard queue.move(by: 1, wraps: repeatMode == .all) else { prepareQueuedNext(); return }
         load(autoplay: isPlaying)
     }
 
     /// 播放超过 3 秒时回到开头，否则回到上一首。
     func previous() {
+        playbackIntentRevision &+= 1
+        cancelQueuedNext()
         if isDiscovery {
             cancelDiscoveryRequest()
             guard queue.move(by: -1, wraps: false) else { return }
@@ -388,13 +586,21 @@ final class PlayerStore {
             return
         }
         guard progress <= 3, queue.move(by: -1, wraps: repeatMode == .all) else {
-            seek(to: 0)
+            performSeek(to: 0)
+            prepareQueuedNext()
             return
         }
         load(autoplay: isPlaying)
     }
 
     func seek(to seconds: TimeInterval) {
+        playbackIntentRevision &+= 1
+        performSeek(to: seconds)
+    }
+
+    /// Restoring progress and replaying an item do not represent a new user command.
+    private func performSeek(to seconds: TimeInterval) {
+        promoteQueuedItem()
         let target = max(0, duration > 0 ? min(seconds, duration) : seconds)
         progress = target
         progressUpdatedAt = .now
@@ -412,14 +618,18 @@ final class PlayerStore {
     }
 
     func cycleRepeatMode() {
+        cancelQueuedNext()
         guard !isDiscovery else { return }
         repeatMode = repeatMode.next
+        prepareQueuedNext()
         saveState()
     }
 
     func toggleShuffle() {
+        cancelQueuedNext()
         guard !isDiscovery else { return }
         queue.toggleShuffle()
+        prepareQueuedNext()
         saveState()
     }
 
@@ -427,13 +637,12 @@ final class PlayerStore {
 
     func remoteLyrics(for track: Track) async throws -> LocalLyrics? { try await resolver.lyrics(for: track) }
 
-    func disableHeartMode() { isHeartMode = false; saveState() }
-
     /// Like MeloX, reload the active source at the same position and preserve
     /// play/pause intent. Prepared URLs are checked again before promotion.
     func remoteQualityDidChange(providerID: String) {
         resolver.invalidateRemote(providerID)
-        if currentTrack?.remoteSource?.providerID == providerID {
+        prepareQueuedNext()
+        if currentTrack?.playbackProviderID == providerID {
             // Keep the next song's identity, but discard an in-flight old-quality transfer.
             AudioPlaybackCache.shared.leave(preparedDiscovery?.cacheJob, listened: 0, duration: 0)
             preparedDiscovery?.cacheJob = nil
@@ -443,9 +652,53 @@ final class PlayerStore {
 
     func remoteAccountDidChange(providerID: String) {
         resolver.invalidateRemote(providerID)
-        if currentTrack?.remoteSource?.providerID == providerID {
+        prepareQueuedNext()
+        if currentTrack?.playbackProviderID == providerID {
             cancelDiscoveryRequest()
             load(autoplay: false, startAt: progress)
+        }
+    }
+
+    /// A platform adapter calls this after a purchase or other entitlement change.
+    func sourceContentDidChange(providerID: String, collectionID: String) {
+        resolver.invalidate(providerID: providerID, collectionID: collectionID)
+        prepareQueuedNext()
+        if isDiscovery, currentTrack?.playbackProviderID == providerID {
+            cancelDiscoveryRequest()
+            prepareNextDiscovery()
+        }
+        if currentTrack?.playbackProviderID == providerID, currentTrack?.discID == collectionID,
+           isPreview || isResolving {
+            load(autoplay: isPlaying, startAt: progress)
+        }
+    }
+
+    /// Revokes online capabilities without interrupting another source or a downloaded copy.
+    func disableProvider(providerID: String) async {
+        reporting.unregister(providerID)
+        cancelQueuedNext()
+        resolver.unregister(providerID)
+        remoteDiscoverySources[providerID] = nil
+        discoverySelections[providerID] = nil
+        if remoteDiscoveryID == providerID { remoteTrackTask?.cancel(); remoteTrackTask = nil }
+        prepareQueuedNext()
+        AudioPlaybackCache.shared.cancelTransfers(providerID: providerID)
+        if currentTrack?.playbackProviderID == providerID {
+            cancelDiscoveryRequest()
+            isDiscovery = false
+            remoteDiscoveryID = nil
+            if !loadedLocalFile {
+                cancelQueuedNext()
+                activeItem = nil
+                pause()
+                loadGeneration += 1
+                loadTask?.cancel()
+                loadTask = nil
+                player.replaceCurrentItem(with: nil)
+                isResolving = false
+                isBuffering = false
+                issue = PlaybackError.unavailable.localizedDescription
+            }
         }
     }
 
@@ -461,7 +714,6 @@ final class PlayerStore {
         isDiscovery = snapshot.isDiscovery == true
         remoteDiscoveryID = isDiscovery ? queue.currentTrack?.remoteSource?.providerID : nil
         queueSourceID = snapshot.sourceID
-        isHeartMode = snapshot.heartMode == true
         repeatMode = snapshot.repeatMode
         currentTrack = queue.currentTrack
         if let currentTrack { reporting.begin(currentTrack, sourceID: queueSourceID) }
@@ -483,14 +735,16 @@ final class PlayerStore {
             isShuffled: queue.isShuffled,
             shuffledOrder: queue.persistedShuffleOrder,
             isDiscovery: isDiscovery,
-            sourceID: queueSourceID,
-            heartMode: isHeartMode
+            sourceID: queueSourceID
         ))
     }
 
     // MARK: - 加载
 
     private func load(autoplay: Bool, startAt position: TimeInterval = 0, preferLocal: Bool = true, prepared: PreparedDiscovery? = nil, continuing: Bool = false) {
+        cancelQueuedNext()
+        activeItem = nil
+        activeLocalAccess = nil
         AudioPlaybackCache.shared.leave(audioCacheJob, listened: continuing ? 0 : max(cacheListenedAtEnd, reporting.listenedSeconds),
                                         duration: duration > 0 ? duration : currentTrack?.duration ?? 0)
         audioCacheJob = nil; cacheListenedAtEnd = 0
@@ -561,7 +815,7 @@ final class PlayerStore {
         }
     }
 
-    private func start(url: URL, generation: Int, preparedPlayer: AVPlayer? = nil) {
+    private func start(url: URL, generation: Int, preparedPlayer: AVQueuePlayer? = nil) {
         guard generation == loadGeneration else { return }
         if url.isFileURL, tagWritePaths.contains(LocalLibraryScanner.canonical(url)) {
             fail(with: "此曲目正在保存标签，请稍后播放。", generation: generation)
@@ -588,7 +842,7 @@ final class PlayerStore {
         if let existing = preparedPlayer?.currentItem { item = existing }
         else if !bypassCacheForRetry, !url.isFileURL, !isPreview, let track = currentTrack,
                 let key = resolver.audioCacheKey(for: track), let actual = resolver.actualQuality(for: track),
-                let cached = AudioPlaybackCache.shared.makeItem(url: url, key: key, actualQuality: actual) {
+                let cached = AudioPlaybackCache.shared.makeItem(url: url, key: key, actualQuality: actual, providerID: track.playbackProviderID) {
             item = cached.0; audioCacheJob = cached.1
         } else { item = AVPlayerItem(url: url) }
         itemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] _, _ in
@@ -596,7 +850,10 @@ final class PlayerStore {
             Task { @MainActor in self.handleItemStatusChange(generation: generation) }
         }
         if preparedPlayer == nil { player.replaceCurrentItem(with: item) }
+        activeItem = item
+        player.actionAtItemEnd = .pause
         handleItemStatusChange(generation: generation)
+        prepareQueuedNext()
         if isPlaying {
             activateAndPlay()
         }
@@ -615,21 +872,41 @@ final class PlayerStore {
 
     private func activateAndPlay() {
         #if os(iOS)
-        do {
-            try AudioSessionConfigurator.activate()
-            nowPlaying.activate()
-        } catch {
-            debugLog("激活音频会话失败：\(error)")
+        // Session activation follows the loaded item, not transport command
+        // revisions: seek and queue-boundary commands preserve playback intent.
+        // Pause/interruption explicitly cancel the consumer; replacements are
+        // rejected by load generation and item identity below.
+        let generation = loadGeneration
+        let item = player.currentItem
+        sessionActivation.request(start: { @MainActor @Sendable [activateSession] completion in
+            activateSession(completion)
+        }) { [weak self] result in
+            guard let self, self.isPlaying,
+                  self.loadGeneration == generation,
+                  self.player.currentItem === item else { return }
+            switch result {
+            case .success:
+                self.nowPlaying.activate()
+                self.player.play()
+            case .failure(let error):
+                self.fail(with: "激活音频会话失败：\(error.localizedDescription)", generation: generation)
+            }
         }
         #else
         nowPlaying.activate()
-        #endif
         player.play()
+        #endif
     }
 
     // MARK: - 播放器事件
 
     private func installPlayerObservers() {
+        currentItemObservation = player.observe(\.currentItem, options: [.new]) { [weak self, weak observedPlayer = player] _, _ in
+            Task { @MainActor in
+                guard let self, self.player === observedPlayer else { return }
+                self.promoteQueuedItem()
+            }
+        }
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
             queue: .main
@@ -662,26 +939,6 @@ final class PlayerStore {
                 self.handleFailure()
             }
         })
-        observers.append(center.addObserver(forName: .dizzyAccountDidChange, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                if self?.remoteDiscoveryID == nil { self?.cancelDiscoveryRequest() }
-                self?.resolver.clearDizzyLabCache()
-            }
-        })
-        observers.append(center.addObserver(forName: .dizzyPurchaseDidComplete, object: nil, queue: .main) { [weak self] notification in
-            MainActor.assumeIsolated {
-                guard let self, let discID = notification.object as? String else { return }
-                self.resolver.invalidate(discID: discID)
-                if self.isDiscovery, self.remoteDiscoveryID == nil {
-                    self.cancelDiscoveryRequest()
-                    self.prepareNextDiscovery()
-                }
-                // 已加载的试听 AVPlayerItem 也需要换成完整版，保留用户的暂停状态与进度。
-                if self.currentTrack?.remoteSource == nil, self.currentTrack?.discID == discID, self.isPreview || self.isResolving {
-                    self.load(autoplay: self.isPlaying, startAt: self.progress)
-                }
-            }
-        })
         #if os(iOS)
         // 文档没有说明这两个通知的 object 是什么，不按 object 过滤。
         observers.append(center.addObserver(forName: AVAudioSession.didBecomeInactiveNotification, object: nil, queue: .main) { [weak self] notification in
@@ -706,9 +963,12 @@ final class PlayerStore {
     }
 
     private func handleTick(_ seconds: Double) {
+        promoteQueuedItem()
         guard !isSeeking, !isResolving, seconds.isFinite, player.currentItem != nil else { return }
         reporting.setPlaying(isPlaying && player.timeControlStatus == .playing)
-        progress = max(seconds, 0)
+        let currentSeconds = player.currentItem?.currentTime().seconds ?? seconds
+        guard currentSeconds.isFinite else { return }
+        progress = max(currentSeconds, 0)
         progressUpdatedAt = .now
         updateNowPlaying()
         if abs(progress - lastSavedProgress) >= 10 {
@@ -717,6 +977,7 @@ final class PlayerStore {
     }
 
     private func handleTimeControlStatusChange() {
+        promoteQueuedItem()
         reporting.setPlaying(isPlaying && !isResolving && player.timeControlStatus == .playing)
         // 切歌时会短暂处于「没有可播放的项目」，那段时间由 isResolving 表示，不算缓冲。
         let buffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
@@ -739,7 +1000,7 @@ final class PlayerStore {
             if pendingSeek > 0 {
                 let target = duration > 0 && pendingSeek >= duration - 1 ? 0 : pendingSeek
                 pendingSeek = 0
-                seek(to: target)
+                performSeek(to: target)
             }
             updateNowPlaying()
         case .failed:
@@ -750,7 +1011,11 @@ final class PlayerStore {
     }
 
     private func handleItemEnded(_ object: Any?) {
-        guard (object as AnyObject?) === player.currentItem else { return }
+        if let next = queuedNext {
+            if player.currentItem === next.item { promoteQueuedItem(); return }
+            if (object as AnyObject?) === activeItem { return }
+        }
+        guard (object as AnyObject?) === activeItem else { return }
         cacheListenedAtEnd = max(cacheListenedAtEnd, reporting.listenedSeconds)
         reporting.finish()
         if isDiscovery {
@@ -761,14 +1026,14 @@ final class PlayerStore {
             }
             isPlaying = false
             player.pause()
-            seek(to: 0)
+            performSeek(to: 0)
             saveState()
             return
         }
         switch repeatMode {
         case .one:
             if let currentTrack { reporting.begin(currentTrack, sourceID: queueSourceID) }
-            seek(to: 0)
+            performSeek(to: 0)
             player.play()
         case .all, .off:
             if queue.move(by: 1, wraps: repeatMode == .all) {
@@ -777,7 +1042,7 @@ final class PlayerStore {
                 // 整个队列播完：停在最后一首的开头。
                 isPlaying = false
                 player.pause()
-                seek(to: 0)
+                performSeek(to: 0)
                 saveState()
             }
         }
@@ -807,9 +1072,15 @@ final class PlayerStore {
         let context = notification.userInfo?[AVAudioSession.deactivationContextKey] as? AVAudioSession.DeactivationContext
         debugLog("音频会话停用：source=\(context?.source.rawValue ?? -1) reason=\(context?.interruptionContext?.reason.rawValue ?? 999) isPlaying=\(isPlaying)")
         guard context?.source != .app else { return }
+        sessionWasInterrupted(routeDisconnected: context?.interruptionContext?.reason == .routeDisconnected)
+    }
+
+    func sessionWasInterrupted(routeDisconnected: Bool) {
+        sessionActivation.cancel()
+        playbackIntentRevision &+= 1
         // 耳机断开后不自动恢复；来电等中断结束后按系统建议接着播。
         reporting.setPlaying(false)
-        resumeAfterInterruption = isPlaying && context?.interruptionContext?.reason != .routeDisconnected
+        resumeAfterInterruption = isPlaying && !routeDisconnected
         isPlaying = false
         updateNowPlaying()
         saveState()
@@ -818,7 +1089,11 @@ final class PlayerStore {
     private func handleResumptionRecommendation(_ notification: Notification) {
         let context = notification.userInfo?[AVAudioSession.resumptionContextKey] as? AVAudioSession.ResumptionContext
         debugLog("系统恢复建议：recommendation=\(context?.recommendation.rawValue ?? -1) resumeAfterInterruption=\(resumeAfterInterruption)")
-        if resumeAfterInterruption, context?.recommendation == .shouldResume {
+        sessionResumptionRecommended(shouldResume: context?.recommendation == .shouldResume)
+    }
+
+    func sessionResumptionRecommended(shouldResume: Bool) {
+        if resumeAfterInterruption, shouldResume {
             resume()
         }
         resumeAfterInterruption = false

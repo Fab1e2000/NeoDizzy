@@ -2,6 +2,7 @@ import SwiftUI
 
 /// 下载队列按状态分组：进行中、需要处理、已完成；有任务进行时顶部显示总进度。
 struct DownloadQueueSection: View {
+    @Environment(DownloadStore.self) private var downloads
     let jobs: [DownloadJob]
 
     var body: some View {
@@ -9,6 +10,10 @@ struct DownloadQueueSection: View {
         let attention = jobs.filter { !$0.isActive && $0.canRetry }
         let finished = jobs.filter { !$0.isActive && !$0.canRetry }
         VStack(alignment: .leading, spacing: 12) {
+            if let error = downloads.persistenceError {
+                Text(error).foregroundStyle(.red)
+                Button("重试保存队列") { downloads.retryPersistence() }
+            }
             if jobs.isEmpty {
                 ContentUnavailableView("没有下载任务", systemImage: "arrow.down.circle",
                                        description: Text("下载的专辑和歌单会显示在这里，完成后自动加入资料库。"))
@@ -80,6 +85,7 @@ struct DownloadJobRow: View {
     @State private var confirmsRemoval = false
 
     private var retryUnavailableReason: String? {
+        if !downloads.isAvailable(job.providerID) { return "下载来源不可用" }
         if offline.folderName == nil { return "请先选择音乐文件夹" }
         if downloads.jobs.contains(where: { $0.identity == job.identity && $0.isActive }) {
             return "这张专辑已有下载任务"
@@ -174,10 +180,6 @@ private struct DownloadTransferRow: View {
     let index: Int
     @Environment(DownloadStore.self) private var downloads
 
-    private var metadata: NeteaseDownloadMetadata? {
-        guard providerID == "netease" else { return nil }
-        return try? JSONDecoder().decode(NeteaseDownloadMetadata.self, from: transfer.metadata)
-    }
     private var status: String {
         switch transfer.state {
         case .completed: "已保存"
@@ -194,8 +196,8 @@ private struct DownloadTransferRow: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(index)").monospacedDigit().foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(metadata?.track.title ?? "专辑压缩包").lineLimit(2)
-                    if let artist = metadata?.track.artists { Text(artist).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                    Text(transfer.summary?.title ?? "下载文件").lineLimit(2)
+                    if let artist = transfer.summary?.subtitle { Text(artist).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                 }
                 Spacer(minLength: 8)
                 if transfer.state == .completed {

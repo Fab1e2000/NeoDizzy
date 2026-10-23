@@ -33,3 +33,18 @@ nonisolated struct RemoteTrackSource: Codable, Hashable, Sendable {
     let providerID: String
     let itemID: String
 }
+
+// Legacy queue snapshots omit remoteSource for the original platform. Keep that
+// decoding convention at the model boundary, not in the playback engine.
+extension Track {
+    var playbackProviderID: String? {
+        remoteSource?.providerID ?? (localSource == nil ? "dizzylab" : nil)
+    }
+}
+
+nonisolated struct DiscoverySelection: Sendable {
+    let track: Track
+    let stream: URL
+    let label: String
+    let tags: [String]
+}

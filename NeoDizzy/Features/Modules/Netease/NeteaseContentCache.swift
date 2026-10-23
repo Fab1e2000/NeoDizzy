@@ -8,6 +8,7 @@ final class NeteaseContentCache {
     init(prepareArtwork: @escaping ([URL]) async -> Void = { await AlbumArtworkPreload.prepareFirstScreen($0) }) {
         self.prepareArtwork = prepareArtwork
     }
+    private var stopped = false
     @ObservationIgnored private var pages: [Key: NeteasePageModel] = [:]
     @ObservationIgnored private var revision = -1
     @ObservationIgnored private var shortcutTask: Task<Void, Never>?
@@ -15,7 +16,17 @@ final class NeteaseContentCache {
     @ObservationIgnored private var pendingArtwork: [URL] = []
     @ObservationIgnored private var scheduledArtwork = Set<URL>()
 
+    func stop() {
+        stopped = true
+        revision += 1
+        shortcutTask?.cancel(); shortcutTask = nil
+        artworkTask?.cancel(); artworkTask = nil
+        pages.values.forEach { $0.reset() }; pages.removeAll()
+        pendingArtwork.removeAll(); scheduledArtwork.removeAll()
+    }
+
     func page(_ key: Key, revision: Int) -> NeteasePageModel {
+        if stopped { return NeteasePageModel() }
         if self.revision != revision {
             shortcutTask?.cancel(); shortcutTask = nil
             artworkTask?.cancel(); artworkTask = nil
@@ -26,7 +37,7 @@ final class NeteaseContentCache {
         if let page = pages[key] { return page }
         let page = NeteasePageModel()
         page.didUpdate = { [weak self] page in
-            guard let self, self.revision == revision else { return }
+            guard let self, !self.stopped, self.revision == revision else { return }
             for playlist in page.playlists + page.blocks.flatMap(\.playlists) {
                 self.seed(.playlist(playlist.id), title: playlist.name, artwork: playlist.artworkURL, revision: revision)
             }
@@ -47,6 +58,7 @@ final class NeteaseContentCache {
     }
 
     private func enqueueArtwork(_ urls: [URL], revision: Int) {
+        guard !stopped else { return }
         pendingArtwork += urls.filter { scheduledArtwork.insert($0).inserted }
         guard artworkTask == nil, !pendingArtwork.isEmpty else { return }
         artworkTask = Task {
@@ -66,6 +78,7 @@ final class NeteaseContentCache {
     }
 
     func prewarmShortcuts(store: NeteaseStore) {
+        guard !stopped else { return }
         _ = page(.home("", 1000), revision: store.revision)
         guard shortcutTask == nil else { return }
         let revision = store.revision

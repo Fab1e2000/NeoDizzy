@@ -14,7 +14,7 @@ final class ModuleSettings {
     private(set) var searchOrder: [ModuleID]
     private(set) var hidden: Set<ModuleID>
     var startupModule: ModuleID { didSet { save() } }
-    @ObservationIgnored private let installed: [ModuleID]
+    private var installed: [ModuleID]
     @ObservationIgnored private let defaults: UserDefaults
     private static let key = "mainModules.v1"
     private static let searchKey = "search.moduleOrder.v1"
@@ -48,6 +48,19 @@ final class ModuleSettings {
         hidden = preferences.hidden.intersection(ids)
         startupModule = ids.contains(preferences.startup) ? preferences.startup : ids[0]
         if order.allSatisfy(hidden.contains), let first = order.first { hidden.remove(first) }
+        save()
+    }
+
+    /// Reconcile enabled services without interpreting any platform identity.
+    func updateInstalled(_ descriptors: [ModuleDescriptor]) {
+        let ids = descriptors.map(\.id)
+        guard !ids.isEmpty else { return }
+        installed = ids
+        order = order.filter(ids.contains) + ids.filter { !order.contains($0) }
+        searchOrder = searchOrder.filter(ids.contains) + ids.filter { !searchOrder.contains($0) }
+        hidden.formIntersection(ids)
+        if order.allSatisfy(hidden.contains), let first = order.first { hidden.remove(first) }
+        if !ids.contains(startupModule) { startupModule = ids[0] }
         save()
     }
 

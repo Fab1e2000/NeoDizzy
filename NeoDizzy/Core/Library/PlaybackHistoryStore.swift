@@ -6,20 +6,33 @@ import Observation
 @Observable
 final class PlaybackHistoryStore {
     nonisolated struct Entry: Codable, Hashable, Identifiable, Sendable {
-        enum Kind: String, Codable, Sendable { case localAlbum, neteaseAlbum, dizzylabAlbum }
+        enum Kind: String, Codable, Sendable { case localAlbum, neteaseAlbum, dizzylabAlbum, remoteAlbum }
         let kind: Kind
+        var sourceID: String? = nil
         let itemID: String
         var title: String
         var subtitle: String
         var coverURL: URL?
         var playedAt: Date
-        var id: String { "\(kind.rawValue)/\(itemID)" }
+        var providerID: String {
+            switch kind {
+            case .localAlbum: "local"
+            case .neteaseAlbum: "netease"
+            case .dizzylabAlbum: "dizzylab"
+            case .remoteAlbum: sourceID ?? ""
+            }
+        }
+        var id: String { "\(providerID)/album/\(itemID)" }
     }
 
     static let limit = 30
     private(set) var entries: [Entry]
     @ObservationIgnored private let defaults: UserDefaults
     private static let key = "playbackHistory.v1"
+    @ObservationIgnored private var providers: [String: (Track) -> String?] = [:]
+
+    func register(_ providerID: String, albumID: @escaping (Track) -> String?) { providers[providerID] = albumID }
+    func unregister(_ providerID: String) { providers[providerID] = nil }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -27,8 +40,14 @@ final class PlaybackHistoryStore {
     }
 
     func record(_ track: Track, at date: Date = .now) {
-        guard let (kind, itemID) = Self.album(of: track) else { return }
-        let entry = Entry(kind: kind, itemID: itemID, title: track.albumTitle, subtitle: track.artists,
+        let kind: Entry.Kind, itemID: String, sourceID: String?
+        if let local = track.localSource {
+            kind = .localAlbum; itemID = local.albumID; sourceID = nil
+        } else {
+            guard let providerID = track.playbackProviderID, let album = providers[providerID]?(track), !album.isEmpty else { return }
+            kind = .remoteAlbum; itemID = album; sourceID = providerID
+        }
+        let entry = Entry(kind: kind, sourceID: sourceID, itemID: itemID, title: track.albumTitle, subtitle: track.artists,
                           coverURL: track.coverURL, playedAt: date)
         // 同一张专辑连着播放只更新时间，不重排、不重复写入。
         if entries.first?.id == entry.id {
@@ -41,13 +60,4 @@ final class PlaybackHistoryStore {
         if let data = try? JSONEncoder().encode(entries) { defaults.set(data, forKey: Self.key) }
     }
 
-    /// 本地文件按本地专辑记；网易云按专辑 ID；两种来源都没有的是 DizzyLab 站点曲目。
-    private static func album(of track: Track) -> (Entry.Kind, String)? {
-        if let local = track.localSource { return (.localAlbum, local.albumID) }
-        if let remote = track.remoteSource {
-            guard remote.providerID == "netease", let id = Int(track.discID), id > 0 else { return nil }
-            return (.neteaseAlbum, String(id))
-        }
-        return track.discID.isEmpty ? nil : (.dizzylabAlbum, track.discID)
-    }
 }

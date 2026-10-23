@@ -52,80 +52,134 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NeoDizzyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = NeoDizzyWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		89175AF12F06E62B7BC35428 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
-		893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NeoDizzy.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NeoDizzyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		A87D9E8001FA29A97C53BD6E /* NeoDizzy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NeoDizzy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NeoDizzy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NeoDizzyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A87D9E8001FA29A97C53BD6E /* NeoDizzyMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NeoDizzyMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FD46C7D8C96414D162079D9A /* AudioTags */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AudioTags; path = Packages/AudioTags; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		22DE5524606831764F616599 /* Exceptions for "NeoDizzyWidget" folder in "NeoDizzyWidget" target */ = {
+		22DE5524606831764F616599 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 044F953941CB40672A6A121F /* NeoDizzyWidget */;
 		};
-		49E59DC00E4F8222A2C05521 /* Exceptions for "NeoDizzy" folder in "NeoDizzyMac" target */ = {
+		49E59DC00E4F8222A2C05521 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				App/ModuleSettings.swift,
+				App/Modules,
 				App/Modules/AppComposition.swift,
 				App/Modules/AppModule.swift,
 				App/Modules/NowPlayingPresentation.swift,
-				App/ModuleSettings.swift,
+				App/Modules/PlatformRuntime.swift,
 				App/NeoDizzyApp.swift,
 				App/NowPlayingWidgetBridge.swift,
 				App/RootView.swift,
 				App/WindowAppearance.swift,
 				Core/Playback/AudioSessionConfigurator.swift,
-				Core/UI/DiscCard.swift,
+				Core/UI/AlbumPresentation.swift,
+				Core/UI/CollectionLayout.swift,
+				Core/UI/CoverCard.swift,
+				Core/UI/DiscoveryShortcutButton.swift,
+				Core/UI/ExpandableText.swift,
 				Core/UI/LoadStateViews.swift,
 				Core/UI/PageHeader.swift,
 				Core/UI/PlaceholderCard.swift,
-				Features/Account/LoginView.swift,
-				Features/Community/CommunityPages.swift,
-				Features/Community/DiscCommunityView.swift,
-				Features/Community/FollowLabelButton.swift,
-				Features/Community/ReviewDetailView.swift,
-				Features/Disc/AlbumPresentation.swift,
-				Features/Disc/DiscDetailView.swift,
-				Features/Discover/DiscoverView.swift,
-				Features/Discover/DiscoveryShortcutButton.swift,
-				Features/Discover/DizzyLabShortcuts.swift,
-				Features/Discover/ShuffleView.swift,
-				Features/Downloads/DownloadAlbumView.swift,
+				Features/Downloads,
 				Features/Downloads/DownloadQueueSection.swift,
-				Features/Feed/FeedView.swift,
-				Features/Labels/LabelDetailView.swift,
-				Features/Labels/LabelsView.swift,
+				Features/Downloads/DownloadQueueSheet.swift,
+				Features/Library,
 				Features/Library/AudioTagEditorSheet.swift,
 				Features/Library/BatchAudioTagEditorSheet.swift,
-				Features/Library/LibraryView.swift,
+				Features/Library/FavoritesView.swift,
+				Features/Library/LibraryExportView.swift,
 				Features/Library/LocalLibraryView.swift,
+				Features/Library/LocalPlaylistViews.swift,
+				Features/Library/SavedLibraryControls.swift,
+				Features/Library/SongLibraryActions.swift,
+				Features/Library/SongRow.swift,
+				Features/Mine,
 				Features/Mine/AppearanceSettingsView.swift,
-				Features/Mine/BrowsingHistoryView.swift,
 				Features/Mine/DisclaimerView.swift,
 				Features/Mine/LyricsSettingsView.swift,
+				Features/Mine/ManualView.swift,
 				Features/Mine/MineView.swift,
 				Features/Mine/TabSettingsView.swift,
+				Features/Modules,
+				Features/Modules/DizzyLab,
+				Features/Modules/DizzyLab/Account,
+				Features/Modules/DizzyLab/Account/LoginView.swift,
+				Features/Modules/DizzyLab/BrowsingHistory,
+				Features/Modules/DizzyLab/BrowsingHistory/BrowsingHistoryView.swift,
+				Features/Modules/DizzyLab/Community,
+				Features/Modules/DizzyLab/Community/CommunityPages.swift,
+				Features/Modules/DizzyLab/Community/DiscCommunityView.swift,
+				Features/Modules/DizzyLab/Community/FollowLabelButton.swift,
+				Features/Modules/DizzyLab/Community/ReviewDetailView.swift,
+				Features/Modules/DizzyLab/Disc,
+				Features/Modules/DizzyLab/Disc/DiscDetailView.swift,
+				Features/Modules/DizzyLab/Discover,
+				Features/Modules/DizzyLab/Discover/DiscoverView.swift,
+				Features/Modules/DizzyLab/Discover/DizzyLabShortcuts.swift,
+				Features/Modules/DizzyLab/Discover/ShuffleView.swift,
 				Features/Modules/DizzyLab/DizzyLabAccountSettings.swift,
+				Features/Modules/DizzyLab/DizzyLabCards.swift,
 				Features/Modules/DizzyLab/DizzyLabContentCache.swift,
 				Features/Modules/DizzyLab/DizzyLabDestination.swift,
 				Features/Modules/DizzyLab/DizzyLabModule.swift,
+				Features/Modules/DizzyLab/DizzyLabPlayerActions.swift,
+				Features/Modules/DizzyLab/DizzyLabPurchasedView.swift,
+				Features/Modules/DizzyLab/DizzyLabRuntime.swift,
+				Features/Modules/DizzyLab/DizzyLabSearchResults.swift,
+				Features/Modules/DizzyLab/DownloadAlbumView.swift,
+				Features/Modules/DizzyLab/Feed,
+				Features/Modules/DizzyLab/Feed/FeedView.swift,
+				Features/Modules/DizzyLab/Labels,
+				Features/Modules/DizzyLab/Labels/LabelDetailView.swift,
+				Features/Modules/DizzyLab/Labels/LabelsView.swift,
+				Features/Modules/DizzyLab/Pack,
+				Features/Modules/DizzyLab/Pack/PackDetailView.swift,
+				Features/Modules/DizzyLab/Purchase,
+				Features/Modules/DizzyLab/Purchase/CheckoutWebView.swift,
+				Features/Modules/DizzyLab/Purchase/PurchaseView.swift,
+				Features/Modules/DizzyLab/Routes,
+				Features/Modules/DizzyLab/Routes/DizzyLabPage.swift,
+				Features/Modules/DizzyLab/Tags,
+				Features/Modules/DizzyLab/Tags/TagDiscsView.swift,
 				Features/Modules/LocalLibraryModule.swift,
+				Features/Modules/Netease,
 				Features/Modules/Netease/NeteaseContentCache.swift,
+				Features/Modules/Netease/NeteaseDownloadButton.swift,
 				Features/Modules/Netease/NeteaseHomeSections.swift,
 				Features/Modules/Netease/NeteaseLibraryActions.swift,
 				Features/Modules/Netease/NeteaseLoginView.swift,
 				Features/Modules/Netease/NeteaseModule.swift,
 				Features/Modules/Netease/NeteasePageModel.swift,
+				Features/Modules/Netease/NeteaseRuntime.swift,
 				Features/Modules/Netease/NeteaseSettingsView.swift,
 				Features/Modules/Netease/NeteaseViews.swift,
-				Features/Pack/PackDetailView.swift,
+				Features/Modules/QQMusic,
+				Features/Modules/QQMusic/QQMusicAccountView.swift,
+				Features/Modules/QQMusic/QQMusicContentCache.swift,
+				Features/Modules/QQMusic/QQMusicDiscoveryShortcuts.swift,
+				Features/Modules/QQMusic/QQMusicDownloadButton.swift,
+				Features/Modules/QQMusic/QQMusicHomeView.swift,
+				Features/Modules/QQMusic/QQMusicLibraryActions.swift,
+				Features/Modules/QQMusic/QQMusicLoginView.swift,
+				Features/Modules/QQMusic/QQMusicModule.swift,
+				Features/Modules/QQMusic/QQMusicPageModel.swift,
+				Features/Modules/QQMusic/QQMusicPlaybackSettingsSection.swift,
+				Features/Modules/QQMusic/QQMusicPlayerActions.swift,
+				Features/Modules/QQMusic/QQMusicStore.swift,
+				Features/Modules/QQMusic/QQMusicViews.swift,
+				Features/Player,
 				Features/Player/MiniPlayerView.swift,
-				Features/Player/NowPlaying/HeartModeNowPlayingBadge.swift,
+				Features/Player/NowPlaying,
 				Features/Player/NowPlaying/NowPlayingAirPlayButton.swift,
 				Features/Player/NowPlaying/NowPlayingArtworkPage.swift,
 				Features/Player/NowPlaying/NowPlayingBottomControls.swift,
@@ -136,8 +190,8 @@
 				Features/Player/NowPlaying/NowPlayingLyricsPage.swift,
 				Features/Player/NowPlaying/NowPlayingLyricsPagePresentation.swift,
 				Features/Player/NowPlaying/NowPlayingMotionSpec.swift,
-				Features/Player/NowPlaying/NowPlayingPages.swift,
 				Features/Player/NowPlaying/NowPlayingPageTransition.swift,
+				Features/Player/NowPlaying/NowPlayingPages.swift,
 				Features/Player/NowPlaying/NowPlayingPortraitArtwork.swift,
 				Features/Player/NowPlaying/NowPlayingQueuePage.swift,
 				Features/Player/NowPlaying/NowPlayingSongActions.swift,
@@ -145,24 +199,27 @@
 				Features/Player/NowPlaying/NowPlayingTransitionCoordinator.swift,
 				Features/Player/NowPlaying/NowPlayingTransportButtonStyle.swift,
 				Features/Player/NowPlaying/NowPlayingView.swift,
-				Features/Purchase/CheckoutWebView.swift,
-				Features/Purchase/PurchaseView.swift,
+				Features/Routes,
 				Features/Routes/AppRouteDestination.swift,
-				Features/Routes/DizzyLabPage.swift,
-				Features/Search/DiscoverSearchResults.swift,
-				Features/Tags/TagDiscsView.swift,
+				Features/Routes/InlinePageRoute.swift,
+				Features/Routes/MiniPlayerSuppression.swift,
+				Features/Search,
+				Features/Search/SearchRows.swift,
+				Features/Search/UnifiedSearchView.swift,
 				Info.plist,
+				"Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png",
+				Resources/Assets.xcassets/AppIcon.appiconset/Contents.json,
 			);
 			target = 4F18C0F88F5D3983448496BD /* NeoDizzyMac */;
 		};
-		A751D87839DDCCDA8E31DDFD /* Exceptions for "NeoDizzyMac" folder in "NeoDizzyMac" target */ = {
+		A751D87839DDCCDA8E31DDFD /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 4F18C0F88F5D3983448496BD /* NeoDizzyMac */;
 		};
-		E015CD3412C03FCB4E9E7A0E /* Exceptions for "NeoDizzy" folder in "NeoDizzy" target */ = {
+		E015CD3412C03FCB4E9E7A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -172,29 +229,33 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		0D8FCDB38B251488A6FA8FEC /* NeoDizzy */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				E015CD3412C03FCB4E9E7A0E /* Exceptions for "NeoDizzy" folder in "NeoDizzy" target */,
-				49E59DC00E4F8222A2C05521 /* Exceptions for "NeoDizzy" folder in "NeoDizzyMac" target */,
-			);
-			path = NeoDizzy;
-			sourceTree = "<group>";
-		};
+		0D8FCDB38B251488A6FA8FEC /* NeoDizzy */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E015CD3412C03FCB4E9E7A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */, 49E59DC00E4F8222A2C05521 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NeoDizzy; sourceTree = "<group>"; };
 		976EFF2EBCA4EB2742D677A7 /* NeoDizzyTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
 			path = NeoDizzyTests;
 			sourceTree = "<group>";
 		};
 		A88537E00FD3538659F85461 /* WidgetShared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
 			path = WidgetShared;
 			sourceTree = "<group>";
 		};
 		DE526EDCB9439C2D576FC12B /* NeoDizzyWidget */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				22DE5524606831764F616599 /* Exceptions for "NeoDizzyWidget" folder in "NeoDizzyWidget" target */,
+				22DE5524606831764F616599 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
 			);
 			path = NeoDizzyWidget;
 			sourceTree = "<group>";
@@ -202,7 +263,11 @@
 		E27E12D563830DA22A0BEC1E /* NeoDizzyMac */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				A751D87839DDCCDA8E31DDFD /* Exceptions for "NeoDizzyMac" folder in "NeoDizzyMac" target */,
+				A751D87839DDCCDA8E31DDFD /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
 			);
 			path = NeoDizzyMac;
 			sourceTree = "<group>";
@@ -249,7 +314,7 @@
 			isa = PBXGroup;
 			children = (
 				893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */,
-				A87D9E8001FA29A97C53BD6E /* NeoDizzy.app */,
+				A87D9E8001FA29A97C53BD6E /* NeoDizzyMac.app */,
 				911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */,
 				25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */,
 			);
@@ -293,8 +358,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				A88537E00FD3538659F85461 /* WidgetShared */,
 				DE526EDCB9439C2D576FC12B /* NeoDizzyWidget */,
+				A88537E00FD3538659F85461 /* WidgetShared */,
 			);
 			name = NeoDizzyWidget;
 			packageProductDependencies = (
@@ -328,7 +393,7 @@
 				499B2BFF8E5C41E5CEF046E7 /* ZIPFoundation */,
 			);
 			productName = NeoDizzyMac;
-			productReference = A87D9E8001FA29A97C53BD6E /* NeoDizzy.app */;
+			productReference = A87D9E8001FA29A97C53BD6E /* NeoDizzyMac.app */;
 			productType = "com.apple.product-type.application";
 		};
 		7B34A05017631F95C6D93E8C /* NeoDizzy */ = {

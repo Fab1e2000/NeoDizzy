@@ -21,11 +21,6 @@ struct NeteasePlayerActions: View {
                         },
                         UIAction(title: "相似歌曲", image: UIImage(systemName: "music.note.list")) { _ in openRoute(.netease(.similar(id))) }
                     ]
-                    if player.isHeartMode {
-                        items.insert(UIAction(title: "退出心动模式", image: UIImage(systemName: "heart.slash")) { _ in
-                            player.disableHeartMode()
-                        }, at: 0)
-                    }
                     if let albumID = Int(track.discID), albumID > 0 {
                         items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "square.stack")) { _ in openRoute(.netease(.album(albumID))) })
                     }

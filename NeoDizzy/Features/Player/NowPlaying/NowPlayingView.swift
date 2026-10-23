@@ -53,6 +53,11 @@ struct NowPlayingView: View {
         .task(id: transitionSettlementTaskID) { await settlePageTransition() }
         .task(id: lyricsEntranceTaskID) { await presentLyricsEntrance() }
         .onChange(of: page) { _, _ in showsLyricsControls = true }
+        .onChange(of: lyricsAvailability, initial: true) { _, availability in
+            if availability != .available, page == .lyrics {
+                pageSelection.wrappedValue = .artwork
+            }
+        }
         .onChange(of: player.currentTrack == nil) { _, empty in if empty { dismiss() } }
         .fileImporter(isPresented: $importingLyrics, allowedContentTypes: [.data, .plainText]) { result in
             guard let id = importTrackID, case .success(let url) = result else { return }
@@ -91,6 +96,7 @@ struct NowPlayingView: View {
         NowPlayingBottomControls(
             song: song,
             page: pageSelection,
+            hasLyrics: lyricsAvailability == .available,
             showsLyricsUtilities:
                 usesExpandedAppleMusicLyricsLayout,
             hasLyricsTranslations: hasLyricsTranslations,
@@ -99,10 +105,15 @@ struct NowPlayingView: View {
         )
     }
 
+    private var lyricsAvailability: NowPlayingLyricsModel.Availability {
+        lyricsModel.availability(for: player.currentTrack?.id)
+    }
+
     private var pageSelection: Binding<NowPlayingPage> {
         Binding(
             get: { page },
             set: { newPage in
+                guard newPage != .lyrics || lyricsAvailability == .available else { return }
                 pageTransition.select(
                     newPage,
                     usesAppleMusicLyrics:

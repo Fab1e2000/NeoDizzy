@@ -1,12 +1,13 @@
 import Foundation
 
+#if os(iOS)
 /// 导出、导入与自动备份共用的资料库和设置来源。
 @MainActor struct LibraryContext {
     let favorites: FavoritesStore
     let mirror: AccountLibraryMirror
     let saved: SavedLibraryStore
     let offline: OfflineLibraryStore
-    let netease: NeteaseStore
+    let providers: LibraryProviderRegistry
     let modules: ModuleSettings
     let downloads: DownloadStore
     var appearance: AppearanceSettings = .shared
@@ -17,18 +18,17 @@ import Foundation
     }
 
     func settings() -> LibraryExport.Settings {
-        LibraryExport.Settings(theme: appearance.themeID, appearance: appearance.mode.rawValue,
+        LibraryExport.Settings(appearance: appearance.mode.rawValue,
                                immersive: defaults.bool(forKey: ImmersiveMode.storageKey),
                                moduleOrder: modules.order.map(\.rawValue), hiddenModules: modules.hidden.map(\.rawValue).sorted(),
                                startupModule: modules.startupModule.rawValue, searchOrder: modules.searchOrder.map(\.rawValue),
-                               neteaseQuality: netease.playbackSettings.quality.rawValue,
+                               providerSettings: providers.settings(),
                                concurrentDownloads: downloads.concurrentDownloadCount,
                                lyricsFocusPosition: defaults.object(forKey: LyricsFocus.storageKey) as? Double)
     }
 
-    /// 只改文件里写了的项；无法识别的值（例如已删除的主题）保持当前设置。
+    /// 只改文件里写了的项；无法识别的值保持当前设置。旧备份里的主题色已不再使用，忽略。
     func apply(_ settings: LibraryExport.Settings) {
-        if let theme = settings.theme, AppTheme.presets.contains(where: { $0.id == theme }) { appearance.themeID = theme }
         if let mode = settings.appearance.flatMap(AppAppearance.init(rawValue:)) { appearance.mode = mode }
         if let immersive = settings.immersive { defaults.set(immersive, forKey: ImmersiveMode.storageKey) }
         if let order = settings.moduleOrder {
@@ -37,33 +37,28 @@ import Foundation
                             startup: settings.startupModule.map { ModuleID(rawValue: $0) } ?? modules.startupModule,
                             search: (settings.searchOrder ?? []).map { ModuleID(rawValue: $0) })
         }
-        if let quality = settings.neteaseQuality.flatMap(NeteaseQuality.init(rawValue:)) { netease.playbackSettings.quality = quality }
+        var values = settings.providerSettings ?? [:]
+        if let legacy = settings.neteaseQuality, values["netease"] == nil { values["netease"] = ["quality": legacy] }
+        providers.apply(values)
         if let count = settings.concurrentDownloads { downloads.concurrentDownloadCount = count }
         if let position = settings.lyricsFocusPosition { defaults.set(min(1, max(0, position)), forKey: LyricsFocus.storageKey) }
     }
 
-    /// 当前网易云会话；没登录时为空。
+    /// 已注册平台愿意备份的当前会话；没登录时为空。
     func credentials() -> LibraryExport.Credentials? {
-        let cookie = netease.api.client.cookie
-        guard netease.profile != nil, NeteaseClient.cookieValues(cookie)["MUSIC_U"] != nil else { return nil }
-        return LibraryExport.Credentials(neteaseCookie: cookie)
+        let values = providers.credentials()
+        return values.isEmpty ? nil : LibraryExport.Credentials(providers: values)
     }
 
     /// 合并进现有资料库，不删除任何已有内容。
-    /// 网易云的喜欢、歌单和收藏随账号同步，登录后自动回来，这里不写入账号。
+    /// 平台的喜欢、歌单和收藏随账号同步，登录后自动回来，这里不写入账号。
     func restore(_ export: LibraryExport, includeSettings: Bool) async throws -> LibraryRestoreReport {
         // 下载歌单的文件不在「专辑」里显示，但喜欢也可能落在它们身上，所以对照全部本地曲目。
         var report = try Self.restoreLibrary(export, favorites: favorites, saved: saved, localTracks: offline.localAlbums.flatMap(\.tracks))
         if includeSettings, let settings = export.settings { apply(settings); report.settingsApplied = true }
-        if let cookie = export.credentials?.neteaseCookie, !cookie.isEmpty {
-            if netease.profile != nil {
-                report.netease = .alreadySignedIn
-            } else {
-                // 登录时会先联网验证；Cookie 过期就保持未登录，不覆盖任何状态。
-                do { try await netease.login(cookie: cookie); report.netease = .restored }
-                catch { report.netease = .expired }
-            }
-        }
+        var credentials = export.credentials?.providers ?? [:]
+        if let legacy = export.credentials?.neteaseCookie, credentials["netease"] == nil { credentials["netease"] = legacy }
+        report.accounts = await providers.restore(credentials)
         return report
     }
 
@@ -110,7 +105,7 @@ import Foundation
         for song in export.savedSongs where song.providerID != "local" && song.providerID != "dizzylab" {
             let item = SavedLibraryItem.song(Self.track(song, remote: song.providerID != "dizzylab"), providerID: song.providerID,
                                              itemID: song.itemID, addedAt: song.addedAt ?? .now)
-            if !saved.contains(.song, providerID: item.providerID, itemID: item.itemID) { saved.add(item); report.savedAdded += 1 }
+            if !saved.contains(.song, providerID: item.providerID, itemID: item.itemID) { guard saved.add(item) else { throw CocoaError(.fileWriteUnknown) }; report.savedAdded += 1 }
         }
         for collection in export.collections {
             guard collection.origin != .local, collection.origin != .account, collection.providerID != "local",
@@ -119,8 +114,8 @@ import Foundation
             // 登录后会像以前一样提交到账号。旧版文件分不清来源，按账号内容处理。
             if collection.providerID == "netease", collection.origin != .saved { report.accountCollections += 1; continue }
             guard !saved.contains(kind, providerID: collection.providerID, itemID: collection.itemID) else { continue }
-            saved.add(SavedLibraryItem(kind: kind, providerID: collection.providerID, itemID: collection.itemID, title: collection.title,
-                                       subtitle: collection.subtitle, coverURL: collection.coverURL, track: nil, addedAt: .now))
+            guard saved.add(SavedLibraryItem(kind: kind, providerID: collection.providerID, itemID: collection.itemID, title: collection.title,
+                                       subtitle: collection.subtitle, coverURL: collection.coverURL, track: nil, addedAt: .now)) else { throw CocoaError(.fileWriteUnknown) }
             report.savedAdded += 1
         }
         return report
@@ -144,6 +139,8 @@ import Foundation
     }
 }
 
+#endif
+
 struct LibraryRestoreReport: Equatable {
     var favoritesAdded = 0
     var savedAdded = 0
@@ -151,20 +148,23 @@ struct LibraryRestoreReport: Equatable {
     var accountFavorites = 0
     var accountCollections = 0
     var settingsApplied = false
-    var netease: NeteaseLogin?
-    enum NeteaseLogin: Equatable { case restored, alreadySignedIn, expired }
+    enum Login: Equatable { case restored, alreadySignedIn, expired }
+    struct Account: Equatable { let title: String; let status: Login }
+    var accounts: [String: Account] = [:]
 
     var lines: [String] {
         var lines = ["新增 \(favoritesAdded) 首喜欢，\(savedAdded) 个收藏。"]
         if settingsApplied { lines.append("已恢复外观、主题、模块顺序等设置。") }
-        switch netease {
-        case .restored: lines.append("已恢复网易云登录，喜欢和歌单会自动同步回来。")
-        case .alreadySignedIn: lines.append("网易云已登录，保留当前账号。")
-        case .expired: lines.append("备份里的网易云登录已过期，请重新登录。")
-        case nil: break
+        for id in accounts.keys.sorted() {
+            guard let account = accounts[id] else { continue }
+            switch account.status {
+            case .restored: lines.append("已恢复\(account.title)登录，账号内容会自动同步回来。")
+            case .alreadySignedIn: lines.append("\(account.title)已登录，保留当前账号。")
+            case .expired: lines.append("备份里的\(account.title)登录已过期，请重新登录。")
+            }
         }
-        if accountFavorites + accountCollections > 0, netease != .restored, netease != .alreadySignedIn {
-            lines.append("\(accountFavorites) 首网易云喜欢和 \(accountCollections) 个网易云歌单、专辑随账号保存，登录网易云后自动同步回来。")
+        if accountFavorites + accountCollections > 0 {
+            lines.append("\(accountFavorites) 首平台喜欢和 \(accountCollections) 个平台歌单、专辑随账号保存，启用对应模块并登录后自动同步。")
         }
         if unmatchedLocal > 0 {
             lines.append("\(unmatchedLocal) 首本地歌曲的喜欢暂未恢复：音乐库里找不到同名文件。它们会继续记在备份里，把音乐放回「文件 › 我的 iPhone › NeoDizzy」后再导入一次即可。")

@@ -1,0 +1,213 @@
+{
+  "date": "2026-10-23",
+  "platform": "iOS Simulator, iOS 27.0, Xcode 27.1",
+  "input": "current working checkout including uncommitted and untracked inputs",
+  "snapshot_inventory_sha256": "5a1e8b7aa5fc936290d0780cfb420f0e338d703cb478100de620929dd5adab8e",
+  "current_production_and_test_code_matches_snapshot": true,
+  "total_passed_across_configurations": 1794,
+  "total_failed": 0,
+  "total_skipped_across_configurations": 4,
+  "skip_reason": "LocalLibraryTests.verifiesUserMusicReadOnly requires NEODIZZY_VERIFY_MUSIC_ROOT pointing at the real user music directory. No skip selector was used.",
+  "cases": [
+    {
+      "case": "remove-dizzylab",
+      "removed": "DizzyLab",
+      "remaining": "网易云、QQ 音乐、本地库",
+      "deleted_product_swift_files": 77,
+      "deleted_owned_test_files": 23,
+      "retained_test_files": 67,
+      "passed": 487,
+      "failed": 0,
+      "skipped": 1,
+      "total": 488,
+      "exit_code": 0,
+      "runtime_environment_verified": true,
+      "expected_modules": [
+        "netease",
+        "qqmusic",
+        "localLibrary"
+      ],
+      "environment_evidence": {
+        "case": "remove-dizzylab",
+        "expected_value": "netease,qqmusic,localLibrary",
+        "expected_module_ids": [
+          "netease",
+          "qqmusic",
+          "localLibrary"
+        ],
+        "xctestrun_files": [],
+        "runtime_contract_matches": [
+          {
+            "log": "/private/tmp/neodizzy-removal-20261023-v5/remove-dizzylab/artifacts/xcodebuild.log",
+            "line": 4222,
+            "expected": [
+              "netease",
+              "qqmusic",
+              "localLibrary"
+            ],
+            "actual": [
+              "localLibrary",
+              "netease",
+              "qqmusic"
+            ],
+            "exact": true
+          }
+        ],
+        "verified": true,
+        "verifiedBy": "runtime-contract-output"
+      },
+      "host_and_survivor_files_unchanged": true,
+      "host_and_survivor_directories_unchanged": true,
+      "ui_launch_verified": true,
+      "artifact_directory": "/tmp/neodizzy-removal-20261023-v5/remove-dizzylab/artifacts"
+    },
+    {
+      "case": "remove-netease",
+      "removed": "网易云",
+      "remaining": "DizzyLab、QQ 音乐、本地库",
+      "deleted_product_swift_files": 31,
+      "deleted_owned_test_files": 13,
+      "retained_test_files": 77,
+      "passed": 561,
+      "failed": 0,
+      "skipped": 1,
+      "total": 562,
+      "exit_code": 0,
+      "runtime_environment_verified": true,
+      "expected_modules": [
+        "dizzyLab",
+        "qqmusic",
+        "localLibrary"
+      ],
+      "environment_evidence": {
+        "case": "remove-netease",
+        "expected_value": "dizzyLab,qqmusic,localLibrary",
+        "expected_module_ids": [
+          "dizzyLab",
+          "qqmusic",
+          "localLibrary"
+        ],
+        "xctestrun_files": [],
+        "runtime_contract_matches": [
+          {
+            "log": "/private/tmp/neodizzy-removal-20261023-v5/remove-netease/artifacts/xcodebuild.log",
+            "line": 4902,
+            "expected": [
+              "dizzyLab",
+              "qqmusic",
+              "localLibrary"
+            ],
+            "actual": [
+              "dizzyLab",
+              "localLibrary",
+              "qqmusic"
+            ],
+            "exact": true
+          }
+        ],
+        "verified": true,
+        "verifiedBy": "runtime-contract-output"
+      },
+      "host_and_survivor_files_unchanged": true,
+      "host_and_survivor_directories_unchanged": true,
+      "ui_launch_verified": true,
+      "artifact_directory": "/tmp/neodizzy-removal-20261023-v5/remove-netease/artifacts"
+    },
+    {
+      "case": "remove-qqmusic",
+      "removed": "QQ 音乐",
+      "remaining": "DizzyLab、网易云、本地库",
+      "deleted_product_swift_files": 28,
+      "deleted_owned_test_files": 16,
+      "retained_test_files": 74,
+      "passed": 473,
+      "failed": 0,
+      "skipped": 1,
+      "total": 474,
+      "exit_code": 0,
+      "runtime_environment_verified": true,
+      "expected_modules": [
+        "dizzyLab",
+        "netease",
+        "localLibrary"
+      ],
+      "environment_evidence": {
+        "case": "remove-qqmusic",
+        "expected_value": "dizzyLab,netease,localLibrary",
+        "expected_module_ids": [
+          "dizzyLab",
+          "netease",
+          "localLibrary"
+        ],
+        "xctestrun_files": [],
+        "runtime_contract_matches": [
+          {
+            "log": "/private/tmp/neodizzy-removal-20261023-v5/remove-qqmusic/artifacts/xcodebuild.log",
+            "line": 4707,
+            "expected": [
+              "dizzyLab",
+              "netease",
+              "localLibrary"
+            ],
+            "actual": [
+              "dizzyLab",
+              "localLibrary",
+              "netease"
+            ],
+            "exact": true
+          }
+        ],
+        "verified": true,
+        "verifiedBy": "runtime-contract-output"
+      },
+      "host_and_survivor_files_unchanged": true,
+      "host_and_survivor_directories_unchanged": true,
+      "ui_launch_verified": true,
+      "artifact_directory": "/tmp/neodizzy-removal-20261023-v5/remove-qqmusic/artifacts"
+    },
+    {
+      "case": "remove-all",
+      "removed": "全部平台",
+      "remaining": "仅本地库与基座",
+      "deleted_product_swift_files": 136,
+      "deleted_owned_test_files": 50,
+      "retained_test_files": 40,
+      "passed": 273,
+      "failed": 0,
+      "skipped": 1,
+      "total": 274,
+      "exit_code": 0,
+      "runtime_environment_verified": true,
+      "expected_modules": [
+        "localLibrary"
+      ],
+      "environment_evidence": {
+        "case": "remove-all",
+        "expected_value": "localLibrary",
+        "expected_module_ids": [
+          "localLibrary"
+        ],
+        "xctestrun_files": [],
+        "runtime_contract_matches": [
+          {
+            "log": "/private/tmp/neodizzy-removal-20261023-v5/remove-all/artifacts/xcodebuild.log",
+            "line": 3827,
+            "expected": [
+              "localLibrary"
+            ],
+            "actual": [
+              "localLibrary"
+            ],
+            "exact": true
+          }
+        ],
+        "verified": true,
+        "verifiedBy": "runtime-contract-output"
+      },
+      "host_and_survivor_files_unchanged": true,
+      "host_and_survivor_directories_unchanged": true,
+      "ui_launch_verified": true,
+      "artifact_directory": "/tmp/neodizzy-removal-20261023-v5/remove-all/artifacts"
+    }
+  ]
+}

@@ -34,9 +34,13 @@ nonisolated struct SavedLibraryItem: Codable, Hashable, Identifiable, Sendable {
 @MainActor
 final class SavedLibraryStore {
     private(set) var items: [SavedLibraryItem] = []
+    var persistenceError: String?
+    @ObservationIgnored private var pendingItems: [SavedLibraryItem]?
+    @ObservationIgnored private let writeData: (Data, URL) throws -> Void
     @ObservationIgnored private let fileURL: URL
 
-    init(directory: URL = URL.applicationSupportDirectory.appendingPathComponent("Library", isDirectory: true)) {
+    init(directory: URL = URL.applicationSupportDirectory.appendingPathComponent("Library", isDirectory: true), writeData: @escaping (Data, URL) throws -> Void = { try $0.write(to: $1, options: .atomic) }) {
+        self.writeData = writeData
         fileURL = directory.appendingPathComponent("saved-items.json")
         if let data = try? Data(contentsOf: fileURL),
            let saved = try? JSONDecoder().decode([SavedLibraryItem].self, from: data) {
@@ -53,36 +57,49 @@ final class SavedLibraryStore {
         items.filter { $0.kind == kind }
     }
 
-    /// 已在资料库时不重复添加，保留原来的加入时间。
-    func add(_ item: SavedLibraryItem) {
-        guard !items.contains(where: { $0.id == item.id }) else { return }
-        items.insert(item, at: 0)
-        save()
+    /// Publish changes only after the atomic snapshot succeeds.
+    @discardableResult
+    func add(_ item: SavedLibraryItem) -> Bool {
+        guard !items.contains(where: { $0.id == item.id }) else { return true }
+        return save([item] + items)
     }
 
-    func remove(id: String) {
-        items.removeAll { $0.id == id }
-        save()
-    }
+    @discardableResult
+    func remove(id: String) -> Bool { save(items.filter { $0.id != id }) }
 
-    func toggle(_ item: SavedLibraryItem) {
-        if items.contains(where: { $0.id == item.id }) { remove(id: item.id) } else { add(item) }
+    @discardableResult
+    func toggle(_ item: SavedLibraryItem) -> Bool {
+        if items.contains(where: { $0.id == item.id }) { return remove(id: item.id) }
+        return add(item)
     }
 
     func removeMigratedSongs(ids: Set<String>) throws {
         guard !ids.isEmpty else { return }
-        let remaining = items.filter { !ids.contains($0.id) }
-        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(remaining).write(to: fileURL, options: .atomic)
-        items = remaining
+        try persist(items.filter { !ids.contains($0.id) })
     }
 
-    private func save() {
+    private func persist(_ candidate: [SavedLibraryItem]) throws {
+        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try writeData(JSONEncoder().encode(candidate), fileURL)
+        items = candidate
+        persistenceError = nil
+        pendingItems = nil
+    }
+
+    @discardableResult
+    func retryPersistence() -> Bool {
+        guard let pendingItems else { return true }
+        return save(pendingItems)
+    }
+
+    private func save(_ candidate: [SavedLibraryItem]) -> Bool {
         do {
-            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(items).write(to: fileURL, options: .atomic)
+            try persist(candidate)
+            return true
         } catch {
-            assertionFailure("Saving the library index failed: \(error)")
+            pendingItems = candidate
+            persistenceError = "资料库更改未保存，请重试。"
+            return false
         }
     }
 }

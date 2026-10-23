@@ -23,6 +23,13 @@ final class PagedList<Item: Identifiable & Sendable> {
         self.fetch = fetch
     }
 
+    /// Cancel owned work and reject responses that ignore cancellation.
+    func cancel() {
+        generation += 1
+        loadTask?.cancel(); loadTask = nil
+        isLoading = false
+    }
+
     /// 已经加载完、而且一条都没有。
     var isEmpty: Bool { items.isEmpty && !hasMore && failure == nil }
 
@@ -91,9 +98,16 @@ final class Loadable<Value> {
 
     private let fetch: () async throws -> Value
     private var loadTask: Task<Void, Never>?
+    private var generation = 0
 
     init(fetch: @escaping () async throws -> Value) {
         self.fetch = fetch
+    }
+
+    func cancel() {
+        generation += 1
+        loadTask?.cancel(); loadTask = nil
+        isLoading = false
     }
 
     func loadIfNeeded() async {
@@ -109,18 +123,23 @@ final class Loadable<Value> {
         }
         isLoading = true
         failure = nil
-        let task = Task { await perform() }
+        let token = generation
+        let task = Task { await perform(generation: token) }
         loadTask = task
         await task.value
     }
 
-    private func perform() async {
+    private func perform(generation token: Int) async {
         do {
-            value = try await fetch()
+            let result = try await fetch()
+            guard token == generation else { return }
+            value = result
         } catch is CancellationError {
         } catch {
+            guard token == generation else { return }
             failure = error.localizedDescription
         }
+        guard token == generation else { return }
         isLoading = false
         loadTask = nil
     }

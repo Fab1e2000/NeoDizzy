@@ -75,7 +75,7 @@ private struct LibraryRemovalConfirmation: ViewModifier {
     let title: String
     @Binding var isPresented: Bool
     @Environment(SavedLibraryStore.self) private var saved
-    @Environment(NeteaseStore.self) private var netease
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(FavoritesStore.self) private var favorites
     @State private var failure: String?
 
@@ -107,11 +107,8 @@ private struct LibraryRemovalConfirmation: ViewModifier {
             do {
                 switch removal {
                 case .saved(let id): saved.remove(id: id)
-                case .neteaseSong(let id):
-                    guard let song = favorites.songs.first(where: { $0.providerID == "netease" && $0.itemID == String(id) }) else { return }
-                    try await favorites.setLiked(song.track, false)
-                case .neteasePlaylist(let id): try await netease.library.unsubscribePlaylist(id: id)
-                case .neteaseAlbum(let id): try await netease.library.unsubscribeAlbum(id: id)
+                case .account(let providerID, let kind, let itemID, _):
+                    try await modules.removeCollection(providerID: providerID, kind: kind, itemID: itemID)
                 }
             } catch is CancellationError {
             } catch { failure = error.localizedDescription }

@@ -4,11 +4,10 @@ import SwiftUI
 struct LocalLibraryView: View {
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
     @Environment(DownloadStore.self) private var downloads
-    @Environment(NeteaseStore.self) private var netease
-    @Environment(AccountStore.self) private var account
     @Environment(PlaybackHistoryStore.self) private var history
     @State private var showsDownloads = false
     @State private var localRecent: [RecentLibraryItem] = []
@@ -17,12 +16,11 @@ struct LocalLibraryView: View {
         MainTabPage(
             title: "资料库",
             onRefresh: {
-                // 下拉刷新同时向网易云和 DizzyLab 账号同步一次。
+                // 下拉刷新同步所有已注册平台。
                 async let likes: Void = favorites.refresh()
                 async let scan: Void = library.scan()
-                async let neteaseSync: Void = { try? await mirror.syncNetease(netease, force: true) }()
-                async let dizzyLabSync: Void = { try? await mirror.syncDizzyLab(userID: account.account?.userID) }()
-                _ = await (scan, neteaseSync, dizzyLabSync, likes)
+                async let sync: Void = mirror.refresh(force: true)
+                _ = await (scan, sync, likes)
             },
             headerAction: PageHeaderAction(title: "下载队列", systemImage: "arrow.down.circle",
                                            badge: downloads.jobs.filter(\.isActive).count) { showsDownloads = true }
@@ -39,7 +37,7 @@ struct LocalLibraryView: View {
                     ContentSkeleton(layout: .grid)
                 } else if recent.isEmpty && played.isEmpty {
                     ContentUnavailableView("资料库还是空的", systemImage: "music.note.list",
-                        description: Text("导入音乐，或登录网易云、DizzyLab：喜欢的歌、收藏的歌单与专辑、已购专辑会出现在这里。"))
+                        description: Text("导入音乐，或登录已启用的音乐平台：喜欢的歌、收藏的歌单与专辑、已购专辑会出现在这里。"))
                 } else {
                     if !played.isEmpty { LibraryShelfRow(title: "最近播放", items: played) }
                     if !recent.isEmpty { LibraryShelfRow(title: "最近添加", items: recent) }
@@ -55,7 +53,7 @@ struct LocalLibraryView: View {
     }
 
     private var recentItems: [LibraryShelfItem] {
-        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites)
+        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules)
         let albums = contents.onlineAlbumsByKey
         let local = localRecent.map { item in
             item.kind == .album
@@ -69,7 +67,7 @@ struct LocalLibraryView: View {
 
     /// 最近播放过的专辑；本地专辑已被删除的不再显示。
     private var playedItems: [LibraryShelfItem] {
-        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites)
+        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules)
         let albums = contents.onlineAlbumsByKey
         return history.entries.compactMap { entry in
             switch entry.kind {
@@ -77,23 +75,19 @@ struct LocalLibraryView: View {
                 guard let album = library.localAlbum(id: entry.itemID) else { return nil }
                 return contents.localAlbumItem(id: album.id, title: album.title, subtitle: album.artist,
                                                coverURL: album.coverURL, addedAt: entry.playedAt, online: albums)
-            case .neteaseAlbum:
-                guard let id = Int(entry.itemID) else { return nil }
+            default:
+                guard let origin = modules.origin(providerID: entry.providerID),
+                      let route = modules.collectionRoute(providerID: entry.providerID, kind: "album", itemID: entry.itemID) else { return nil }
                 var item = LibraryShelfItem(id: entry.id, title: entry.title, subtitle: entry.subtitle, coverURL: entry.coverURL,
-                                            origin: .netease, route: .netease(.album(id)), addedAt: entry.playedAt)
-                item.trackKey = CollectionTrackIndex.key(provider: "netease", kind: "album", id: entry.itemID)
-                return item
-            case .dizzylabAlbum:
-                var item = LibraryShelfItem(id: entry.id, title: entry.title, subtitle: entry.subtitle, coverURL: entry.coverURL,
-                                            origin: .dizzylab, route: .disc(id: entry.itemID), addedAt: entry.playedAt)
-                item.trackKey = CollectionTrackIndex.key(provider: "dizzylab", kind: "album", id: entry.itemID)
+                                            origin: origin, route: route, addedAt: entry.playedAt)
+                item.trackKey = CollectionTrackIndex.key(provider: entry.providerID, kind: "album", id: entry.itemID)
                 return item
             }
         }
     }
 }
 
-/// 首页一行横向滑动的专辑与歌单；超过一行能放的数量时标题旁显示「查看全部」。
+/// 首页一行横向滑动的专辑与歌单；超过一行能放的数量时标题带箭头，点开查看全部。
 private struct LibraryShelfRow: View {
     let title: LocalizedStringKey
     let items: [LibraryShelfItem]
@@ -103,13 +97,22 @@ private struct LibraryShelfRow: View {
     var body: some View {
         // 卡片宽度、间距与网易云、DizzyLab 首页的横向封面行一致。
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
-                Spacer()
-                if items.count > Self.rowLimit {
-                    NavigationLink("查看全部", value: AppRoute.page { LibraryShelfGridPage(title: title, items: items) })
-                        .font(.subheadline)
+            // 与网易云、QQ 音乐首页的分区标题一致：可展开时整行是链接，右侧带箭头。
+            if items.count > Self.rowLimit {
+                NavigationLink(value: AppRoute.page { LibraryShelfGridPage(title: title, items: items) }) {
+                    HStack {
+                        Text(title).font(.title2.bold())
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .foregroundStyle(.primary)
+                    .contentShape(.rect)
                 }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityHint("查看全部")
+            } else {
+                Text(title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
             }
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 14) {
@@ -143,79 +146,85 @@ private struct LibraryShelfGridPage: View {
     }
 }
 
-/// 资料库首页的分类方块：「喜欢」占满一行并用主题色，其余两两并排，数量计入全部来源。
+/// 资料库首页的分类列表：与「音乐」App 资料库相同，一行一类，图标用主题色，数量计入全部来源。
 private struct LibraryQuickTiles: View {
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
+    @ScaledMetric(relativeTo: .title3) private var iconWidth = 28.0
 
-    var body: some View {
-        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites)
-        let songs = contents.songs(.all)
-        let playlists = contents.playlists(.all).count
-        VStack(spacing: 10) {
-            tile("喜欢", systemImage: "heart.fill", count: favorites.songs.count, route: .favorites, prominent: true)
-            Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-                GridRow {
-                    tile("歌单", systemImage: "music.note.list", count: playlists, route: .libraryPlaylists(.all))
-                    tile("专辑", systemImage: "square.stack", count: contents.albums(.all).count, route: .libraryAlbums(.all))
-                }
-                GridRow {
-                    tile("歌曲", systemImage: "music.note", count: songs.count, route: .librarySongs(.all))
-                    tile("歌手", systemImage: "music.microphone", count: LibraryContents.artists(in: songs).count,
-                         route: .libraryArtists(.all))
-                }
-            }
-        }
+    private struct Row: Identifiable {
+        let title: LocalizedStringKey
+        let systemImage: String
+        let count: Int
+        let route: AppRoute
+        var id: String { systemImage }
     }
 
-    private func tile(_ title: LocalizedStringKey, systemImage: String, count: Int, route: AppRoute,
-                      prominent: Bool = false) -> some View {
-        NavigationLink(value: route) {
-            VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(prominent ? DizzyPalette.onAccent : DizzyPalette.accent)
-                    .accessibilityHidden(true)
-                Spacer(minLength: 8)
-                HStack(alignment: .firstTextBaseline) {
-                    Text(title).font(.headline)
-                    Spacer(minLength: 4)
-                    Text("\(count)").font(.subheadline).monospacedDigit()
-                        .foregroundStyle(prominent ? DizzyPalette.onAccent : DizzyPalette.mutedText)
+    var body: some View {
+        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules)
+        let songs = contents.songs(.all)
+        let rows = [
+            Row(title: "喜欢", systemImage: "heart", count: favorites.songs.count, route: .favorites),
+            Row(title: "歌单", systemImage: "music.note.list", count: contents.playlists(.all).count, route: .libraryPlaylists(.all)),
+            Row(title: "专辑", systemImage: "square.stack", count: contents.albums(.all).count, route: .libraryAlbums(.all)),
+            Row(title: "歌曲", systemImage: "music.note", count: songs.count, route: .librarySongs(.all)),
+            Row(title: "歌手", systemImage: "music.microphone", count: LibraryContents.artists(in: songs).count,
+                route: .libraryArtists(.all)),
+        ]
+        VStack(spacing: 0) {
+            ForEach(rows) { row in
+                NavigationLink(value: row.route) {
+                    HStack(spacing: 14) {
+                        Image(systemName: row.systemImage)
+                            .font(.title3)
+                            .foregroundStyle(DizzyPalette.accent)
+                            .frame(width: iconWidth)
+                            .accessibilityHidden(true)
+                        Text(row.title).font(.title3).foregroundStyle(DizzyPalette.text)
+                        Spacer(minLength: 8)
+                        Text("\(row.count)").font(.body).monospacedDigit().foregroundStyle(DizzyPalette.mutedText)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 52)
+                    .contentShape(.rect)
                 }
-                .foregroundStyle(prominent ? DizzyPalette.onAccent : DizzyPalette.text)
+                .buttonStyle(LibraryRowButtonStyle())
+                if row.id != rows.last?.id {
+                    Divider().padding(.leading, 16 + iconWidth + 14)
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-            .background(prominent ? DizzyPalette.accentFill : DizzyPalette.surface, in: .rect(cornerRadius: 14))
-            .contentShape(.rect(cornerRadius: 14))
         }
-        .buttonStyle(.plain)
+        .background(DizzyPalette.surface, in: .rect(cornerRadius: 20, style: .continuous))
+        .clipShape(.rect(cornerRadius: 20, style: .continuous))
+    }
+}
+
+/// 列表行按下时整行变暗，与系统列表一致。
+private struct LibraryRowButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.primary.opacity(0.08) : .clear)
     }
 }
 
 /// 从资料库移除一项会做什么：只删 App 里的记录，或同时取消网易云账号里的喜欢、收藏。
 enum LibraryRemoval: Equatable {
     case saved(String)
-    case neteaseSong(Int)
-    case neteasePlaylist(Int)
-    case neteaseAlbum(Int)
-
-    /// 会改动平台账号的移除先确认。
+    case account(providerID: String, kind: String, itemID: String, notice: String)
     var accountNotice: String? {
-        switch self {
-        case .saved: nil
-        case .neteaseSong: String(localized: "网易云账号也会取消喜欢这首歌。")
-        case .neteasePlaylist: String(localized: "网易云账号也会取消收藏这个歌单。")
-        case .neteaseAlbum: String(localized: "网易云账号也会取消收藏这张专辑。")
-        }
+        if case .account(_, _, _, let notice) = self { return notice }
+        return nil
     }
 }
 
-/// 一首资料库歌曲：本地文件、网易云喜欢的歌，或手动加入的 DizzyLab 歌曲。
+/// 一首资料库歌曲：本地文件、账号喜欢或手动保存的在线歌曲。
 struct LibrarySong: Identifiable {
     let track: Track
     let origin: LibraryOrigin
@@ -237,6 +246,7 @@ struct LibraryShelfItem: Identifiable {
     var sourceKey: String?
     /// 下载来的专辑在本地库里的 ID；有值时长按可删除下载。
     var downloadedAlbumID: String?
+    var isWholeAlbumDownload = false
     /// 在 `CollectionTrackIndex` 里查完整曲目列表用的键。
     var trackKey: String?
 
@@ -251,36 +261,23 @@ struct LibraryShelfItem: Identifiable {
         self.origin = origin; self.route = route; self.addedAt = addedAt; self.removal = removal
     }
 
-    /// 手动加入的 DizzyLab 专辑（未购买）。
-    init?(saved item: SavedLibraryItem) {
-        guard item.providerID == "dizzylab", item.kind == .album else { return nil }
+    init?(saved item: SavedLibraryItem, modules: ModuleRegistry) {
+        guard let origin = modules.origin(providerID: item.providerID),
+              let route = modules.collectionRoute(providerID: item.providerID, kind: item.kind.rawValue, itemID: item.itemID) else { return nil }
         self.init(id: item.id, title: item.title, subtitle: item.subtitle, coverURL: item.coverURL,
-                  origin: .dizzylab, route: .disc(id: item.itemID), addedAt: item.addedAt, removal: .saved(item.id))
-        sourceKey = "dizzylab/\(item.itemID)"
-        trackKey = CollectionTrackIndex.key(provider: "dizzylab", kind: "album", id: item.itemID)
-    }
-
-    /// 网易云账号里的歌单、收藏专辑，DizzyLab 已购专辑。
-    init?(mirrored item: MirroredCollection) {
-        guard let origin = LibraryOrigin(providerID: item.providerID) else { return nil }
-        let route: AppRoute
-        var removal: LibraryRemoval?
-        switch (origin, item.kind) {
-        case (.netease, .playlist):
-            guard let id = Int(item.itemID) else { return nil }
-            route = .netease(.playlist(id))
-            if !item.isPermanent { removal = .neteasePlaylist(id) }
-        case (.netease, .album):
-            guard let id = Int(item.itemID) else { return nil }
-            route = .netease(.album(id)); removal = .neteaseAlbum(id)
-        case (.dizzylab, .album): route = .disc(id: item.itemID)
-        default: return nil
-        }
-        self.init(id: item.id, title: item.title, subtitle: item.subtitle, coverURL: item.coverURL,
-                  origin: origin, route: route, addedAt: item.firstSeen, removal: removal)
+                  origin: origin, route: route, addedAt: item.addedAt, removal: .saved(item.id))
         sourceKey = "\(item.providerID)/\(item.itemID)"
         trackKey = CollectionTrackIndex.key(provider: item.providerID, kind: item.kind.rawValue, id: item.itemID)
     }
+    init?(mirrored item: MirroredCollection, modules: ModuleRegistry) {
+        guard let origin = modules.origin(providerID: item.providerID),
+              let route = modules.collectionRoute(providerID: item.providerID, kind: item.kind.rawValue, itemID: item.itemID) else { return nil }
+        self.init(id: item.id, title: item.title, subtitle: item.subtitle, coverURL: item.coverURL,
+                  origin: origin, route: route, addedAt: item.firstSeen, removal: modules.collectionRemoval(for: item))
+        sourceKey = "\(item.providerID)/\(item.itemID)"
+        trackKey = CollectionTrackIndex.key(provider: item.providerID, kind: item.kind.rawValue, id: item.itemID)
+    }
+
 }
 
 /// 把本地库、账号镜像和手动加入的条目合成一份内容，按来源筛选。
@@ -290,6 +287,7 @@ struct LibraryContents {
     let saved: SavedLibraryStore
     let mirror: AccountLibraryMirror
     var favorites: FavoritesStore? = nil
+    let modules: ModuleRegistry
 
     func songs(_ filter: LibraryOriginFilter) -> [LibrarySong] {
         var songs: [LibrarySong] = []
@@ -298,14 +296,15 @@ struct LibraryContents {
         }
         let existing = Set(songs.map(\.id))
         songs += (favorites?.songs ?? []).compactMap { song in
-            guard let origin = LibraryOrigin(providerID: song.providerID), filter.includes(origin),
+            guard let origin = modules.origin(providerID: song.providerID), filter.includes(origin),
                   !existing.contains(song.track.id) else { return nil }
             return LibrarySong(track: song.track, origin: origin)
         }
-        songs += saved.items(of: .song).filter { $0.providerID == "dizzylab" && filter.includes(.dizzylab) }
+        songs += saved.items(of: .song)
             .compactMap { item in
-                guard let track = item.track, !songs.contains(where: { $0.id == track.id }) else { return nil }
-                return LibrarySong(track: track, origin: .dizzylab, removal: .saved(item.id))
+                guard let origin = modules.origin(providerID: item.providerID), filter.includes(origin),
+                      let track = item.track, !songs.contains(where: { $0.id == track.id }) else { return nil }
+                return LibrarySong(track: track, origin: origin, removal: .saved(item.id))
             }
         return songs.sorted { $0.track.title.localizedStandardCompare($1.track.title) == .orderedAscending }
     }
@@ -323,7 +322,7 @@ struct LibraryContents {
     /// 资料库里同一张在线专辑并进这张卡片，带上它的移除操作。
     func localAlbumItem(id: String, title: String, subtitle: String, coverURL: URL?, addedAt: Date,
                         online: [String: LibraryShelfItem]) -> LibraryShelfItem {
-        guard let source = library.albumSources[id], let origin = LibraryOrigin(providerID: source.provider), origin != .local else {
+        guard let source = library.albumSources[id], let origin = modules.origin(providerID: source.provider) ?? LibraryOrigin(providerID: source.provider), origin != .local else {
             return LibraryShelfItem(id: id, title: title, subtitle: subtitle, coverURL: coverURL,
                                     origin: .local, route: .localAlbum(id: id), addedAt: addedAt)
         }
@@ -333,6 +332,7 @@ struct LibraryContents {
         item.sourceKey = key
         item.trackKey = CollectionTrackIndex.key(provider: source.provider, kind: "album", id: source.id)
         item.downloadedAlbumID = id
+        item.isWholeAlbumDownload = modules.downloadsWholeAlbums(providerID: source.provider)
         return item
     }
 
@@ -354,11 +354,11 @@ struct LibraryContents {
     /// 已下载的在线专辑由本地那张卡片代表，默认不再单独列出。
     func online(_ kind: MirroredCollection.Kind, _ filter: LibraryOriginFilter,
                 includingDownloaded: Bool = false) -> [LibraryShelfItem] {
-        let mirrored = (mirror.neteaseCollections + mirror.dizzyLabAlbums).filter { $0.kind == kind && !$0.isLikedPlaylist }
-            .compactMap(LibraryShelfItem.init(mirrored:))
-        let purchased = Set(mirror.dizzyLabAlbums.map(\.itemID))
-        let manual = kind == .album ? saved.items(of: .album).filter { !purchased.contains($0.itemID) }
-            .compactMap(LibraryShelfItem.init(saved:)) : []
+        let mirrored = mirror.collections.filter { $0.kind == kind && !$0.isLikedPlaylist }
+            .compactMap { LibraryShelfItem(mirrored: $0, modules: modules) }
+        let known = Set(mirror.collections.map { "\($0.providerID)/\($0.kind.rawValue)/\($0.itemID)" })
+        let manual = saved.items.filter { $0.kind.rawValue == kind.rawValue && !known.contains("\($0.providerID)/\($0.kind.rawValue)/\($0.itemID)") }
+            .compactMap { LibraryShelfItem(saved: $0, modules: modules) }
         let downloaded = kind == .album && !includingDownloaded
             ? Set(library.albumSources.values.map { "\($0.provider)/\($0.id)" }) : []
         let items = (mirrored + manual).filter { filter.includes($0.origin) && !downloaded.contains($0.sourceKey ?? "") }
@@ -398,28 +398,24 @@ struct LibraryArtist {
 /// 歌手头像：网易云歌手用平台头像，其余用这位歌手第一首歌的封面。
 private struct LibraryArtistAvatar: View {
     let artist: LibraryArtist
-    @Environment(AccountLibraryMirror.self) private var mirror
-    @Environment(FavoritesStore.self) private var favorites
-    @Environment(NeteaseStore.self) private var netease
-
+    @Environment(LibraryProviderRegistry.self) private var providers
     var body: some View {
-        let neteaseID = mirror.neteaseArtistID(named: artist.name)
-        ArtworkImage(url: neteaseID.flatMap(mirror.artistAvatar) ?? artist.coverURL, cornerRadius: 0)
+        ArtworkImage(url: providers.artistAvatar(named: artist.name) ?? artist.coverURL, cornerRadius: 0)
             .frame(width: 44, height: 44)
             .clipShape(.circle)
             .accessibilityHidden(true)
-            .task(id: neteaseID) {
-                if let neteaseID { await mirror.loadArtistAvatar(neteaseID, api: netease.api) }
-            }
+            .task(id: providers.artistLookupKey(named: artist.name)) { await providers.loadArtistAvatar(named: artist.name) }
     }
 }
 
 /// 歌曲和搜索结果副标题前的来源标记。
 struct LibraryOriginBadge: View {
     let origin: LibraryOrigin
+    @Environment(ModuleRegistry.self) private var modules: ModuleRegistry?
+    private var label: String { modules?.origin(providerID: origin.rawValue)?.label ?? origin.label }
 
     var body: some View {
-        Text(origin.label)
+        Text(label)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(DizzyPalette.mutedText)
             .padding(.horizontal, 5)
@@ -427,18 +423,19 @@ struct LibraryOriginBadge: View {
             .background {
                 RoundedRectangle(cornerRadius: 4).strokeBorder(DizzyPalette.mutedText.opacity(0.6), lineWidth: 1)
             }
-            .accessibilityLabel("来源：\(origin.label)")
+            .accessibilityLabel("来源：\(label)")
     }
 }
 
 /// 封面右下角的标记：来源图标，下载过的再加「已下载」图标，放在同一个胶囊里。
 struct LibraryOriginMark: View {
+    @Environment(ModuleRegistry.self) private var modules: ModuleRegistry?
     var origin: LibraryOrigin?
     var state: CollectionOfflineState?
 
     var body: some View {
         HStack(spacing: 5) {
-            if let origin { Image(systemName: origin.systemImage) }
+            if let origin { Image(systemName: modules?.origin(providerID: origin.rawValue)?.systemImage ?? origin.systemImage) }
             if let state { Image(systemName: state == .downloaded ? "arrow.down.circle.fill" : "arrow.down.circle") }
         }
         .font(.system(size: 12, weight: .semibold))
@@ -454,7 +451,7 @@ struct LibraryOriginMark: View {
 
     private var accessibilityText: String {
         let status = state.map { $0 == .downloaded ? String(localized: "已下载") : String(localized: "已缓存") }
-        return [origin.map { String(localized: "来源：\($0.label)") }, status].compactMap(\.self).joined(separator: "，")
+        return [origin.map { String(localized: "来源：\(modules?.origin(providerID: $0.rawValue)?.label ?? $0.label)") }, status].compactMap(\.self).joined(separator: "，")
     }
 }
 
@@ -467,7 +464,7 @@ extension View {
 
     func libraryOriginMark(_ origin: LibraryOrigin?, item: LibraryShelfItem) -> some View {
         libraryOriginMark(origin, tracks: item.trackKey.flatMap(CollectionTrackIndex.shared.tracks(for:)),
-                          downloaded: item.downloadedAlbumID != nil && item.origin == .dizzylab)
+                          downloaded: item.downloadedAlbumID != nil && item.isWholeAlbumDownload)
     }
 }
 
@@ -479,7 +476,7 @@ private struct CollectionOfflineMark: View {
     @Environment(OfflineLibraryStore.self) private var library
 
     var body: some View {
-        // DizzyLab 只能整张下载，没有曲目列表时整张已下载即可判断。
+        // 没有完整曲目索引时，已入库的下载专辑仍可标为已下载。
         let state = tracks.flatMap { CollectionOfflineState.resolve($0, isDownloaded: library.hasLocalFile(for:),
                                                                     isCached: { player.cachedQuality(for: $0) != nil }) }
             ?? (downloaded ? .downloaded : nil)
@@ -492,6 +489,7 @@ struct LibraryShelfCard: View {
     let item: LibraryShelfItem
     var showsOrigin = true
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
 
@@ -568,12 +566,13 @@ struct LibrarySearchSection: View {
     let query: String
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
     @Environment(PlayerStore.self) private var player
 
     var body: some View {
-        let result = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites).search(query)
+        let result = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules).search(query)
         let collections = Array(result.collections.prefix(2))
         let songs = Array(result.songs.prefix(3))
         if result.collections.isEmpty && result.songs.isEmpty {
@@ -605,12 +604,13 @@ struct LibrarySearchPage: View {
     let query: String
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
     @Environment(PlayerStore.self) private var player
 
     var body: some View {
-        let result = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites).search(query)
+        let result = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules).search(query)
         let songs = Array(result.songs.prefix(200))
         List {
             if !result.collections.isEmpty {
@@ -672,6 +672,7 @@ struct LibrarySongsPage: View {
     let filter: LibraryOriginFilter
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
     @Environment(PlayerStore.self) private var player
@@ -682,7 +683,7 @@ struct LibrarySongsPage: View {
     }
 
     var body: some View {
-        let all = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites).songs(filter)
+        let all = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules).songs(filter)
         let songs = artist.map { name in all.filter { LibraryContents.artistNames($0.track).contains(name) } } ?? all
         let tracks = songs.map(\.track)
         ScrollView {
@@ -716,13 +717,14 @@ struct LibraryArtistsPage: View {
     let filter: LibraryOriginFilter
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
 
     init(filter: LibraryOriginFilter) { self.filter = filter }
 
     var body: some View {
-        let artists = LibraryContents.artists(in: LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites).songs(filter))
+        let artists = LibraryContents.artists(in: LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules).songs(filter))
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 if artists.isEmpty {
@@ -756,13 +758,14 @@ struct LocalPlaylistsPage: View {
     let filter: LibraryOriginFilter
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
 
     init(filter: LibraryOriginFilter) { self.filter = filter }
 
     var body: some View {
-        let online = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites).online(.playlist, filter)
+        let online = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules).online(.playlist, filter)
         ScrollView {
             LocalPlaylistsView(online: online, showsLocal: filter.includes(.local), showsOrigin: filter == .all)
             .padding(.horizontal, 20).padding(.vertical, 8)
@@ -779,6 +782,7 @@ struct LocalAlbumsPage: View {
     let filter: LibraryOriginFilter
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(AccountLibraryMirror.self) private var mirror
     @Environment(FavoritesStore.self) private var favorites
     @State private var selection = LocalAlbumSelection()
@@ -790,7 +794,7 @@ struct LocalAlbumsPage: View {
     init(filter: LibraryOriginFilter) { self.filter = filter }
 
     var body: some View {
-        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites)
+        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules)
         let albums = contents.onlineAlbumsByKey
         let local = items.map { album in
             LocalAlbumCardItem(album: album, shelf: contents.localAlbumItem(

@@ -160,6 +160,76 @@ import Testing
         #expect(store.contains(song)); #expect(loads == 2)
     }
 
+    @Test func reenabledSameAccountRefreshRejectsOldProviderAndKeepsNewSyncMarker() async {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FavoritesStore(directory: folder)
+        var oldRead: CheckedContinuation<[Track], Never>?
+        var newRead: CheckedContinuation<[Track], Never>?
+        var oldLoads = 0
+        store.register("netease", provider: FavoritesProvider(account: { "same" }, load: {
+            oldLoads += 1
+            return await withCheckedContinuation { oldRead = $0 }
+        }, setLiked: { _, _ in }))
+        let oldTask = Task { await store.refresh("netease") }
+        while oldRead == nil { await Task.yield() }
+        store.unregister("netease")
+        store.register("netease", provider: FavoritesProvider(account: { "same" }, load: {
+            await withCheckedContinuation { newRead = $0 }
+        }, setLiked: { _, _ in }))
+        let newTask = Task { await store.refresh("netease") }
+        while newRead == nil { await Task.yield() }
+        oldRead?.resume(returning: [track("netease", "old")])
+        await oldTask.value
+        #expect(store.syncing.contains("netease"))
+        #expect(store.songs.isEmpty)
+        #expect(oldLoads == 1)
+        newRead?.resume(returning: [track("netease", "new")])
+        await newTask.value
+        #expect(store.songs.map(\.itemID) == ["new"])
+        #expect(!store.syncing.contains("netease"))
+    }
+
+    @Test func reenabledSameAccountWriteRejectsOldCommitAndKeepsNewPendingMarker() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FavoritesStore(directory: folder), song = track()
+        var oldWrite: CheckedContinuation<Void, Never>?
+        var newWrite: CheckedContinuation<Void, Never>?
+        store.register("netease", provider: FavoritesProvider(account: { "same" }, load: { [] }, setLiked: { _, _ in
+            await withCheckedContinuation { oldWrite = $0 }
+        }))
+        let oldTask = Task { try await store.setLiked(song, true) }
+        while oldWrite == nil { await Task.yield() }
+        store.unregister("netease")
+        store.register("netease", provider: FavoritesProvider(account: { "same" }, load: { [] }, setLiked: { _, _ in
+            await withCheckedContinuation { newWrite = $0 }
+        }))
+        let newTask = Task { try await store.setLiked(song, true) }
+        while newWrite == nil { await Task.yield() }
+        oldWrite?.resume()
+        await #expect(throws: CancellationError.self) { try await oldTask.value }
+        #expect(store.pending.contains(FavoriteSong(track: song).id))
+        #expect(!store.contains(song))
+        newWrite?.resume()
+        try await newTask.value
+        #expect(store.contains(song))
+        #expect(store.pending.isEmpty)
+    }
+
+    @Test func slowProviderDoesNotBlockOtherFavoriteSync() async {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FavoritesStore(directory: folder)
+        var slow: CheckedContinuation<[Track], Never>?
+        store.register("aaa", provider: FavoritesProvider(account: { "a" }, load: {
+            await withCheckedContinuation { slow = $0 }
+        }, setLiked: { _, _ in }))
+        store.register("zzz", provider: FavoritesProvider(account: { "b" }, load: { [track("zzz", "ready")] }, setLiked: { _, _ in }))
+        let work = Task { await store.refresh() }
+        while slow == nil || !store.contains(track("zzz", "ready")) { await Task.yield() }
+        #expect(store.contains(track("zzz", "ready")))
+        slow?.resume(returning: [])
+        await work.value
+    }
+
     @Test func migrationNeverResurrectsAnUnlikedSong() async throws {
         let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
         let store = FavoritesStore(directory: folder), song = track()

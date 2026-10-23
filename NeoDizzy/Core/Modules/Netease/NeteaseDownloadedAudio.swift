@@ -10,7 +10,7 @@ nonisolated enum NeteaseDownloadedAudio {
         var errorDescription: String? {
             switch self {
             case .damagedContainer: "NCM 文件损坏或加密格式不受支持，请重新下载"
-            case .unsupportedAudio: "NCM 中的音频格式不受支持"
+            case .unsupportedAudio: "音频文件损坏或格式不受支持"
             }
         }
     }
@@ -24,6 +24,16 @@ nonisolated enum NeteaseDownloadedAudio {
         guard header == Data("CTENFDAM".utf8) else {
             guard declaredType != "ncm" else { throw Failure.damagedContainer }
             guard AudioFileMatcher.extensions.contains(declaredType) else { throw Failure.unsupportedAudio }
+            // Do not let a text/error response become an apparently valid tagged MP3.
+            if declaredType == "mp3" {
+                guard header.starts(with: Data("ID3".utf8)) ||
+                    (header.count >= 2 && header[0] == 0xff && header[1] & 0xe0 == 0xe0) else {
+                    throw Failure.unsupportedAudio
+                }
+            } else if declaredType == "flac" {
+                guard header.starts(with: Data("fLaC".utf8)) else { throw Failure.unsupportedAudio }
+            }
+
             let result = staging.appendingPathComponent(UUID().uuidString).appendingPathExtension(declaredType)
             try FileManager.default.copyItem(at: source, to: result)
             return result

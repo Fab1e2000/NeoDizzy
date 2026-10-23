@@ -25,7 +25,7 @@ struct AppSettingsView: View {
 
                 Section {
                     NavigationLink(value: AppRoute.page { AppearanceSettingsView() }) {
-                        Label("外观与主题", systemImage: "paintpalette")
+                        Label("外观", systemImage: "circle.lefthalf.filled")
                     }
                     Toggle(isOn: $isImmersive) {
                         Label("沉浸模式", systemImage: "rectangle.dashed")

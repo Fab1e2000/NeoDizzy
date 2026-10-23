@@ -27,6 +27,12 @@ struct DizzyLabAccountSettings: View {
 
     var body: some View {
         accountSection.listRowBackground(DizzyPalette.surface)
+        if let error = account.sessionError {
+            Section {
+                Text(error).foregroundStyle(.red)
+                Button("重试清除凭据") { Task { await account.logout() } }
+            }
+        }
         Section {
             NavigationLink(value: AppRoute.page { BrowsingHistoryView() }) {
                 Label("浏览记录", systemImage: "clock.arrow.circlepath")
@@ -41,7 +47,7 @@ struct DizzyLabAccountSettings: View {
         if let user = account.account {
             Section {
                 HStack(spacing: 14) {
-                    AvatarImage(url: user.avatarURL, size: 52)
+                    DizzyLabAvatarImage(url: user.avatarURL, size: 52)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(user.nickname)
                             .font(.headline)

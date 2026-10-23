@@ -34,6 +34,8 @@ import Observation
     let capacity: Int64
     @ObservationIgnored private var entries: [String: Entry] = [:]
     @ObservationIgnored private var jobs: [UUID: ProgressiveAudioLoader] = [:]
+    @ObservationIgnored private var jobProviders: [UUID: String] = [:]
+    @ObservationIgnored private var providerGenerations: [String: Int] = [:]
     @ObservationIgnored private var discarded = Set<UUID>()
     @ObservationIgnored private var completed = Set<UUID>()
     @ObservationIgnored private var detached: [UUID] = []
@@ -72,9 +74,11 @@ import Observation
         return entries[key.name]?.actualQuality
     }
     func file(for key: Key) -> URL? { entry(for: key).map { directory.appendingPathComponent($0.filename) } }
-    func protect(_ url: URL?) {
+    func protect(_ url: URL?) { protectFiles([url].compactMap { $0 }) }
+
+    func protectFiles(_ urls: [URL]) {
         let previous = activeFiles
-        activeFiles = Set([url].compactMap { $0 })
+        activeFiles = Set(urls)
         for old in previous.subtracting(activeFiles) where old.deletingLastPathComponent().standardizedFileURL.path == directory.standardizedFileURL.path && !entries.values.contains(where: { $0.filename == old.lastPathComponent }) {
             try? FileManager.default.removeItem(at: old)
         }
@@ -87,25 +91,27 @@ import Observation
         }
     }
 
-    func makeItem(url: URL, key: Key, actualQuality: String, configuration: URLSessionConfiguration = .ephemeral) -> (AVPlayerItem, UUID)? {
+    func makeItem(url: URL, key: Key, actualQuality: String, providerID: String? = nil, configuration: URLSessionConfiguration = .ephemeral) -> (AVPlayerItem, UUID)? {
         let id = UUID(), generation = generation
+        let providerGeneration = providerID.map { providerGenerations[$0, default: 0] }
         do {
             let loader = try ProgressiveAudioLoader(url: url, directory: directory, configuration: configuration) { [weak self] file, size, ext in
                 Task { @MainActor [weak self] in
                     defer { if let file { try? FileManager.default.removeItem(at: file) } }
                     guard let self else { return }
-                    if self.discarded.remove(id) == nil, self.generation == generation, let file {
-                        do { try await self.commit(file, key: key, actualQuality: actualQuality, bytes: size, fileExtension: ext) }
+                    if self.discarded.remove(id) == nil, self.generation == generation, providerID.map({ self.providerGenerations[$0, default: 0] }) == providerGeneration, let file {
+                        do { try await self.commit(file, key: key, actualQuality: actualQuality, bytes: size, fileExtension: ext, providerID: providerID, providerGeneration: providerGeneration) }
                         catch { self.issue = "音频缓存保存失败，请检查可用空间。" }
                     }
                     guard self.jobs[id] != nil else { return }
                     self.completed.insert(id)
-                    if self.detached.contains(id) { self.jobs[id] = nil; self.completed.remove(id) }
+                    if self.detached.contains(id) { self.jobs[id] = nil; self.jobProviders[id] = nil; self.completed.remove(id) }
                     self.detached.removeAll { $0 == id }
                     // Active loaders remain alive to serve AVFoundation after the transfer finishes.
                 }
             }
             jobs[id] = loader
+            jobProviders[id] = providerID
             return (loader.makeItem(), id)
         } catch { issue = "无法创建音频缓存，已使用在线播放。"; return nil }
     }
@@ -113,19 +119,26 @@ import Observation
         guard let id else { return }
         if completed.remove(id) == nil { discarded.insert(id) }
         detached.removeAll { $0 == id }
+        jobProviders[id] = nil
         jobs.removeValue(forKey: id)?.cancel()
     }
     func leave(_ id: UUID?, listened: TimeInterval, duration: TimeInterval) {
         guard let id, let job = jobs[id] else { return }
-        if completed.remove(id) != nil { jobs[id] = nil; return }
+        if completed.remove(id) != nil { jobs[id] = nil; jobProviders[id] = nil; return }
         if Self.mayContinue(listened: listened, duration: duration) {
             detached.append(id)
             // Bound background work; the active song is never evicted here.
-            while detached.count > 2 { let oldest = detached.removeFirst(); jobs.removeValue(forKey: oldest)?.cancel() }
-        } else { jobs[id] = nil; job.cancel() }
+            while detached.count > 2 { let oldest = detached.removeFirst(); discard(oldest) }
+        } else { jobs[id] = nil; jobProviders[id] = nil; job.cancel() }
     }
+    /// Cancels this source only, including detached transfers and pending commits.
+    func cancelTransfers(providerID: String) {
+        providerGenerations[providerID, default: 0] += 1
+        for id in jobProviders.filter({ $0.value == providerID }).map(\.key) { discard(id) }
+    }
+
     /// 复制可能有几百 MB，放到后台执行；复制期间清理过缓存就丢弃这份。
-    func commit(_ file: URL, key: Key, actualQuality: String, bytes: Int64, fileExtension: String) async throws {
+    func commit(_ file: URL, key: Key, actualQuality: String, bytes: Int64, fileExtension: String, providerID: String? = nil, providerGeneration: Int? = nil) async throws {
         guard bytes > 0, bytes <= capacity else { throw PlaybackError.failed }
         let ext = AudioFileMatcher.extensions.contains(fileExtension.lowercased()) ? fileExtension.lowercased() : "audio"
         let filename = UUID().uuidString + "." + ext
@@ -135,7 +148,7 @@ import Observation
             guard (try file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) == bytes else { throw PlaybackError.failed }
             try FileManager.default.copyItem(at: file, to: target)
         }.value
-        guard self.generation == generation else { try? FileManager.default.removeItem(at: target); return }
+        guard self.generation == generation, providerID.map({ providerGenerations[$0, default: 0] }) == providerGeneration else { try? FileManager.default.removeItem(at: target); return }
         if let old = entries[key.name], !activeFiles.contains(directory.appendingPathComponent(old.filename)) {
             try? FileManager.default.removeItem(at: directory.appendingPathComponent(old.filename))
         }
@@ -145,7 +158,7 @@ import Observation
     /// In-flight streams keep serving playback, but cannot repopulate a cleared cache.
     func clear() {
         generation += 1; issue = nil
-        for id in detached { jobs.removeValue(forKey: id)?.cancel() }
+        for id in detached { jobs.removeValue(forKey: id)?.cancel(); jobProviders[id] = nil }
         detached.removeAll()
         for (key, entry) in entries {
             let url = directory.appendingPathComponent(entry.filename)

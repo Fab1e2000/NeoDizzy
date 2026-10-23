@@ -19,6 +19,9 @@ nonisolated struct DizzyLabDownloadRequest: Codable, Sendable {
 
 final class DizzyLabDownloadProvider: DownloadProvider {
     let id = "dizzylab"
+    func summary(for transfer: DownloadTransfer) -> DownloadTransferSummary? {
+        DownloadTransferSummary(title: "专辑压缩包")
+    }
     private let library: OfflineLibraryStore
     init(library: OfflineLibraryStore) { self.library = library }
     func title(_ data: Data) -> String { (try? JSONDecoder().decode(DownloadRequest.self, from: data).title) ?? "下载专辑" }

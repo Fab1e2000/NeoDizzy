@@ -127,7 +127,7 @@ nonisolated final class DownloadTransport: NSObject, URLSessionDownloadDelegate,
 
     static func message(for error: any Error) -> String {
         if let error = error as? DownloadFailure { return error.localizedDescription }
-        if let error = error as? DizzyError { return error.localizedDescription }
+        if let error = error as? any DownloadDisplayableError { return error.localizedDescription }
         if let error = error as? OfflineLibraryError { return error.localizedDescription }
         // NSError descriptions can contain the full signed URL. Never save or display them.
         if (error as NSError).domain == NSURLErrorDomain { return "网络连接失败，请重试下载" }

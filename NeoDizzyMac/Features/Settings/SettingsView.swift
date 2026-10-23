@@ -213,7 +213,7 @@ private struct AccountSettings: View {
             if let user = account.account {
                 Section {
                     HStack(spacing: 14) {
-                        AvatarImage(url: user.avatarURL, size: 52)
+                        DizzyLabAvatarImage(url: user.avatarURL, size: 52)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(user.nickname).font(.headline)
                             if account.isSessionExpired {

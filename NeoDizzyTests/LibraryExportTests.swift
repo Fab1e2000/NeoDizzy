@@ -139,13 +139,13 @@ import Testing
 
     @Test func moduleRestoreIgnoresUnknownModulesAndKeepsOneVisible() throws {
         let store = try #require(UserDefaults(suiteName: "LibraryExportTests.\(UUID())"))
-        let modules = AppComposition.settings(modules: [DizzyLabModule.metadata, LocalLibraryModule.metadata], defaults: store)
-        modules.restore(order: [ModuleID(rawValue: "gone"), .localLibrary], hidden: [.localLibrary, .dizzyLab],
-                        startup: ModuleID(rawValue: "gone"), search: [.dizzyLab])
-        #expect(modules.order == [.localLibrary, .dizzyLab])
+        let modules = AppComposition.settings(modules: [ModuleDescriptor(id: ModuleID(rawValue: "fixture"), title: "Fixture", systemImage: "square"), LocalLibraryModule.metadata], defaults: store)
+        modules.restore(order: [ModuleID(rawValue: "gone"), .localLibrary], hidden: [.localLibrary, ModuleID(rawValue: "fixture")],
+                        startup: ModuleID(rawValue: "gone"), search: [ModuleID(rawValue: "fixture")])
+        #expect(modules.order == [.localLibrary, ModuleID(rawValue: "fixture")])
         #expect(modules.visibleModules == [.localLibrary])
-        #expect(modules.searchOrder.first == .dizzyLab)
-        #expect(modules.startupModule == modules.order.first || modules.startupModule == .dizzyLab)
+        #expect(modules.searchOrder.first == ModuleID(rawValue: "fixture"))
+        #expect(modules.startupModule == modules.order.first || modules.startupModule == ModuleID(rawValue: "fixture"))
     }
 
     @Test func restoredBackupIsNotOverwrittenBeforeImport() throws {

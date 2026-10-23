@@ -84,7 +84,7 @@ struct LibraryImportTests {
         let root = base.appendingPathComponent("library", isDirectory: true)
         let downloaded = root.appendingPathComponent("星海", isDirectory: true)
         try FileManager.default.createDirectory(at: downloaded, withIntermediateDirectories: true)
-        _ = try file(OfflineManifest.filename, in: downloaded, contents: "{}")
+        _ = try file(LibraryManifest.filename, in: downloaded, contents: "{}")
         let picked = base.appendingPathComponent("picked", isDirectory: true)
         try FileManager.default.createDirectory(at: picked, withIntermediateDirectories: true)
         _ = try await LibraryImporter.importItems([try file("星海 - 01.flac", in: picked)], into: root, albumTitle: albumFromName)

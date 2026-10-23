@@ -65,6 +65,40 @@ import Testing
         #expect(fixture.store.jobs.isEmpty)
     }
 
+    @Test func disablingSourceCancelsOnlyItsWorkAndPreservesLibraryFiles() async throws {
+        let fixture = try QueueFixture(jobCount: 2, separateProviders: true)
+        defer { fixture.cleanup() }
+        fixture.store.concurrentDownloadCount = 6
+        let retained = fixture.root.appendingPathComponent("music/keep.flac")
+        try FileManager.default.createDirectory(at: retained.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("committed".utf8).write(to: retained)
+        await fixture.store.restore()
+        try await eventually {
+            fixture.provider.processing && fixture.otherProvider.processing &&
+            !fixture.provider.started.isEmpty && !fixture.otherProvider.started.isEmpty
+        }
+        await fixture.store.unregister(fixture.provider.id)
+        #expect(fixture.provider.cancelledProcessing)
+        #expect(fixture.provider.cancelledSources == fixture.provider.started.count)
+        #expect(!fixture.provider.completedCalled)
+        #expect(!fixture.otherProvider.cancelledProcessing)
+        #expect(fixture.otherProvider.cancelledSources == 0)
+        #expect(fixture.store.jobs.first(where: { $0.providerID == fixture.provider.id })?.state == .failed)
+        #expect(fixture.store.jobs.first(where: { $0.providerID == fixture.otherProvider.id })?.isActive == true)
+        #expect(try Data(contentsOf: retained) == Data("committed".utf8))
+        for job in fixture.store.jobs { await fixture.store.remove(job) }
+    }
+
+    @Test func missingSourceDoesNotRunRestorationOrTransfers() async throws {
+        let fixture = try QueueFixture(registerProviders: false)
+        defer { fixture.cleanup() }
+        await fixture.store.restore()
+        #expect(fixture.store.jobs.allSatisfy { $0.state == .failed })
+        #expect(fixture.provider.started.isEmpty)
+        #expect(!fixture.provider.processing)
+        for job in fixture.store.jobs { await fixture.store.remove(job) }
+    }
+
     private func eventually(_ predicate: () -> Bool) async throws {
         for _ in 0..<300 {
             if predicate() { return }
@@ -82,7 +116,8 @@ import Testing
     let library: OfflineLibraryStore
     let store: DownloadStore
     let provider = GatedDownloadProvider()
-    init(jobCount: Int = 1) throws {
+    let otherProvider = GatedDownloadProvider(id: "other")
+    init(jobCount: Int = 1, separateProviders: Bool = false, registerProviders: Bool = true) throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         queue = root.appendingPathComponent("queue")
         suite = "Concurrency.\(UUID())"
@@ -90,8 +125,8 @@ import Testing
         try FileManager.default.createDirectory(at: queue, withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(DownloadRequest(title: "并行测试", identity: "test", coverURL: nil, payload: Data()))
         var jobs: [DownloadJob] = []
-        for _ in 0..<jobCount {
-            var job = DownloadJob(id: UUID(), providerID: provider.id, requestData: data)
+        for index in 0..<jobCount {
+            var job = DownloadJob(id: UUID(), providerID: separateProviders && index > 0 ? otherProvider.id : provider.id, requestData: data)
             job.transfers = (0..<5).map { _ in DownloadTransfer(id: UUID(), metadata: Data()) }
             try Data("downloaded".utf8).write(to: queue.appendingPathComponent(job.transfers[0].id.uuidString + ".zip"))
             jobs.append(job)
@@ -100,7 +135,10 @@ import Testing
         library = OfflineLibraryStore(defaults: defaults,
             scanner: LocalLibraryScanner(cacheURL: root.appendingPathComponent("cache")), libraryRoot: root.appendingPathComponent("music"))
         store = DownloadStore(library: library, directory: queue, transportIdentifier: suite, defaults: defaults)
-        store.register(provider)
+        if registerProviders {
+            store.register(provider)
+            if separateProviders { store.register(otherProvider) }
+        }
     }
     func cleanup() {
         defaults.removePersistentDomain(forName: suite)
@@ -109,7 +147,8 @@ import Testing
 }
 
 @MainActor private final class GatedDownloadProvider: DownloadProvider {
-    let id = "test"
+    let id: String
+    init(id: String = "test") { self.id = id }
     var started: [UUID] = []
     var released = Set<UUID>()
     var finished = Set<UUID>()

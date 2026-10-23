@@ -30,6 +30,33 @@ final class NeteaseDownloadProvider: DownloadProvider {
     init(api: NeteaseAPI, library: OfflineLibraryStore, artworkSession: URLSession = .shared) {
         self.api = api; self.library = library; self.artworkSession = artworkSession
     }
+    func summary(for transfer: DownloadTransfer) -> DownloadTransferSummary? {
+        guard let metadata = try? JSONDecoder().decode(NeteaseDownloadMetadata.self, from: transfer.metadata) else { return nil }
+        return DownloadTransferSummary(title: metadata.track.title, subtitle: metadata.track.artists)
+    }
+    func migrateRestoredJob(_ job: DownloadJob) -> DownloadJob {
+        guard let envelope = job.request,
+              let request = try? JSONDecoder().decode(NeteaseDownloadRequest.self, from: envelope.payload),
+              request.kind == "playlist", let cover = envelope.coverURL else { return job }
+        var migrated = job
+        for index in migrated.transfers.indices {
+            guard var metadata = try? JSONDecoder().decode(NeteaseDownloadMetadata.self, from: migrated.transfers[index].metadata),
+                  metadata.playlistID != nil, metadata.playlistArtworkURL == nil else { continue }
+            metadata.playlistArtworkURL = cover
+            if let data = try? JSONEncoder().encode(metadata) { migrated.transfers[index].metadata = data }
+        }
+        return migrated
+    }
+    func restore(jobs: [DownloadJob]) async {
+        var artwork: [String: URL] = [:]
+        for job in jobs {
+            guard let envelope = job.request,
+                  let request = try? JSONDecoder().decode(NeteaseDownloadRequest.self, from: envelope.payload),
+                  request.kind == "playlist", let cover = envelope.coverURL else { continue }
+            if artwork[String(request.id)] == nil { artwork[String(request.id)] = cover }
+        }
+        try? await library.repairNeteasePlaylistArtwork(artwork)
+    }
     func title(_ data: Data) -> String { (try? JSONDecoder().decode(DownloadRequest.self, from: data).title) ?? "下载歌曲" }
     func identity(_ data: Data) -> String { (try? JSONDecoder().decode(DownloadRequest.self, from: data).identity) ?? "" }
     func plan(_ data: Data) async throws -> [DownloadTransfer] {
@@ -183,12 +210,13 @@ final class NeteaseDownloadProvider: DownloadProvider {
             title: collectionTitle, artist: metadata.albumArtist, artworkURL: metadata.playlistID == nil ? track.coverURL : metadata.playlistArtworkURL,
             entries: [.init(relativePath: path, itemID: String(songID), track: track, quality: level, requestedQuality: metadata.quality.rawValue)])
         // 网易云的下载统一放在 netease/ 下，再按专辑、歌单分开。
-        let name = (metadata.playlistID == nil ? "netease/专辑/" : "netease/歌单/") + OfflinePaths.directoryName(collectionTitle, fallback: collectionID)
+        let name = (metadata.playlistID == nil ? "netease/专辑/" : "netease/歌单/") + OfflinePaths.directoryName(collectionTitle, fallback: collectionID) + " [" + OfflinePaths.directoryName(collectionID, fallback: "collection") + "]"
         let folderName: String
         if let existing = library.collection(provider: id, kind: kind, id: collectionID), let root = library.downloadRoot,
            let relative = try? OfflinePaths.relativePath(of: existing.directoryURL, inside: root) { folderName = relative }
         else { folderName = name }
-        return PreparedDownload(folderName: folderName, provenance: .collection(manifest, merge: true, preserving: [], placeholderMarker: nil))
+        try Task.checkCancellation()
+        return PreparedDownload(folderName: folderName, provenance: .updatingCollection(manifest))
     }
     private func artwork(_ url: URL) async throws -> Data {
         let (artwork, response) = try await artworkSession.data(for: URLRequest(url: url, timeoutInterval: 20))
@@ -221,5 +249,12 @@ extension DownloadStore {
     func enqueueNeteaseSong(_ track: Track, quality: NeteaseQuality) async {
         guard track.remoteSource?.providerID == "netease", let id = (track.remoteSource?.itemID).flatMap(Int.init) else { return }
         await enqueueNetease(kind: "single", id: id, title: track.title, coverURL: track.coverURL, quality: quality)
+    }
+}
+
+extension OfflineLibraryStore {
+    /// Compatibility entry point for older Netease download manifests.
+    func repairNeteasePlaylistArtwork(_ artwork: [String: URL]) async throws {
+        try await repairPlaylistArtwork(artwork, providerID: "netease")
     }
 }

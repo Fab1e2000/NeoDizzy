@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TabSettingsView: View {
+    @Environment(AppServices.self) private var services
     @Environment(ModuleSettings.self) private var settings
     @Environment(ModuleRegistry.self) private var modules
     var body: some View {
@@ -13,7 +14,18 @@ struct TabSettingsView: View {
                         settings.reorder(order)
                     }
             } header: { Text("模块") }
-            Section { Button("恢复默认") { settings.reset() } }
+            Section {
+                ForEach(services.registrations.filter(\.canDisable), id: \.descriptor.id) { registration in
+                    Toggle(registration.descriptor.title, isOn: Binding(
+                        get: { services.isEnabled(registration.descriptor.id) },
+                        set: { value in Task { await services.setEnabled(value, for: registration.descriptor.id) } }
+                    ))
+                    .disabled(services.transitioning.contains(registration.descriptor.id))
+                }
+            } header: { Text("平台服务") } footer: {
+                Text("关闭平台服务会停止该平台的在线播放、同步与未完成下载。账号凭据、资料库记录和已下载文件保留；上方开关只控制入口显示。")
+            }
+            Section { Button("恢复默认显示") { settings.reset() } }
         }
         .environment(\.editMode, .constant(.active))
         .safeAreaPadding(.top, 5)

@@ -5,34 +5,27 @@ extension ModuleID {
 }
 
 /// 资料库里一项内容的来源。本地文件（包括下载好的）都算本地。
-enum LibraryOrigin: String, CaseIterable, Hashable, Sendable {
-    case local, netease, dizzylab
-
-    init?(providerID: String) { self.init(rawValue: providerID) }
-
-    var label: String {
-        switch self {
-        case .local: String(localized: "本地")
-        case .netease: String(localized: "网易云")
-        case .dizzylab: "DizzyLab"
-        }
+struct LibraryOrigin: Hashable, Sendable {
+    let rawValue: String
+    let label: String
+    let systemImage: String
+    static let local = Self(rawValue: "local", label: String(localized: "本地"), systemImage: "iphone")
+    init(rawValue: String, label: String, systemImage: String) {
+        self.rawValue = rawValue; self.label = label; self.systemImage = systemImage
     }
-
-    /// 封面右下角的来源图标。
-    var systemImage: String {
-        switch self {
-        case .local: "iphone"
-        case .netease: "cloud"
-        case .dizzylab: "bag"
-        }
+    init?(providerID: String) {
+        guard !providerID.isEmpty else { return nil }
+        self = providerID == "local" ? .local : Self(rawValue: providerID, label: providerID, systemImage: "music.note")
     }
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.rawValue == rhs.rawValue }
+    func hash(into hasher: inout Hasher) { hasher.combine(rawValue) }
 }
 
 /// 资料库顶部的来源筛选。
 enum LibraryOriginFilter: Hashable, Sendable {
     case all, only(LibraryOrigin)
 
-    static var choices: [Self] { [.all] + LibraryOrigin.allCases.map(Self.only) }
+    static func choices(origins: [LibraryOrigin]) -> [Self] { [.all] + origins.map(Self.only) }
 
     var label: String {
         switch self {

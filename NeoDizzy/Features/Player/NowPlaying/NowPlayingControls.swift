@@ -200,11 +200,14 @@ struct NowPlayingPageSelector: View {
     @Environment(PlayerStore.self) private var player
 
     @Binding var page: NowPlayingPage
+    let hasLyrics: Bool
 
     var body: some View {
         HStack {
-            pageButton(page: .lyrics, systemImage: "quote.bubble", accessibilityLabel: "歌词")
-            Spacer()
+            if hasLyrics {
+                pageButton(page: .lyrics, systemImage: "quote.bubble", accessibilityLabel: "歌词")
+                Spacer()
+            }
             AirPlayButton().frame(width: 44, height: 44).accessibilityLabel("隔空播放")
             Spacer()
             pageButton(page: .queue, systemImage: "list.bullet", accessibilityLabel: "继续播放",

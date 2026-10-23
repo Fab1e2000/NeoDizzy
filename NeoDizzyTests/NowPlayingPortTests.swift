@@ -52,8 +52,9 @@ import Testing
         let favoritesDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: favoritesDirectory) }
         let favorites = FavoritesStore(directory: favoritesDirectory)
+        let modules = try ModuleRegistry([LocalLibraryModule(library: library)])
         let controller = UIHostingController(rootView: NowPlayingView(initialPage: page)
-            .environment(player).environment(library).environment(favorites).frame(width: size.width, height: size.height))
+            .environment(player).environment(library).environment(favorites).environment(modules).frame(width: size.width, height: size.height))
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let window = UIWindow(windowScene: scene)
         window.rootViewController = controller

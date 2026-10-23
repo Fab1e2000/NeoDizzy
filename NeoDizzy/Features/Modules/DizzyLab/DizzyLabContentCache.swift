@@ -8,6 +8,8 @@ final class DizzyLabContentCache {
     var library = LibraryModel()
     @ObservationIgnored private var summaries: [String: DiscSummary] = [:]
     @ObservationIgnored private var details: [String: DiscDetailModel] = [:]
+    private var stopped = false
+    @ObservationIgnored private var purchasesTask: Task<Void, Never>?
     @ObservationIgnored private var warmTask: Task<Void, Never>?
     @ObservationIgnored private var artworkTask: Task<Void, Never>?
     @ObservationIgnored private var pending: [URL] = []
@@ -26,6 +28,19 @@ final class DizzyLabContentCache {
         }
     }
 
+    func stop() {
+        stopped = true
+        generation += 1
+        warmTask?.cancel(); warmTask = nil
+        artworkTask?.cancel(); artworkTask = nil
+        purchasesTask?.cancel(); purchasesTask = nil
+        pending.removeAll(); scheduled.removeAll()
+        discover.lists.values.forEach { $0.cancel() }
+        discover.showcase.cancel()
+        labels.cancel(); feed.groups?.cancel(); library.purchases?.cancel()
+        details.values.forEach { $0.detail.cancel() }; details.removeAll()
+    }
+
     func disc(_ id: String) -> DiscDetailModel {
         if let model = details[id] { return model }
         if details.count >= 40, let oldest = details.keys.first { details[oldest] = nil }
@@ -36,22 +51,27 @@ final class DizzyLabContentCache {
     func artwork(for id: String) -> URL? { summaries[id]?.coverURL }
 
     func remember(_ discs: [DiscSummary]) {
+        guard !stopped else { return }
         for disc in discs { summaries[disc.id] = disc }
         enqueue(discs.compactMap(\.coverURL))
     }
 
     func accountChanged() {
+        guard !stopped else { return }
         generation += 1
         warmTask?.cancel(); warmTask = nil
         feed = FeedModel(); library = LibraryModel()
         details.removeAll()
     }
     func purchasesChanged() {
+        guard !stopped else { return }
         details.removeAll()
-        Task { await library.purchases?.reload(keepingItems: true) }
+        purchasesTask?.cancel()
+        purchasesTask = Task { await library.purchases?.reload(keepingItems: true) }
     }
 
     func prewarm(account: AccountStore) {
+        guard !stopped else { return }
         feed.update(userID: account.isSessionExpired ? nil : account.account?.userID)
         library.update(userID: account.account?.userID)
         let currentGeneration = generation
@@ -87,6 +107,7 @@ final class DizzyLabContentCache {
     }
 
     private func enqueue(_ urls: [URL]) {
+        guard !stopped else { return }
         pending += urls.prefix(12).filter { scheduled.insert($0).inserted }
         guard artworkTask == nil, !pending.isEmpty else { return }
         artworkTask = Task {

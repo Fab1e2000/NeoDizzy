@@ -46,7 +46,11 @@ struct ProfileSectionHeader<All: View>: View {
             Spacer()
             if let allTitle {
                 // 走导航路径：在「全部」页里再点进详情时只推入一页。
+                #if os(iOS)
                 NavigationLink(allTitle, value: AppRoute.page(allTitle, all)).font(.subheadline)
+                #else
+                NavigationLink(allTitle, destination: all).font(.subheadline)
+                #endif
             }
         }
         .padding(.horizontal, 20)

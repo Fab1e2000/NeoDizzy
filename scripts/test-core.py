@@ -31,11 +31,11 @@ def main():
         sources.mkdir(parents=True)
         tests.mkdir(parents=True)
         files = []
-        for directory in ("Models", "TagEditing", "Lyrics", "Networking", "OfflineLibrary", "Downloads", "Purchases", "Community", "Modules/DizzyLab"):
+        for directory in ("Models", "TagEditing", "Lyrics", "OfflineLibrary", "Downloads", "Modules/DizzyLab"):
             files.extend((ROOT / "NeoDizzy/Core" / directory).rglob("*.swift"))
         files.extend(ROOT / "NeoDizzy/Core" / name for name in (
-            "BrowsingHistory/BrowsingHistoryStore.swift", "DebugLog.swift", "UI/PagedList.swift", "Account/DizzyAuth.swift", "Playback/PlaybackQueue.swift",
-            "Playback/PlaybackPersistence.swift", "Playback/StreamResolver.swift", "Account/AccountStore.swift", "Account/KeychainStore.swift",
+            "DebugLog.swift", "UI/PagedList.swift", "Playback/PlaybackQueue.swift",
+            "Playback/PlaybackPersistence.swift", "Playback/StreamResolver.swift", "Account/KeychainStore.swift",
             "Playback/AudioPlaybackCache.swift", "Playback/ProgressiveAudioLoader.swift",
         ))
         # DownloadStore restores provider-specific requests; compile the real providers too.
@@ -46,9 +46,15 @@ def main():
             "NeteasePlaybackSettings.swift", "NeteaseCheckToken.swift",
             "NeteaseDownloadProvider.swift", "NeteaseDownloadedAudio.swift",
         ))
-        # iOS 与 macOS 共用的页面状态，同样在 macOS 上编译检查。
-        files.extend((ROOT / "NeoDizzy/Shared/ViewModels").glob("*.swift"))
         for source in files:
+            # Platform UI, routing and runtime composition need the full app host.
+            # Foundation page models now live alongside the platform's core code.
+            if source.is_relative_to(ROOT / "NeoDizzy/Core/Modules/DizzyLab"):
+                relative = source.relative_to(ROOT / "NeoDizzy/Core/Modules/DizzyLab")
+                if relative.parts[0] in {"Routing", "Runtime", "UI", "Web"}:
+                    continue
+            if source.name.endswith(("AccountMirror.swift", "LibraryProvider.swift")):
+                continue
             shutil.copy2(source, sources / source.name)
         for name in (
             "NeteaseDownloadTests", "NeteaseDownloadedAudioTests", "GenericDownloadTests",
@@ -57,7 +63,10 @@ def main():
             "PurchaseConfirmationTests", "CheckoutNavigationTests", "PurchaseStoreTests",
             "AlipayReturnRouterTests", "CommunityTests", "FeedPaginationTests", "BrowsingHistoryTests",
         ):
-            shutil.copy2(ROOT / f"NeoDizzyTests/{name}.swift", tests / f"{name}.swift")
+            matches = list((ROOT / "NeoDizzyTests").rglob(f"{name}.swift"))
+            if len(matches) != 1:
+                raise SystemExit(f"Expected one test source for {name}, found {len(matches)}")
+            shutil.copy2(matches[0], tests / f"{name}.swift")
         # Xcode test bundles use Bundle(for:); SwiftPM puts resources in Bundle.module.
         fixture = (ROOT / "NeoDizzyTests/Fixture.swift").read_text()
         assert "Bundle(for: BundleToken.self)" in fixture

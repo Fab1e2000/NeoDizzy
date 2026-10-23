@@ -100,67 +100,22 @@ struct PlaybackQueueTests {
 }
 
 struct StreamResolverTests {
-    /// 过期时间 2026-09-26 17:38（东八区）。
-    private let signed = URL(string: "https://streaming.dizzylab.net/202609261738/47b9396aaf5e70bc3fc219be690419bd/fx4/preview/1.mp3")!
-    private let renewed = URL(string: "https://streaming.dizzylab.net/202609261838/0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f/fx4/preview/1.mp3")!
-    private var expiry: Date { DizzyURL.streamExpiry(signed)! }
-
-    private final class FetchLog {
-        var discIDs: [String] = []
+    private let renewed = URL(string: "https://fixture.invalid/renewed.mp3")!
+    private final class FetchLog { var discIDs: [String] = [] }
+    private func resolver(log: FetchLog, localFile: @escaping (Track) -> URL?, result: URL) -> StreamResolver {
+        let resolver = StreamResolver(localFile: localFile)
+        resolver.register("dizzylab", provider: PlaybackProvider(stream: { track in
+            log.discIDs.append(track.discID)
+            return .init(url: result, expiresAt: .distantFuture, isPreview: true)
+        }))
+        return resolver
     }
-
-    private func resolver(now: Date, log: FetchLog, result: [String: URL]) -> StreamResolver {
-        StreamResolver(
-            fetch: { discID in
-                log.discIDs.append(discID)
-                return result
-            },
-            now: { now }
-        )
-    }
-
-    @Test func usesAddressFromDiscPageWhileFresh() async throws {
-        let log = FetchLog()
-        let resolver = resolver(now: expiry.addingTimeInterval(-600), log: log, result: ["1": renewed])
-        resolver.store(["1": signed], for: "fx4")
-        #expect(try await resolver.stream(for: track(1)) == signed)
-        #expect(log.discIDs.isEmpty)
-    }
-
-    @Test func refetchesShortlyBeforeExpiry() async throws {
-        let log = FetchLog()
-        let resolver = resolver(now: expiry.addingTimeInterval(-60), log: log, result: ["1": renewed])
-        resolver.store(["1": signed], for: "fx4")
-        #expect(try await resolver.stream(for: track(1)) == renewed)
-        #expect(log.discIDs == ["fx4"])
-    }
-
-    @Test func refetchesAfterPlaybackFailure() async throws {
-        let log = FetchLog()
-        let resolver = resolver(now: expiry.addingTimeInterval(-600), log: log, result: ["1": renewed])
-        resolver.store(["1": signed], for: "fx4")
-        resolver.invalidate(discID: "fx4")
-        #expect(try await resolver.stream(for: track(1)) == renewed)
-        #expect(log.discIDs == ["fx4"])
-    }
-
-    @Test func missingTrackIsUnavailable() async {
-        let resolver = resolver(now: expiry, log: FetchLog(), result: ["1": renewed])
-        await #expect(throws: PlaybackError.unavailable) {
-            try await resolver.stream(for: track(7))
-        }
-    }
-
     @Test func localFileWinsOverPreviewAndDoesNotNeedNetworkOrLogin() async throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
         try Data([1, 2, 3]).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
         let log = FetchLog()
-        let resolver = StreamResolver(fetch: { discID in
-            log.discIDs.append(discID)
-            throw PlaybackError.unavailable
-        }, localFile: { _ in file })
-        resolver.store(["1": signed], for: "fx4")
+        let resolver = resolver(log: log, localFile: { _ in file }, result: renewed)
         #expect(try await resolver.stream(for: track(1)) == file)
         resolver.removeAll()
         #expect(try await resolver.stream(for: track(1)) == file)
@@ -170,10 +125,7 @@ struct StreamResolverTests {
     @Test func removedLocalFileFallsBackToNetwork() async throws {
         let missing = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
         let log = FetchLog()
-        let resolver = StreamResolver(fetch: { discID in
-            log.discIDs.append(discID)
-            return ["1": self.renewed]
-        }, localFile: { _ in missing })
+        let resolver = resolver(log: log, localFile: { _ in missing }, result: renewed)
         #expect(try await resolver.stream(for: track(1)) == renewed)
         #expect(log.discIDs == ["fx4"])
     }
@@ -182,8 +134,75 @@ struct StreamResolverTests {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp3")
         try Data([0]).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        let resolver = StreamResolver(fetch: { _ in ["1": self.renewed] }, localFile: { _ in file })
+        let resolver = resolver(log: FetchLog(), localFile: { _ in file }, result: renewed)
         #expect(try await resolver.stream(for: track(1), preferLocal: false) == renewed)
         #expect(try await resolver.stream(for: track(1)) == file)
+    }
+}
+
+@MainActor struct PlaybackProviderIsolationTests {
+    private func remote(_ provider: String) -> Track {
+        var song = track(1)
+        song.remoteSource = RemoteTrackSource(providerID: provider, itemID: "same-id")
+        return song
+    }
+
+    @Test func emptyHostDoesNotImplicitlyCallOriginalPlatform() async {
+        let resolver = StreamResolver()
+        await #expect(throws: PlaybackError.unavailable) { try await resolver.stream(for: track(1)) }
+        #expect(resolver.audioCacheKey(for: track(1)) == nil)
+    }
+
+    @Test func unregisteringOneSourceKeepsOtherSourceCacheAndDownloadedFiles() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data([1]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        var local = false
+        let resolver = StreamResolver(localFile: { _ in local ? file : nil })
+        var firstCalls = 0, secondCalls = 0
+        let first = remote("first"), second = remote("second")
+        resolver.register("first", provider: PlaybackProvider(stream: { _ in
+            firstCalls += 1
+            return .init(url: URL(string: "https://first.invalid/audio")!, expiresAt: .distantFuture, isPreview: false)
+        }))
+        resolver.register("second", provider: PlaybackProvider(stream: { _ in
+            secondCalls += 1
+            return .init(url: URL(string: "https://second.invalid/audio")!, expiresAt: .distantFuture, isPreview: false)
+        }))
+        _ = try await resolver.stream(for: first)
+        let secondURL = try await resolver.stream(for: second)
+        resolver.unregister("first")
+        await #expect(throws: PlaybackError.unavailable) { try await resolver.stream(for: first) }
+        #expect(try await resolver.stream(for: second) == secondURL)
+        #expect(firstCalls == 1 && secondCalls == 1)
+        local = true
+        #expect(try await resolver.stream(for: first) == file)
+    }
+
+    @Test func disabledSourceCannotCommitLateResponse() async throws {
+        let resolver = StreamResolver()
+        let song = remote("first")
+        var resume: CheckedContinuation<Void, Never>?
+        resolver.register("first", provider: PlaybackProvider(stream: { _ in
+            await withCheckedContinuation { resume = $0 }
+            return .init(url: URL(string: "https://first.invalid/late")!, expiresAt: .distantFuture, isPreview: false)
+        }))
+        let task = Task { try await resolver.stream(for: song) }
+        while resume == nil { await Task.yield() }
+        resolver.unregister("first")
+        resume?.resume()
+        await #expect(throws: CancellationError.self) { try await task.value }
+        await #expect(throws: PlaybackError.unavailable) { try await resolver.stream(for: song) }
+    }
+
+    @Test func localLookupReceivesRegisteredQualityOnlyForItsSource() {
+        var qualities: [String?] = []
+        let resolver = StreamResolver(qualityLocalFile: { _, quality in qualities.append(quality); return nil })
+        resolver.register("first", provider: PlaybackProvider(stream: { _ in throw PlaybackError.unavailable }, selectedQuality: { "lossless" }))
+        _ = resolver.localURL(for: remote("first"))
+        _ = resolver.localURL(for: remote("second"))
+        resolver.unregister("first")
+        _ = resolver.localURL(for: remote("first"))
+        #expect(qualities == ["lossless", nil, nil])
     }
 }

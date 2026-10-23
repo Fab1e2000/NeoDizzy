@@ -2,6 +2,8 @@ import Foundation
 import Observation
 
 @Observable final class DownloadStore {
+    private(set) var persistenceError: String?
+    @ObservationIgnored private let writeData: (Data, URL) throws -> Void
     static let concurrentDownloadRange = 1...6
     private static let concurrencyKey = "downloads.concurrentCount"
     var concurrentDownloadCount: Int {
@@ -25,7 +27,8 @@ import Observation
     @ObservationIgnored private var transferProgressByID: [UUID: DownloadProgress] = [:]
     @ObservationIgnored private var progressByID: [UUID: DownloadProgress] = [:]
 
-    init(library: OfflineLibraryStore, directory: URL? = nil, transportIdentifier: String = BackgroundDownloadBridge.identifier, defaults: UserDefaults = .standard, migrateLegacy: (Data) -> [DownloadJob]? = { _ in nil }) {
+    init(library: OfflineLibraryStore, directory: URL? = nil, transportIdentifier: String = BackgroundDownloadBridge.identifier, defaults: UserDefaults = .standard, migrateLegacy: (Data) -> [DownloadJob]? = { _ in nil }, writeData: @escaping (Data, URL) throws -> Void = { try $0.write(to: $1, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }) {
+        self.writeData = writeData
         self.defaults = defaults
         let saved = defaults.object(forKey: Self.concurrencyKey) as? Int ?? 2
         concurrentDownloadCount = min(6, max(1, saved))
@@ -39,6 +42,30 @@ import Observation
     }
 
     func register(_ provider: any DownloadProvider) { providers[provider.id] = provider }
+    /// Stop only this source. Queue records and committed library files remain available.
+    /// Await writers before returning so callers can safely release the platform session.
+    func unregister(_ providerID: String) async {
+        providers[providerID] = nil
+        let affected = jobs.filter { $0.providerID == providerID && $0.isActive }
+        let ids = Set(affected.flatMap { $0.transfers.map(\.id) })
+        let writers = affected.compactMap { operations[$0.id] }
+        let sources = ids.compactMap { sourceOperations[$0] }
+        for job in affected {
+            update(job.id) { $0.state = .failed; $0.failureMessage = "下载来源不可用"; $0.progress = nil }
+        }
+        writers.forEach { $0.cancel() }
+        sources.forEach { $0.cancel() }
+        save()
+        for task in await transport.tasks() where task.taskDescription.flatMap(UUID.init(uuidString:)).map(ids.contains) == true {
+            task.cancel()
+        }
+        for writer in writers { await writer.value }
+        for source in sources { await source.value }
+        save(); pump()
+    }
+
+    func isAvailable(_ providerID: String) -> Bool { providers[providerID] != nil }
+
     func progress(for job: DownloadJob) -> DownloadProgress {
         if let progress = progressByID[job.id] { return progress }
         let progress = DownloadProgress(fraction: job.progress)
@@ -55,21 +82,20 @@ import Observation
 
     func restore() async {
         guard !restored else { return }
-        var playlistArtwork: [String: URL] = [:]
-        for index in jobs.indices where jobs[index].providerID == "netease" {
-            guard let envelope = jobs[index].request,
-                  let request = try? JSONDecoder().decode(NeteaseDownloadRequest.self, from: envelope.payload),
-                  request.kind == "playlist", let cover = envelope.coverURL else { continue }
-            let playlistID = String(request.id)
-            if playlistArtwork[playlistID] == nil { playlistArtwork[playlistID] = cover }
-            for file in jobs[index].transfers.indices {
-                guard var metadata = try? JSONDecoder().decode(NeteaseDownloadMetadata.self, from: jobs[index].transfers[file].metadata),
-                      metadata.playlistID != nil, metadata.playlistArtworkURL == nil else { continue }
-                metadata.playlistArtworkURL = cover
-                if let data = try? JSONEncoder().encode(metadata) { jobs[index].transfers[file].metadata = data }
+        for provider in Array(providers.values) {
+            for index in jobs.indices where jobs[index].providerID == provider.id {
+                jobs[index] = provider.migrateRestoredJob(jobs[index])
+                for transfer in jobs[index].transfers.indices where jobs[index].transfers[transfer].summary == nil {
+                    jobs[index].transfers[transfer].summary = provider.summary(for: jobs[index].transfers[transfer])
+                }
             }
+            await provider.restore(jobs: jobs.filter { $0.providerID == provider.id })
         }
-        try? await library.repairNeteasePlaylistArtwork(playlistArtwork)
+        // Unavailable sources must never resume their background network tasks.
+        for index in jobs.indices where jobs[index].isActive && providers[jobs[index].providerID] == nil {
+            jobs[index].state = .failed
+            jobs[index].failureMessage = "下载来源不可用"
+        }
         let tasks = await transport.tasks()
         let live = Set(tasks.compactMap { $0.taskDescription.flatMap(UUID.init(uuidString:)) })
         for index in jobs.indices where jobs[index].isActive {
@@ -90,7 +116,7 @@ import Observation
         }
         restored = true
         eventTask = Task { [weak self] in
-            for await event in transport.events {
+            for await event in self?.transport.events ?? AsyncStream { $0.finish() } {
                 guard let self else { break }
                 await self.handle(event)
             }
@@ -152,7 +178,7 @@ import Observation
     }
 
     private func pump() {
-        guard restored else { return }
+        guard restored, persistenceError == nil else { return }
         for job in jobs where job.isActive && providers[job.providerID] == nil {
             update(job.id) { $0.state = .failed; $0.failureMessage = "下载来源不可用" }
         }
@@ -187,7 +213,7 @@ import Observation
 
     private func advance(_ id: UUID) async {
         defer { operations[id] = nil; save(); pump() }
-        guard let job = jobs.first(where: { $0.id == id }), job.isActive else { return }
+        guard persistenceError == nil, let job = jobs.first(where: { $0.id == id }), job.isActive else { return }
         guard let provider = providers[job.providerID] else {
             update(id) { $0.state = .failed; $0.failureMessage = "下载来源不可用" }; return
         }
@@ -196,13 +222,17 @@ import Observation
             guard library.folderName != nil else { throw DownloadFailure.folderMissing }
             if job.transfers.isEmpty {
                 update(id) { $0.state = .preparing }
-                let plan = try await provider.plan(job.requestData)
+                let plan = try await provider.plan(job.requestData).map { transfer in
+                    var transfer = transfer
+                    transfer.summary = transfer.summary ?? provider.summary(for: transfer)
+                    return transfer
+                }
                 try Task.checkCancellation()
                 guard !plan.isEmpty else { throw DownloadFailure.unavailable }
                 update(id) { $0.transfers = plan }
-                save(); pump()
+                guard save() else { return }; pump()
             }
-            while let current = jobs.first(where: { $0.id == id }), current.isActive {
+            while persistenceError == nil, let current = jobs.first(where: { $0.id == id }), current.isActive {
                 try Task.checkCancellation()
                 if let file = current.transfers.first(where: { $0.state == .downloaded }) {
                     let staging = directory.appendingPathComponent("\(file.id).contents")
@@ -244,7 +274,7 @@ import Observation
 
     private func startTransfer(_ file: DownloadTransfer, jobID: UUID) async {
         defer { sourceOperations[file.id] = nil; save(); pump() }
-        guard let job = jobs.first(where: { $0.id == jobID }), job.isActive,
+        guard persistenceError == nil, let job = jobs.first(where: { $0.id == jobID }), job.isActive,
               let provider = providers[job.providerID] else { return }
         do {
             guard library.folderName != nil else { throw DownloadFailure.folderMissing }
@@ -258,7 +288,10 @@ import Observation
             guard jobs.first(where: { $0.id == jobID })?.isActive == true else { return }
             updateTransfer(jobID, file.id) { $0.metadata = source.metadata; $0.state = .downloading }
             update(jobID) { $0.state = .downloading }
-            save()
+            guard save() else {
+                updateTransfer(jobID, file.id) { $0.state = .queued }
+                return
+            }
             if source.url.isFileURL {
                 // 「转为下载」复制缓存文件，大文件放到后台复制，避免卡住界面。
                 let archive = transport.archiveURL(file.id), sourceURL = source.url
@@ -339,14 +372,24 @@ import Observation
             try? FileManager.default.removeItem(at: directory.appendingPathComponent("\(file.id).contents"))
         }
     }
-    private func save() {
+    func retryPersistence() {
+        if save() { pump() }
+    }
+
+    @discardableResult
+    private func save() -> Bool {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(DownloadSnapshot(version: 2, jobs: jobs))
-            try data.write(to: directory.appendingPathComponent("jobs.json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try writeData(data, directory.appendingPathComponent("jobs.json"))
             var location = directory
             var values = URLResourceValues(); values.isExcludedFromBackup = true
             try? location.setResourceValues(values)
-        } catch { }
+            persistenceError = nil
+            return true
+        } catch {
+            persistenceError = "下载队列尚未保存，新任务已暂停启动。请重试保存，成功前退出可能丢失队列更改。"
+            return false
+        }
     }
 }

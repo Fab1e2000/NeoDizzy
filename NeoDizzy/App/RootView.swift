@@ -29,6 +29,17 @@ struct RootView: View {
 
     var body: some View {
         modules.install(in: AnyView(shell))
+            .safeAreaInset(edge: .top) {
+                if let error = services.savedLibrary.persistenceError {
+                    HStack {
+                        Text(error).font(.footnote)
+                        Button("重试") { services.savedLibrary.retryPersistence() }
+                        Button("关闭") { services.savedLibrary.persistenceError = nil }
+                    }
+                    .padding()
+                    .background(.regularMaterial)
+                }
+            }
             .tint(DizzyPalette.accent)
             .environment(modules)
             .environment(host)
@@ -40,6 +51,9 @@ struct RootView: View {
             .environment(services.favorites)
             .environment(services.accountLibrary)
             .environment(services.playbackHistory)
+            .environment(services.downloads)
+            .environment(services.libraryProviders)
+            .environment(services)
             .environment(libraryBackup)
             .environment(\.openRoute, OpenRouteAction { route in
                 settingsPresentation.isPresented = false
@@ -68,8 +82,11 @@ struct RootView: View {
                 MainNavigationStack(path: path(for: .search)) { UnifiedSearchView() }
             }
         }
-        .onChange(of: host.selection) { _, selection in
+        .onChange(of: host.selection, initial: true) { _, selection in
             if selection == .search { search.isActive = true }
+            // 每个标签页用自己来源的主题色；搜索和没有品牌色的模块用黑色。
+            appearance.accent = modules.descriptor(for: selection)?.accent ?? .neutral
+            WindowAppearance.apply(appearance)
         }
         .environment(search)
         .environment(\.setMiniPlayerSuppressed, SetMiniPlayerSuppressedAction { isMiniPlayerSuppressed = $0 })
@@ -106,9 +123,6 @@ struct RootView: View {
         .statusBarHidden(isImmersive)
         .onOpenURL { modules.handleURL($0, host: host) }
         // 本机喜欢、收藏后立刻更新资料库；换账号时重新同步。
-        .onChange(of: services.netease.library.revision) { _, _ in services.accountLibrary.rebuildNetease(from: services.netease) }
-        .onChange(of: services.netease.profile?.userId) { _, _ in services.favorites.updateAccounts(); Task { await services.syncAccountLibrary(force: true) } }
-        .onChange(of: services.account.account?.userID) { _, _ in Task { await services.syncAccountLibrary(force: true) } }
         .onChange(of: host.dismissPresentations) { _, shouldDismiss in
             guard shouldDismiss else { return }
             pendingPlayerRoute = nil
@@ -120,7 +134,6 @@ struct RootView: View {
         // 「正在播放」小组件跟着当前歌曲换封面；换歌时取消上一次未完成的封面请求。
         .task(id: player.currentTrack?.id) { await NowPlayingWidgetBridge.update(for: player.currentTrack) }
         .onChange(of: appearance.mode, initial: true) { WindowAppearance.apply(appearance) }
-        .onChange(of: appearance.themeID) { WindowAppearance.apply(appearance) }
         .onChange(of: scenePhase, initial: true) { oldPhase, phase in
             if phase == .active { WindowAppearance.apply(appearance) }
             // 用户可能刚在「文件」App 里往音乐文件夹放了歌。
@@ -147,7 +160,7 @@ struct RootView: View {
 
     private var libraryContext: LibraryContext {
         LibraryContext(favorites: services.favorites, mirror: services.accountLibrary, saved: services.savedLibrary,
-                       offline: offlineLibrary, netease: services.netease, modules: tabSettings, downloads: services.downloads)
+                       offline: offlineLibrary, providers: services.libraryProviders, modules: tabSettings, downloads: services.downloads)
     }
 
     // Finish dismissal before pushing the destination.

@@ -20,23 +20,14 @@ struct SongLibraryActions: View {
 struct SongActionPresentationModifier: ViewModifier {
     let track: Track
     @Bindable var presentation: SongActionPresentation
-    @Environment(NeteaseStore.self) private var netease: NeteaseStore?
+    @Environment(ModuleRegistry.self) private var modules
     func body(content: Content) -> some View {
         content
             .songPlaylistSheet(isPresented: $presentation.playlist, track: track)
-            .sheet(isPresented: $presentation.login) { if let netease { NeteaseLoginView(store: netease) } }
+            .sheet(isPresented: $presentation.login) {
+                if let provider = track.remoteSource?.providerID { modules.loginView(providerID: provider) }
+            }
             .alert("喜欢操作失败", item: $presentation.failure) { _ in Button("好", role: .cancel) { } } message: { Text($0) }
-    }
-}
-
-nonisolated enum SongPlaylistDestination: Equatable {
-    case netease(Int), local, unavailable
-
-    static func resolve(_ track: Track, hasLocalFile: Bool) -> Self {
-        // 已下载的网易云歌曲仍然写入原平台歌单。
-        if track.remoteSource?.providerID == "netease",
-           let id = (track.remoteSource?.itemID).flatMap(Int.init) { return .netease(id) }
-        return hasLocalFile ? .local : .unavailable
     }
 }
 
@@ -49,22 +40,15 @@ extension View {
 private struct SongPlaylistSheet: View {
     let track: Track
     @Environment(OfflineLibraryStore.self) private var library
-    @Environment(NeteaseStore.self) private var netease: NeteaseStore?
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        switch SongPlaylistDestination.resolve(track, hasLocalFile: library.localFile(for: track) != nil) {
-        case .netease(let id):
-            if let netease, netease.profile == nil {
-                NeteaseLoginView(store: netease)
-            } else if netease != nil {
-                NeteasePlaylistPicker(songID: id)
-            } else {
-                unavailable("网易云模块当前不可用。")
-            }
-        case .local:
+        if let picker = modules.playlistPicker(for: track) {
+            picker
+        } else if library.localFile(for: track) != nil {
             LocalPlaylistPicker(track: track)
-        case .unavailable:
+        } else {
             unavailable("这首歌尚无可用的平台歌单接口。下载歌曲后，可以加入本地歌单。")
         }
     }

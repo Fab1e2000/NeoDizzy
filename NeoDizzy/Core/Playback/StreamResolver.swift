@@ -8,154 +8,147 @@ nonisolated struct RemotePlaybackSource {
     var fileExtension: String? = nil
 }
 
-/// 本地文件、DizzyLab 专辑地址和注册来源的逐曲播放地址分别解析与缓存。
+/// A source owns URL semantics and optional collection preloading. The resolver owns
+/// local precedence, expiration and source-scoped cancellation for every provider.
+struct PlaybackProvider {
+    let stream: (Track) async throws -> RemotePlaybackSource
+    var lyrics: ((Track) async throws -> LocalLyrics?)? = nil
+    var selectedQuality: (() -> String?)? = nil
+    var cacheKey: ((Track) -> AudioPlaybackCache.Key)? = nil
+    var prime: (([String: URL], String) -> Void)? = nil
+    var invalidate: ((String?) -> Void)? = nil
+}
+
 final class StreamResolver {
-    private var remoteProviders: [String: (String) async throws -> RemotePlaybackSource] = [:]
-    private var lyricProviders: [String: (String) async throws -> LocalLyrics] = [:]
-    private var remoteCache: [String: RemotePlaybackSource] = [:]
-    private var cacheKeys: [String: (Track) -> AudioPlaybackCache.Key] = [:]
+    private struct Cached {
+        let providerID: String
+        let collectionID: String
+        let source: RemotePlaybackSource
+    }
+    private var providers: [String: PlaybackProvider] = [:]
+    private var cache: [String: Cached] = [:]
     private var revisions: [String: Int] = [:]
-
-    func register(_ provider: String, stream: @escaping (String) async throws -> RemotePlaybackSource,
-                  lyrics: @escaping (String) async throws -> LocalLyrics,
-                  cacheKey: ((Track) -> AudioPlaybackCache.Key)? = nil) {
-        cacheKeys[provider] = cacheKey
-        remoteProviders[provider] = stream
-        lyricProviders[provider] = lyrics
-    }
-    func audioCacheKey(for track: Track) -> AudioPlaybackCache.Key? {
-        if let source = track.remoteSource { return cacheKeys[source.providerID]?(track) }
-        guard track.localSource == nil else { return nil }
-        return .init(trackID: track.id,
-                     scope: AudioPlaybackCache.digest(DizzyHTTPClient.shared.credentials.cookieHeader() ?? ""), quality: "original")
-    }
-    func actualQuality(for track: Track) -> String? {
-        track.remoteSource == nil ? "original" : remoteCache[track.id]?.actualQuality
-    }
-
-    func lyrics(for track: Track) async throws -> LocalLyrics? {
-        guard let source = track.remoteSource, let fetch = lyricProviders[source.providerID] else { return nil }
-        return try await fetch(source.itemID)
-    }
-    func isPreview(for track: Track?, url: URL) -> Bool {
-        if url.isFileURL { return false }
-        if let track, track.remoteSource != nil { return remoteCache[track.id]?.isPreview ?? false }
-        return DizzyURL.isPreviewStream(url)
-    }
-    func invalidate(for track: Track) {
-        if track.remoteSource != nil { remoteCache[track.id] = nil }
-        else { invalidate(discID: track.discID) }
-    }
-
-    /// 距离过期不到这么久就重新获取，避免播到一半地址失效。
-    static let refreshMargin: TimeInterval = 120
-
-    private var cache: [String: [String: URL]] = [:]
-    private var dizzyRevision = 0
-    private let fetch: (String) async throws -> [String: URL]
     private let now: () -> Date
     private var retainedAccess: OfflineFolderAccess?
     private let localAccess: (Track) -> OfflineFolderAccess?
     private let localFile: (Track) -> URL?
+    private let qualityLocalFile: ((Track, String?) -> URL?)?
+    private let qualityLocalAccess: ((Track, String?) -> OfflineFolderAccess?)?
+    static let refreshMargin: TimeInterval = 120
 
-    init(
-        fetch: @escaping (String) async throws -> [String: URL] = { try await DizzyAPI.shared.discDetail(id: $0, fresh: true).streams },
-        now: @escaping () -> Date = Date.init,
-        localFile: @escaping (Track) -> URL? = { _ in nil },
-        localAccess: @escaping (Track) -> OfflineFolderAccess? = { _ in nil }
-    ) {
-        self.fetch = fetch
+    init(now: @escaping () -> Date = Date.init,
+         localFile: @escaping (Track) -> URL? = { _ in nil },
+         localAccess: @escaping (Track) -> OfflineFolderAccess? = { _ in nil },
+         qualityLocalFile: ((Track, String?) -> URL?)? = nil,
+         qualityLocalAccess: ((Track, String?) -> OfflineFolderAccess?)? = nil) {
         self.now = now
         self.localFile = localFile
         self.localAccess = localAccess
+        self.qualityLocalFile = qualityLocalFile
+        self.qualityLocalAccess = qualityLocalAccess
     }
 
-    func localURL(for track: Track) -> URL? { localFile(track) }
+    func register(_ id: String, provider: PlaybackProvider) {
+        invalidateRemote(id)
+        providers[id] = provider
+    }
+    func register(_ id: String, stream: @escaping (String) async throws -> RemotePlaybackSource,
+                  lyrics: @escaping (String) async throws -> LocalLyrics,
+                  cacheKey: ((Track) -> AudioPlaybackCache.Key)? = nil, selectedQuality: (() -> String?)? = nil) {
+        register(id, provider: PlaybackProvider(stream: { track in
+            guard let source = track.remoteSource, source.providerID == id else { throw PlaybackError.unavailable }
+            return try await stream(source.itemID)
+        }, lyrics: { track in
+            guard let source = track.remoteSource, source.providerID == id else { return nil }
+            return try await lyrics(source.itemID)
+        }, selectedQuality: selectedQuality, cacheKey: cacheKey))
+    }
+    func unregister(_ id: String) {
+        invalidateRemote(id)
+        providers[id] = nil
+    }
+    func audioCacheKey(for track: Track) -> AudioPlaybackCache.Key? {
+        guard let id = track.playbackProviderID else { return nil }
+        return providers[id]?.cacheKey?(track)
+    }
+    func actualQuality(for track: Track) -> String? { cache[track.id]?.source.actualQuality }
+    func lyrics(for track: Track) async throws -> LocalLyrics? {
+        guard let id = track.playbackProviderID, let fetch = providers[id]?.lyrics else { return nil }
+        let revision = revisions[id, default: 0]
+        let result = try await fetch(track)
+        try Task.checkCancellation()
+        guard revision == revisions[id, default: 0] else { throw CancellationError() }
+        return result
+    }
+    func isPreview(for track: Track?, url: URL) -> Bool {
+        guard !url.isFileURL, let track, let cached = cache[track.id], cached.source.url == url else { return false }
+        return cached.source.isPreview
+    }
+    func selectedQuality(for track: Track) -> String? {
+        track.playbackProviderID.flatMap { providers[$0]?.selectedQuality?() }
+    }
+    func localURL(for track: Track) -> URL? {
+        if let qualityLocalFile { return qualityLocalFile(track, selectedQuality(for: track)) }
+        return localFile(track)
+    }
+    private func access(for track: Track) -> OfflineFolderAccess? {
+        if let qualityLocalAccess { return qualityLocalAccess(track, selectedQuality(for: track)) }
+        return localAccess(track)
+    }
+    func independentLocalAccess(for track: Track) -> OfflineFolderAccess? { access(for: track) }
+
     func releaseLocalAccess() { retainedAccess = nil }
 
-    /// 专辑页已经拿到的地址，直接放进缓存，播放时不用再请求一次。
-    func store(_ streams: [String: URL], for discID: String) {
+    func prime(_ streams: [String: URL], for track: Track) {
+        guard let id = track.playbackProviderID else { return }
+        prime(streams, providerID: id, collectionID: track.discID)
+    }
+    func prime(_ streams: [String: URL], providerID: String, collectionID: String) {
         guard !streams.isEmpty else { return }
-        cache[discID] = streams
+        invalidate(providerID: providerID, collectionID: collectionID)
+        providers[providerID]?.prime?(streams, collectionID)
     }
 
     func stream(for track: Track, preferLocal: Bool = true, retainAccess: Bool = true) async throws -> URL {
-        // 每次换曲目都重新查询：刚下载的曲目立即可播，移走的文件可回退到串流。
-        // 本地地址不放入签名地址缓存，也不受登录/退出登录的缓存清理影响。
-        if (preferLocal || track.localSource != nil), let url = localFile(track), url.isFileURL,
+        if (preferLocal || track.localSource != nil), let url = localURL(for: track), url.isFileURL,
            FileManager.default.isReadableFile(atPath: url.path) {
-            if retainAccess { retainedAccess = localAccess(track) }
+            if retainAccess { retainedAccess = access(for: track) }
             return url
         }
-        if preferLocal, let key = audioCacheKey(for: track), let file = AudioPlaybackCache.shared.file(for: key) {
-            return file
-        }
+        if preferLocal, let key = audioCacheKey(for: track), let file = AudioPlaybackCache.shared.file(for: key) { return file }
         if track.localSource != nil { throw PlaybackError.localUnavailable }
         if retainAccess { retainedAccess = nil }
-        if let source = track.remoteSource {
-            if retainAccess { retainedAccess = nil }
-            if let cached = remoteCache[track.id], cached.expiresAt.timeIntervalSince(now()) > Self.refreshMargin { return cached.url }
-            guard let provider = remoteProviders[source.providerID] else { throw PlaybackError.unavailable }
-            let generation = revisions[source.providerID, default: 0]
-            let result = try await provider(source.itemID)
-            try Task.checkCancellation()
-            guard generation == revisions[source.providerID, default: 0] else { throw CancellationError() }
-            remoteCache[track.id] = result
-            return result.url
-        }
-        if let url = cache[track.discID]?[track.number], isFresh(url) {
-            return url
-        }
-        let revision = dizzyRevision
-        let streams = try await fetch(track.discID)
+        guard let id = track.playbackProviderID, let provider = providers[id] else { throw PlaybackError.unavailable }
+        if let cached = cache[track.id], cached.source.expiresAt.timeIntervalSince(now()) > Self.refreshMargin { return cached.source.url }
+        let revision = revisions[id, default: 0]
+        let result = try await provider.stream(track)
         try Task.checkCancellation()
-        guard revision == dizzyRevision else { throw CancellationError() }
-        cache[track.discID] = streams
-        guard let url = streams[track.number] else {
-            throw PlaybackError.unavailable
-        }
-        return url
+        guard revision == revisions[id, default: 0] else { throw CancellationError() }
+        cache[track.id] = Cached(providerID: id, collectionID: track.discID, source: result)
+        return result.url
     }
 
-    /// 播放出错（多半是地址过期返回 403）后丢掉这张专辑的地址，下次重新获取。
-    func invalidate(discID: String) {
-        dizzyRevision += 1
-        cache[discID] = nil
+    func invalidate(for track: Track) {
+        guard let id = track.playbackProviderID else { return }
+        invalidate(providerID: id, collectionID: track.discID)
     }
-
-    /// 登录或退出登录后，同一张专辑的地址可能从试听变成完整版（或反过来），全部重新获取。
-    func removeAll() {
-        for provider in remoteProviders.keys { invalidateRemote(provider) }
-        remoteCache.removeAll()
-        clearDizzyLabCache()
-    }
-
-    func invalidateRemote(_ providerID: String) {
+    func invalidate(providerID: String, collectionID: String? = nil) {
         revisions[providerID, default: 0] += 1
-        remoteCache = remoteCache.filter { !$0.key.hasPrefix("remote/\(providerID)/") }
+        cache = cache.filter { $0.value.providerID != providerID || (collectionID != nil && $0.value.collectionID != collectionID) }
+        providers[providerID]?.invalidate?(collectionID)
     }
-
-    func clearDizzyLabCache() { dizzyRevision += 1; cache.removeAll() }
+    func invalidateRemote(_ providerID: String) { invalidate(providerID: providerID) }
+    func removeAll() { for id in Array(providers.keys) { invalidateRemote(id) } }
 
     func isFresh(_ url: URL, for track: Track) -> Bool {
         if url.isFileURL {
             guard FileManager.default.isReadableFile(atPath: url.path) else { return false }
-            if localFile(track) == url { return true }
+            if localURL(for: track) == url { return true }
             if let key = audioCacheKey(for: track), AudioPlaybackCache.shared.file(for: key) == url { return true }
-            // A remote provider may return a file URL in tests; it still obeys source invalidation.
             if url.deletingLastPathComponent().standardizedFileURL.path == AudioPlaybackCache.shared.directory.standardizedFileURL.path { return false }
         }
-        if track.remoteSource != nil {
-            guard let source = remoteCache[track.id], source.url == url else { return false }
-            return source.expiresAt.timeIntervalSince(now()) > Self.refreshMargin
-        }
-        return isFresh(url)
-    }
-
-    private func isFresh(_ url: URL) -> Bool {
-        // 看不出过期时间时照常使用，真的失效了会在播放出错后重新获取。
-        guard let expiry = DizzyURL.streamExpiry(url) else { return true }
-        return expiry.timeIntervalSince(now()) > Self.refreshMargin
+        guard let cached = cache[track.id], cached.source.url == url else { return false }
+        return cached.source.expiresAt.timeIntervalSince(now()) > Self.refreshMargin
     }
 }
 

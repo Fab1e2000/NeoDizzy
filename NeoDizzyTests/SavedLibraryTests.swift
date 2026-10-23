@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import NeoDizzy
 
@@ -50,24 +51,46 @@ struct SavedLibraryTests {
         #expect(LibraryContents.artistNames(unnamed) == ["未知歌手"])
     }
 
-    @Test func accountItemsOnlyOfferRemovalWhenTheAccountAllowsIt() {
+    private final class CollectionModule: AppModule {
+        let descriptor: ModuleDescriptor
+        let requiresNumericID: Bool
+        init(_ provider: String, numeric: Bool = false) {
+            descriptor = ModuleDescriptor(id: ModuleID(rawValue: provider), title: provider, systemImage: "square")
+            requiresNumericID = numeric
+        }
+        func rootView() -> AnyView { AnyView(EmptyView()) }
+        func destination(for route: AppRoute) -> AnyView? { nil }
+        func collectionRoute(kind: String, itemID: String) -> AppRoute? {
+            guard ["album", "playlist"].contains(kind), !requiresNumericID || Int(itemID) != nil else { return nil }
+            return AppRoute(moduleID: descriptor.id, destination: "\(kind)/\(itemID)", title: itemID)
+        }
+        func collectionRemoval(for item: MirroredCollection) -> LibraryRemoval? {
+            guard !item.isPermanent, requiresNumericID, collectionRoute(kind: item.kind.rawValue, itemID: item.itemID) != nil else { return nil }
+            return .account(providerID: item.providerID, kind: item.kind.rawValue, itemID: item.itemID, notice: "账号也会取消收藏此内容。")
+        }
+    }
+    @Test func accountItemsOnlyOfferRemovalWhenTheAccountAllowsIt() throws {
+        let modules = try ModuleRegistry([CollectionModule("account-fixture", numeric: true), CollectionModule("purchased-fixture")])
         func item(_ provider: String, _ kind: MirroredCollection.Kind, _ id: String, permanent: Bool = false, liked: Bool = false) -> MirroredCollection {
             MirroredCollection(providerID: provider, kind: kind, itemID: id, title: "标题", subtitle: "副标题", coverURL: nil,
                                isLikedPlaylist: liked, isPermanent: permanent, firstSeen: .now)
         }
-        // 自建歌单与「我喜欢的音乐」只能在网易云里管理；收藏的歌单和专辑可以移除。
-        #expect(LibraryShelfItem(mirrored: item("netease", .playlist, "1", permanent: true, liked: true))?.removal == nil)
-        #expect(LibraryShelfItem(mirrored: item("netease", .playlist, "2"))?.removal == .neteasePlaylist(2))
-        #expect(LibraryShelfItem(mirrored: item("netease", .album, "3"))?.removal == .neteaseAlbum(3))
-        // DizzyLab 已购专辑不能移除。
-        let purchased = LibraryShelfItem(mirrored: item("dizzylab", .album, "abc", permanent: true))
+        // The provider owns collection removal policy.
+        #expect(LibraryShelfItem(mirrored: item("account-fixture", .playlist, "1", permanent: true, liked: true), modules: modules)?.removal == nil)
+        #expect(LibraryShelfItem(mirrored: item("account-fixture", .playlist, "2"), modules: modules)?.removal == .account(providerID: "account-fixture", kind: "playlist", itemID: "2", notice: "账号也会取消收藏此内容。"))
+        #expect(LibraryShelfItem(mirrored: item("account-fixture", .album, "3"), modules: modules)?.removal == .account(providerID: "account-fixture", kind: "album", itemID: "3", notice: "账号也会取消收藏此内容。"))
+        // Permanent purchases cannot be removed.
+        let purchased = LibraryShelfItem(mirrored: item("purchased-fixture", .album, "abc", permanent: true), modules: modules)
         #expect(purchased?.removal == nil)
-        #expect(purchased?.origin == .dizzylab)
-        // 网易云的 ID 必须是数字。
-        #expect(LibraryShelfItem(mirrored: item("netease", .playlist, "x")) == nil)
+        #expect(purchased?.origin.rawValue == "purchased-fixture")
+        // The fixture provider rejects malformed IDs.
+        #expect(LibraryShelfItem(mirrored: item("account-fixture", .playlist, "x"), modules: modules) == nil)
         // 会改动账号的移除才需要确认。
+        modules.remove(ModuleID(rawValue: "account-fixture"))
+        #expect(LibraryShelfItem(mirrored: item("account-fixture", .album, "3"), modules: modules) == nil)
+        #expect(LibraryShelfItem(mirrored: item("purchased-fixture", .album, "abc", permanent: true), modules: modules) != nil)
         #expect(LibraryRemoval.saved("a").accountNotice == nil)
-        #expect(LibraryRemoval.neteaseSong(1).accountNotice != nil)
+        #expect(LibraryRemoval.account(providerID: "test", kind: "album", itemID: "1", notice: "取消账号收藏").accountNotice != nil)
     }
 }
 
@@ -77,60 +100,97 @@ struct AccountLibraryMirrorTests {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     }
 
-    private func purchases(_ id: String) -> Page<PurchasedDisc> {
-        Page(items: [PurchasedDisc(disc: DiscSummary(id: id, title: id, coverURL: nil), purchaseDate: nil)], hasMore: false)
+    private func purchases(_ id: String) -> [MirroredCollection] {
+        [.init(providerID: "fixture", kind: .album, itemID: id, title: id, subtitle: "", coverURL: nil, firstSeen: .now)]
+    }
+    private func sync(_ mirror: AccountLibraryMirror, account: Int?, load: @escaping (Int) async throws -> [MirroredCollection]) async throws {
+        try await mirror.sync("fixture", account: account.map(String.init)) { commit in
+            guard let account else { return }
+            try commit(await load(account))
+        }
     }
 
     @Test func logoutDoesNotWaitForOrRestoreAnOldPurchaseRequest() async throws {
         let folder = directory()
         defer { try? FileManager.default.removeItem(at: folder) }
-        var request: CheckedContinuation<Page<PurchasedDisc>, Never>?
-        let mirror = AccountLibraryMirror(directory: folder, loadPurchases: { _, _ in
-            await withCheckedContinuation { request = $0 }
-        })
-        let reading = Task { try await mirror.syncDizzyLab(userID: 1) }
+        var request: CheckedContinuation<[MirroredCollection], Never>?
+        let mirror = AccountLibraryMirror(directory: folder)
+        let load: (Int) async -> [MirroredCollection] = { _ in await withCheckedContinuation { request = $0 } }
+        let reading = Task { try await sync(mirror, account: 1, load: load) }
         while request == nil { await Task.yield() }
         // Logout must finish before the suspended network request does.
-        try await mirror.syncDizzyLab(userID: nil)
-        #expect(mirror.dizzyLabAlbums.isEmpty)
+        try await sync(mirror, account: nil, load: load)
+        #expect(mirror.state("fixture").collections.isEmpty)
         request?.resume(returning: purchases("old-account"))
         do { try await reading.value; Issue.record("Old account request should be cancelled") }
         catch is CancellationError { }
-        #expect(mirror.dizzyLabAlbums.isEmpty)
-        #expect(AccountLibraryMirror(directory: folder).dizzyLabAlbums.isEmpty)
+        #expect(mirror.state("fixture").collections.isEmpty)
+        #expect(AccountLibraryMirror(directory: folder).state("fixture").collections.isEmpty)
     }
 
     @Test func switchingAccountsStartsANewRequestAndRejectsLateOldResults() async throws {
         let folder = directory()
         defer { try? FileManager.default.removeItem(at: folder) }
-        var request: CheckedContinuation<Page<PurchasedDisc>, Never>?
-        let mirror = AccountLibraryMirror(directory: folder, loadPurchases: { userID, _ in
+        var request: CheckedContinuation<[MirroredCollection], Never>?
+        let mirror = AccountLibraryMirror(directory: folder)
+        let load: (Int) async -> [MirroredCollection] = { userID in
             if userID == 1 { return await withCheckedContinuation { request = $0 } }
             return purchases("new-account")
-        })
-        let reading = Task { try await mirror.syncDizzyLab(userID: 1) }
+        }
+        let reading = Task { try await sync(mirror, account: 1, load: load) }
         while request == nil { await Task.yield() }
-        try await mirror.syncDizzyLab(userID: 2)
-        #expect(mirror.dizzyLabAlbums.map(\.itemID) == ["new-account"])
+        try await sync(mirror, account: 2, load: load)
+        #expect(mirror.state("fixture").collections.map(\.itemID) == ["new-account"])
         request?.resume(returning: purchases("old-account"))
         do { try await reading.value; Issue.record("Old account request should be cancelled") }
         catch is CancellationError { }
-        #expect(mirror.dizzyLabAlbums.map(\.itemID) == ["new-account"])
-        #expect(AccountLibraryMirror(directory: folder).dizzyLabAlbums.map(\.itemID) == ["new-account"])
+        #expect(mirror.state("fixture").collections.map(\.itemID) == ["new-account"])
+        #expect(AccountLibraryMirror(directory: folder).state("fixture").collections.map(\.itemID) == ["new-account"])
     }
 
     @Test func failedNewAccountSyncClearsThePreviousAccountsPersistedAlbums() async throws {
         enum Failure: Error { case network }
         let folder = directory()
         defer { try? FileManager.default.removeItem(at: folder) }
-        let mirror = AccountLibraryMirror(directory: folder, loadPurchases: { userID, _ in
+        let mirror = AccountLibraryMirror(directory: folder)
+        let load: (Int) async throws -> [MirroredCollection] = { userID in
             if userID == 2 { throw Failure.network }
             return purchases("old-account")
+        }
+        try await sync(mirror, account: 1, load: load)
+        #expect(mirror.state("fixture").collections.count == 1)
+        await #expect(throws: Failure.self) { try await sync(mirror, account: 2, load: load) }
+        #expect(mirror.state("fixture").collections.isEmpty)
+        #expect(AccountLibraryMirror(directory: folder).state("fixture").collections.isEmpty)
+    }
+}
+
+@MainActor struct SavedLibraryPersistenceTests {
+    @Test func failedAddAndRemoveKeepPublishedAndDurableStateUntilRetry() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var fail = true
+        let store = SavedLibraryStore(directory: directory, writeData: { data, url in
+            if fail { throw CocoaError(.fileWriteOutOfSpace) }
+            try data.write(to: url, options: .atomic)
         })
-        try await mirror.syncDizzyLab(userID: 1)
-        #expect(mirror.dizzyLabAlbums.count == 1)
-        await #expect(throws: Failure.self) { try await mirror.syncDizzyLab(userID: 2) }
-        #expect(mirror.dizzyLabAlbums.isEmpty)
-        #expect(AccountLibraryMirror(directory: folder).dizzyLabAlbums.isEmpty)
+        let item = SavedLibraryItem(kind: .album, providerID: "test", itemID: "1",
+                                   title: "Album", subtitle: "", coverURL: nil, addedAt: .now)
+        #expect(!store.add(item))
+        #expect(store.items.isEmpty)
+        #expect(store.persistenceError != nil)
+        #expect(SavedLibraryStore(directory: directory).items.isEmpty)
+        fail = false
+        #expect(store.retryPersistence())
+        #expect(store.persistenceError == nil)
+        #expect(SavedLibraryStore(directory: directory).items == [item])
+        fail = true
+        #expect(!store.remove(id: item.id))
+        #expect(store.items == [item])
+        #expect(SavedLibraryStore(directory: directory).items == [item])
+        fail = false
+        #expect(store.retryPersistence())
+        #expect(store.persistenceError == nil)
+        #expect(SavedLibraryStore(directory: directory).items.isEmpty)
     }
 }

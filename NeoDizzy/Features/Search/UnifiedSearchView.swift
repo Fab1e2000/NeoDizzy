@@ -90,13 +90,14 @@ private struct SearchResultsList: View {
 
 /// 没有输入时的「接着听」：最近播放过的专辑，点一下打开。
 private struct ContinueListening: View {
+    @Environment(ModuleRegistry.self) private var modules
     @Environment(PlaybackHistoryStore.self) private var history
     @Environment(OfflineLibraryStore.self) private var library
 
     var body: some View {
         let entries = Array(history.entries.lazy.filter(isAvailable).prefix(6))
         if entries.isEmpty {
-            ContentUnavailableView("搜索资料库、网易云和 DizzyLab", systemImage: "magnifyingglass",
+            ContentUnavailableView("搜索资料库与音乐平台", systemImage: "magnifyingglass",
                                    description: Text("一次搜索，按来源列出结果。"))
                 .padding(.top, 40)
         } else {
@@ -113,24 +114,19 @@ private struct ContinueListening: View {
 
     /// 本地专辑被删掉后不再显示。
     private func isAvailable(_ entry: PlaybackHistoryStore.Entry) -> Bool {
-        entry.kind != .localAlbum || library.localAlbum(id: entry.itemID) != nil
+        if entry.kind == .localAlbum { return library.localAlbum(id: entry.itemID) != nil }
+        return route(entry) != nil
     }
 
-    private func route(_ entry: PlaybackHistoryStore.Entry) -> AppRoute {
-        switch entry.kind {
-        case .localAlbum: .localAlbum(id: library.localAlbum(id: entry.itemID)?.id ?? entry.itemID)
-        case .neteaseAlbum: .netease(.album(Int(entry.itemID) ?? 0))
-        case .dizzylabAlbum: .disc(id: entry.itemID)
-        }
+    private func route(_ entry: PlaybackHistoryStore.Entry) -> AppRoute? {
+        if entry.kind == .localAlbum { return .localAlbum(id: entry.itemID) }
+        return modules.collectionRoute(providerID: entry.providerID, kind: "album", itemID: entry.itemID)
     }
 
     private func source(_ entry: PlaybackHistoryStore.Entry) -> String {
-        switch entry.kind {
-        case .localAlbum: String(localized: "本地")
-        case .neteaseAlbum: String(localized: "网易云")
-        case .dizzylabAlbum: "DizzyLab"
-        }
+        modules.origin(providerID: entry.providerID)?.label ?? entry.providerID
     }
+
 }
 
 /// 搜索页搜索框的状态：选中「搜索」标签时自动进入输入。

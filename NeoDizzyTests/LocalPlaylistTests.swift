@@ -10,6 +10,32 @@ struct LocalPlaylistTests {
         return root
     }
 
+    @Test func additionalProviderPlaylistRoundTripsAndRejectsInjectedHeaders() throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let track = Track(discID: "", number: "1", title: "歌曲", artists: "歌手", albumTitle: "Album", coverURL: nil)
+        let audio = root.appendingPathComponent("Album/song.mp3")
+        let source = LibrarySource(provider: "qqmusic", kind: "playlist", id: "mid_123")
+        try LocalPlaylistFile.write(title: "QQ", entries: [(track, audio)], source: source, existing: nil, root: root)
+        let file = root.appendingPathComponent("Playlists/QQ.m3u8")
+        let (playlist, issues) = try LocalPlaylistFile.read(file, root: root, tracks: [LocalLibraryScanner.canonical(audio): track])
+        #expect(playlist.source == source)
+        #expect(playlist.tracks.map(\.id) == [track.id])
+        #expect(issues.isEmpty)
+        for provider in ["", "qq:music", "qq\nmusic", "qq\0music"] {
+            #expect(throws: (any Error).self) {
+                try LocalPlaylistFile.write(title: "Invalid", entries: [],
+                                            source: LibrarySource(provider: provider, kind: "playlist", id: "123"), existing: nil, root: root)
+            }
+        }
+        for id in ["", "12:3", "12\n3", "12\0" ] {
+            #expect(throws: (any Error).self) {
+                try LocalPlaylistFile.write(title: "Invalid", entries: [],
+                                            source: LibrarySource(provider: "qqmusic", kind: "playlist", id: id), existing: nil, root: root)
+            }
+        }
+    }
+
     @Test func roundTripPreservesOrderSourceAndSkipsUnsafeOrMissingReferences() async throws {
         let root = try folder()
         defer { try? FileManager.default.removeItem(at: root) }

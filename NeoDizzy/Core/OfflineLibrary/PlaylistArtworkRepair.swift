@@ -2,9 +2,9 @@ import Foundation
 
 extension OfflineLibraryStore {
     /// Recover the original playlist artwork retained in older download requests.
-    func repairNeteasePlaylistArtwork(_ artwork: [String: URL]) async throws {
+    func repairPlaylistArtwork(_ artwork: [String: URL], providerID: String) async throws {
         let records = collections.filter { record in
-            record.manifest.source.provider == "netease" && record.manifest.source.kind == "playlist" &&
+            record.manifest.source.provider == providerID && record.manifest.source.kind == "playlist" &&
             artwork[record.manifest.source.id] != nil && record.manifest.artworkURL != artwork[record.manifest.source.id] &&
             (record.manifest.artworkURL == nil || record.manifest.entries.contains { entry in entry.track.coverURL == record.manifest.artworkURL })
         }

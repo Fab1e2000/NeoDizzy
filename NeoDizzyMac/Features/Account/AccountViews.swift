@@ -125,7 +125,7 @@ struct AccountMenu: View {
                 Label {
                     Text(user.nickname)
                 } icon: {
-                    AvatarImage(url: user.avatarURL, size: 22)
+                    DizzyLabAvatarImage(url: user.avatarURL, size: 22)
                         .overlay(alignment: .bottomTrailing) {
                             if account.isSessionExpired {
                                 Image(systemName: "exclamationmark.circle.fill")

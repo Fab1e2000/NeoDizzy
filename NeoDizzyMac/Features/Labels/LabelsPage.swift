@@ -63,7 +63,7 @@ struct LabelDetailPage: View {
 
     private func header(_ label: LabelPage) -> some View {
         HStack(alignment: .center, spacing: 22) {
-            AvatarImage(url: label.coverURL, size: 140)
+            DizzyLabAvatarImage(url: label.coverURL, size: 140)
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 6)
             VStack(alignment: .leading, spacing: 8) {
                 Text(label.name).font(.pageTitle).lineLimit(2).textSelection(.enabled)

@@ -35,20 +35,49 @@ import Testing
         time = 4; session.finish()
         #expect(starts == 2 && finishes == 2)
     }
-    @Test func unifiedQualityMigratesAndPersists() throws {
-        let name = "NeteaseQuality.\(UUID())"
+
+}
+
+@MainActor struct PlaybackReportingIsolationTests {
+    @Test func unregisterOnlyRemovesThatSourcesReporter() {
+        let reporting = PlaybackReportingSession()
+        var first = 0, second = 0, history = 0
+        reporting.onStart = { _, _ in history += 1 }
+        reporting.register("first", onStart: { _, _ in first += 1 }, onFinish: { _, _, _ in })
+        reporting.register("second", onStart: { _, _ in second += 1 }, onFinish: { _, _, _ in })
+        func play(_ provider: String) {
+            let song = Track(discID: "album", number: "1", title: "", artists: "", albumTitle: "", coverURL: nil,
+                             remoteSource: .init(providerID: provider, itemID: "1"))
+            reporting.begin(song, sourceID: nil)
+            reporting.setPlaying(true)
+        }
+        play("first")
+        reporting.unregister("first")
+        play("first")
+        play("second")
+        #expect(first == 1 && second == 1 && history == 3)
+    }
+}
+
+@MainActor struct PlaybackHistoryIsolationTests {
+    @Test func legacyHistoryDecodesAndNewProvidersUseTheirOwnNamespace() throws {
+        let name = "PlaybackHistoryIsolation.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
-        defaults.set("hires", forKey: "netease.quality.wifi")
-        defaults.set("standard", forKey: "netease.quality.download")
-        let settings = NeteasePlaybackSettings(defaults: defaults)
-        #expect(settings.quality == .hiResolution)
-        var changes = 0
-        settings.changed = { changes += 1 }
-        settings.quality = .master
-        settings.quality = .master
-        #expect(changes == 1)
-        #expect(settings.selected == .master)
-        #expect(NeteasePlaybackSettings(defaults: defaults).quality == .master)
+        let old = PlaybackHistoryStore.Entry(kind: .neteaseAlbum, itemID: "7", title: "old", subtitle: "", playedAt: .now)
+        defaults.set(try JSONEncoder().encode([old]), forKey: "playbackHistory.v1")
+        let history = PlaybackHistoryStore(defaults: defaults)
+        #expect(history.entries.first?.providerID == "netease")
+        history.register("custom", albumID: { $0.discID })
+        let song = Track(discID: "7", number: "1", title: "", artists: "", albumTitle: "new", coverURL: nil,
+                         remoteSource: .init(providerID: "custom", itemID: "1"))
+        history.record(song)
+        #expect(history.entries.count == 2)
+        #expect(history.entries.first?.providerID == "custom")
+        history.unregister("custom")
+        history.record(Track(discID: "8", number: "1", title: "", artists: "", albumTitle: "ignored", coverURL: nil,
+                             remoteSource: .init(providerID: "custom", itemID: "2")))
+        #expect(history.entries.count == 2)
+        #expect(PlaybackHistoryStore(defaults: defaults).entries.first?.providerID == "custom")
     }
 }

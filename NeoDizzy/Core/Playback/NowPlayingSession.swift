@@ -1,5 +1,5 @@
 // 移植自 MeloX（GPLv3）Core/Playback/Session/NowPlayingSession.swift：
-// 去掉歌词和播客，标识改为 DizzyLab 的专辑 / 曲目，封面改用 Nuke 加载。
+// 系统媒体会话使用来源命名空间标识曲目与专辑，封面由 Nuke 加载。
 
 import AVFoundation
 import MediaPlayer
@@ -75,8 +75,8 @@ final class NowPlayingSession: NSObject {
             MPMediaItemPropertyPlaybackDuration: max(duration, 0),
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
             MPNowPlayingInfoPropertyIsLiveStream: false,
-            MPNowPlayingInfoPropertyExternalContentIdentifier: track.localSource.map { "neodizzy:local-track:\($0.trackID)" } ?? "dizzylab:track:\(track.id)",
-            MPNowPlayingInfoCollectionIdentifier: track.localSource.map { "neodizzy:local-album:\($0.albumID)" } ?? "dizzylab:disc:\(track.discID)",
+            MPNowPlayingInfoPropertyExternalContentIdentifier: track.localSource.map { "neodizzy:local-track:\($0.trackID)" } ?? "\(track.playbackProviderID ?? "local"):track:\(track.id)",
+            MPNowPlayingInfoCollectionIdentifier: track.localSource.map { "neodizzy:local-album:\($0.albumID)" } ?? "\(track.playbackProviderID ?? "local"):album:\(track.discID)",
             MPNowPlayingInfoPropertyPlaybackQueueIndex: max(queueIndex, 0),
             MPNowPlayingInfoPropertyPlaybackQueueCount: max(queueCount, 1),
         ]

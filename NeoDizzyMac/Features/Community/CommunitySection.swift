@@ -183,7 +183,7 @@ struct UserPage: View {
         PageScroll {
             if let profile = model.profile {
                 HStack(spacing: 20) {
-                    AvatarImage(url: profile.user.avatarURL, size: 110)
+                    DizzyLabAvatarImage(url: profile.user.avatarURL, size: 110)
                         .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(profile.user.name).font(.pageTitle)

@@ -4,6 +4,8 @@ struct ModuleDescriptor: Identifiable, Equatable {
     let id: ModuleID
     let title: String
     let systemImage: String
+    /// 这个标签页及其推入页面使用的主题色；没有自己品牌色的模块用中性的黑色。
+    var accent: AccentPalette = .neutral
 }
 
 /// Optional account capability; modules with accounts get a row in the global settings.
@@ -17,9 +19,12 @@ struct ModuleAccountEntry {
 @MainActor
 protocol AppModule {
     var descriptor: ModuleDescriptor { get }
+    var libraryOrigin: LibraryOrigin { get }
+    var downloadsWholeAlbums: Bool { get }
     var accountEntry: ModuleAccountEntry? { get }
     func openAccount()
     func dismissAccount()
+    func deactivate()
     func rootView() -> AnyView
     func destination(for route: AppRoute) -> AnyView?
     func install(in content: AnyView) -> AnyView
@@ -27,23 +32,44 @@ protocol AppModule {
     func handleURL(_ url: URL, host: ModuleHost) -> Bool
     /// 统一搜索里这个模块的一组结果（含标题和「查看全部」）；没有搜索能力的模块返回 nil。
     func searchSection(query: String) -> AnyView?
+    func loginView() -> AnyView?
+    func playlistPicker(for track: Track) -> AnyView?
+    func collectionRoute(kind: String, itemID: String) -> AppRoute?
+    func collectionRemoval(for item: MirroredCollection) -> LibraryRemoval?
+    func removeCollection(kind: String, itemID: String) async throws
+    func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction]
 }
 
 extension AppModule {
+    var downloadsWholeAlbums: Bool { false }
+    var libraryOrigin: LibraryOrigin { LibraryOrigin(rawValue: descriptor.id.rawValue, label: descriptor.title, systemImage: descriptor.systemImage) }
     var accountEntry: ModuleAccountEntry? { nil }
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? { nil }
     func openAccount() {}
     func dismissAccount() {}
+    func deactivate() {}
     func install(in content: AnyView) -> AnyView { content }
     func handleURL(_ url: URL, host: ModuleHost) -> Bool { false }
     func searchSection(query: String) -> AnyView? { nil }
+    func loginView() -> AnyView? { nil }
+    func playlistPicker(for track: Track) -> AnyView? { nil }
+    func collectionRoute(kind: String, itemID: String) -> AppRoute? { nil }
+    func collectionRemoval(for item: MirroredCollection) -> LibraryRemoval? { nil }
+    func removeCollection(kind: String, itemID: String) async throws { throw ModuleCapabilityError.unavailable }
+    func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction] { [] }
+
+}
+
+enum ModuleCapabilityError: LocalizedError {
+    case unavailable
+    var errorDescription: String? { "此来源的模块或操作当前不可用。" }
 }
 
 @Observable
 final class ModuleRegistry {
     enum RegistrationError: Error { case empty, duplicateID(ModuleID) }
-    let descriptors: [ModuleDescriptor]
-    @ObservationIgnored private let modules: [any AppModule]
+    private(set) var descriptors: [ModuleDescriptor]
+    private var modules: [any AppModule]
 
     init(_ modules: [any AppModule]) throws {
         guard !modules.isEmpty else { throw RegistrationError.empty }
@@ -57,8 +83,49 @@ final class ModuleRegistry {
         descriptors = modules.map(\.descriptor)
     }
 
+    func register(_ module: any AppModule) throws {
+        guard self.module(for: module.descriptor.id) == nil else { throw RegistrationError.duplicateID(module.descriptor.id) }
+        modules.append(module)
+        descriptors = modules.map(\.descriptor)
+    }
+    func remove(_ id: ModuleID) {
+        module(for: id)?.dismissAccount()
+        module(for: id)?.deactivate()
+        modules.removeAll { $0.descriptor.id == id }
+        descriptors = modules.map(\.descriptor)
+    }
+    func contains(providerID: String) -> Bool { module(providerID: providerID) != nil }
+    func loginView(providerID: String) -> AnyView? { module(providerID: providerID)?.loginView() }
+    func requiresLogin(providerID: String) -> Bool {
+        guard let entry = module(providerID: providerID)?.accountEntry else { return false }
+        return !entry.isSignedIn && module(providerID: providerID)?.loginView() != nil
+    }
+    func playlistPicker(for track: Track) -> AnyView? {
+        guard let source = track.remoteSource else { return nil }
+        return module(providerID: source.providerID)?.playlistPicker(for: track)
+    }
+    func collectionRoute(providerID: String, kind: String, itemID: String) -> AppRoute? {
+        module(providerID: providerID)?.collectionRoute(kind: kind, itemID: itemID)
+    }
+    func collectionRemoval(for item: MirroredCollection) -> LibraryRemoval? {
+        module(providerID: item.providerID)?.collectionRemoval(for: item)
+    }
+    func removeCollection(providerID: String, kind: String, itemID: String) async throws {
+        guard let module = module(providerID: providerID) else { throw ModuleCapabilityError.unavailable }
+        try await module.removeCollection(kind: kind, itemID: itemID)
+    }
+    func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction] {
+        guard let source = track.remoteSource else { return [] }
+        return module(providerID: source.providerID)?.cachedSongActions(for: track, downloads: downloads) ?? []
+    }
+    func downloadsWholeAlbums(providerID: String) -> Bool { module(providerID: providerID)?.downloadsWholeAlbums ?? false }
+    func origin(providerID: String) -> LibraryOrigin? {
+        guard providerID != "local" else { return .local }
+        return module(providerID: providerID)?.libraryOrigin
+    }
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
-        modules.lazy.compactMap { $0.songActions(for: track, onImportLyrics: onImportLyrics) }.first
+        guard let providerID = track.playbackProviderID else { return nil }
+        return module(providerID: providerID)?.songActions(for: track, onImportLyrics: onImportLyrics)
     }
     func descriptor(for id: ModuleID) -> ModuleDescriptor? { descriptors.first { $0.id == id } }
     /// 统一搜索的各组结果：按传入的搜索板块顺序显示；只包含 `ids` 里的模块。
@@ -79,6 +146,7 @@ final class ModuleRegistry {
     func handleURL(_ url: URL, host: ModuleHost) -> Bool {
         modules.contains { $0.handleURL(url, host: host) }
     }
+    private func module(providerID: String) -> (any AppModule)? { modules.first { $0.libraryOrigin.rawValue == providerID } }
     private func module(for id: ModuleID) -> (any AppModule)? { modules.first { $0.descriptor.id == id } }
     private var unavailable: AnyView {
         AnyView(ContentUnavailableView("模块不可用", systemImage: "square.stack.3d.up.slash", description: Text("此内容所属的模块尚未接入。")))

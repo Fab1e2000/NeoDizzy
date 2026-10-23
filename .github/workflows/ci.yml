@@ -33,6 +33,8 @@ jobs:
         run: xcodebuild -version
       - name: Install Metal toolchain
         run: xcodebuild -downloadComponent MetalToolchain
+      - name: Module boundary checks
+        run: python3 scripts/check-module-boundaries.py
       - name: Core regression tests
         run: python3 scripts/test-core.py
       - name: Select iPhone simulator

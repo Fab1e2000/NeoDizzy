@@ -23,7 +23,7 @@ import Testing
         let library = OfflineLibraryStore(defaults: defaults,
             scanner: LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache")), libraryRoot: root)
         await library.restore()
-        try await library.repairNeteasePlaylistArtwork(["99": playlistCover])
+        try await library.repairPlaylistArtwork(["99": playlistCover], providerID: "netease")
         let playlist = try #require(library.localPlaylists.first)
         #expect(playlist.coverURL == playlistCover)
         #expect(library.visibleAlbums.isEmpty)
@@ -35,7 +35,7 @@ import Testing
         #expect(saved.entries.first?.track.coverURL == songCover)
         #expect(try Data(contentsOf: folder.appendingPathComponent("01.flac")) == audio)
         // An already correct playlist cover is not replaced by a stale queue thumbnail.
-        try await library.repairNeteasePlaylistArtwork(["99": URL(string: "https://example.com/old.jpg")!])
+        try await library.repairPlaylistArtwork(["99": URL(string: "https://example.com/old.jpg")!], providerID: "netease")
         #expect(library.localPlaylists.first?.coverURL == playlistCover)
     }
 }

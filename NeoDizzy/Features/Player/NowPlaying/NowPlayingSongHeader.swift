@@ -74,18 +74,13 @@ struct NowPlayingSongHeader: View {
                 .frame(width: artworkSize, height: artworkSize)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(song.title)
-                        .font(
-                            usesReferenceLayout
-                                ? .title3.weight(.semibold)
-                                : .headline
-                        )
-                        .lineLimit(1)
-                        .layoutPriority(1)
-
-                    HeartModeNowPlayingBadge()
-                }
+                Text(song.title)
+                    .font(
+                        usesReferenceLayout
+                            ? .title3.weight(.semibold)
+                            : .headline
+                    )
+                    .lineLimit(1)
 
                 Text(artistText)
                     .font(usesReferenceLayout ? .title3 : .subheadline)

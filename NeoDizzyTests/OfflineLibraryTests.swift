@@ -3,13 +3,52 @@ import Testing
 @testable import NeoDizzy
 
 nonisolated private func offlineTrack(_ number: String, title: String) -> Track {
-    Track(discID: "album1", number: number, title: title, artists: "演奏者", albumTitle: "测试专辑", coverURL: nil, duration: 120)
+    Track(discID: "album1", number: number, title: title, artists: "演奏者", albumTitle: "测试专辑", coverURL: nil, duration: 120, remoteSource: .init(providerID: "fixture", itemID: number))
 }
 
-nonisolated private func offlineDetail(tracks: [Track]) -> DiscDetail {
-    DiscDetail(summary: DiscSummary(id: "album1", title: "测试专辑", coverURL: nil, labelName: "测试社团"),
-               releaseDate: "2026-09-26", description: "离线介绍", credits: "制作名单", labelDescription: "社团介绍",
-               hasGift: false, tracks: tracks, streams: ["1": URL(string: "https://example.com/private-signed-stream")!])
+// The fixture supplies provenance through the host contract; no platform adapter is installed.
+nonisolated private struct OfflineCollectionFixture {
+    let tracks: [Track]
+    let id = "fixture/album/album1"
+    let folderName = "测试社团/测试专辑 [album1]"
+    let source = LibrarySource(provider: "fixture", kind: "album", id: "album1")
+
+    func manifest(files: [String: String], coverPath: String?) throws -> LibraryManifest {
+        let entries = try tracks.map { track in
+            guard let path = files[track.number] else { throw OfflineLibraryError.missingTrack(track.title) }
+            return LibraryManifest.Entry(relativePath: path, itemID: track.number, track: track)
+        }
+        return LibraryManifest(source: source, title: "测试专辑", artist: "测试社团", coverPath: coverPath,
+            entries: entries, extra: .object(["releaseDate": .string("2026-09-26"), "description": .string("离线介绍"),
+                                            "credits": .string("制作名单"), "labelDescription": .string("社团介绍")]))
+    }
+    func provenance(in staging: URL) throws -> LibraryProvenance {
+        let paths = try OfflineLibraryWorker.extractedFiles(in: staging)
+        let files = try AudioFileMatcher.match(tracks: tracks, relativePaths: paths)
+        return .collection(try manifest(files: files, coverPath: OfflineLibraryWorker.preferredCover(in: paths)),
+                           merge: false, preserving: ["特典"], placeholderMarker: ".fixture-attachments")
+    }
+}
+nonisolated private func offlineDetail(tracks: [Track]) -> OfflineCollectionFixture {
+    OfflineCollectionFixture(tracks: tracks)
+}
+nonisolated private func offlineManifest(detail: OfflineCollectionFixture, files: [String: String], coverPath: String?) throws -> LibraryManifest {
+    try detail.manifest(files: files, coverPath: coverPath)
+}
+nonisolated private enum OfflineFixtureCommit {
+    @discardableResult
+    static func importDirectory(from staging: URL, detail: OfflineCollectionFixture, into root: URL) throws -> LibraryCollection {
+        guard let collection = try OfflineLibraryWorker.commitDirectory(staging: staging, folderName: detail.folderName,
+                provenance: detail.provenance(in: staging), into: root) else { throw OfflineLibraryError.invalidManifest }
+        return collection
+    }
+    static func importGiftDirectory(from staging: URL, detail: OfflineCollectionFixture, albumDirectory: URL? = nil, into root: URL) throws {
+        let folderName = try albumDirectory.map {
+            LocalLibraryScanner.canonical($0) == LocalLibraryScanner.canonical(root) ? "" : try OfflinePaths.relativePath(of: $0, inside: root)
+        } ?? detail.folderName
+        _ = try OfflineLibraryWorker.commitDirectory(staging: staging, folderName: folderName,
+            provenance: .attachment(detail.source, subdirectory: "特典", marker: ".fixture-attachments"), into: root)
+    }
 }
 
 nonisolated private func temporaryOfflineDirectory() throws -> URL {
@@ -99,7 +138,7 @@ struct OfflineManifestTests {
         try writeOfflineFile("原始目录/cover.jpg", in: source)
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星空")])
 
-        let committed = try OfflineLibraryWorker.importDirectory(from: source, detail: detail, into: root)
+        let committed = try OfflineFixtureCommit.importDirectory(from: source, detail: detail, into: root)
         #expect(committed.id == detail.id)
         #expect(committed.localFile(for: detail.tracks[0]) != nil)
         let scan = try OfflineLibraryWorker.scanDirectory(root)
@@ -110,16 +149,16 @@ struct OfflineManifestTests {
         #expect(album.directoryURL.deletingLastPathComponent().lastPathComponent == "测试社团")
         #expect(album.id == detail.id)
         #expect(album.tracks.map(\.title) == ["星空"])
-        #expect(album.detail.description == "离线介绍")
-        #expect(album.detail.credits == "制作名单")
-        #expect(album.detail.streams.isEmpty)
+        #expect(album.manifest.extra == .object(["releaseDate": .string("2026-09-26"), "description": .string("离线介绍"),
+                                               "credits": .string("制作名单"), "labelDescription": .string("社团介绍")]))
+        #expect(!String(decoding: try JSONEncoder().encode(album.manifest), as: UTF8.self).contains("streams"))
         #expect(album.coverURL?.isFileURL == true)
         #expect(album.localFile(for: detail.tracks[0])?.lastPathComponent == "01 星空.flac")
-        let manifestData = try Data(contentsOf: album.directoryURL.appendingPathComponent(OfflineManifest.filename))
+        let manifestData = try Data(contentsOf: album.directoryURL.appendingPathComponent(LibraryManifest.filename))
         let json = String(decoding: manifestData, as: UTF8.self)
         #expect(!json.contains("private-signed-stream"))
         #expect(!json.contains(source.path))
-        let decoded = try JSONDecoder().decode(OfflineManifest.self, from: manifestData)
+        let decoded = try JSONDecoder().decode(LibraryManifest.self, from: manifestData)
         #expect(decoded.version == 2)
         #expect(decoded.entries[0].relativePath == "原始目录/01 星空.flac")
     }
@@ -130,18 +169,18 @@ struct OfflineManifestTests {
         defer { try? FileManager.default.removeItem(at: source); try? FileManager.default.removeItem(at: root) }
         try writeOfflineFile("01.wav", in: source)
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星空")])
-        let first = try OfflineLibraryWorker.importDirectory(from: source, detail: detail, into: root)
+        let first = try OfflineFixtureCommit.importDirectory(from: source, detail: detail, into: root)
         try writeOfflineFile("特典/bonus.txt", in: first.directoryURL)
         let replacement = Data("replacement audio".utf8)
         try replacement.write(to: source.appendingPathComponent("01.wav"))
-        let second = try OfflineLibraryWorker.importDirectory(from: source, detail: detail, into: root)
+        let second = try OfflineFixtureCommit.importDirectory(from: source, detail: detail, into: root)
         #expect(first.directoryURL.path == second.directoryURL.path)
         #expect(try Data(contentsOf: second.directoryURL.appendingPathComponent("01.wav")) == replacement)
         #expect(FileManager.default.fileExists(atPath: second.directoryURL.appendingPathComponent("特典/bonus.txt").path))
         #expect(try OfflineLibraryWorker.scanDirectory(root).albums.count == 1)
         try FileManager.default.removeItem(at: source.appendingPathComponent("01.wav"))
         #expect(throws: (any Error).self) {
-            try OfflineLibraryWorker.importDirectory(from: source, detail: detail, into: root)
+            try OfflineFixtureCommit.importDirectory(from: source, detail: detail, into: root)
         }
         #expect(try Data(contentsOf: second.directoryURL.appendingPathComponent("01.wav")) == replacement)
     }
@@ -152,7 +191,7 @@ struct OfflineManifestTests {
         defer { try? FileManager.default.removeItem(at: source); try? FileManager.default.removeItem(at: root) }
         try writeOfflineFile("unmatched.wav", in: source)
         #expect(throws: OfflineLibraryError.missingTrack("星空")) {
-            try OfflineLibraryWorker.importDirectory(from: source, detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), into: root)
+            try OfflineFixtureCommit.importDirectory(from: source, detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), into: root)
         }
         #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty)
     }
@@ -181,7 +220,7 @@ struct OfflineManifestTests {
             try OfflinePaths.file("escape/01.wav", inside: source)
         }
         #expect(throws: OfflineLibraryError.unsafePath("escape")) {
-            try OfflineLibraryWorker.importDirectory(from: source, detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), into: root)
+            try OfflineFixtureCommit.importDirectory(from: source, detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), into: root)
         }
     }
 
@@ -279,7 +318,7 @@ struct OfflineManifestTests {
         try writeOfflineFile("原始目录/01 星空.flac", in: source)
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星空")])
 
-        let album = try OfflineLibraryWorker.importDirectory(from: source, detail: detail, into: alias)
+        let album = try OfflineFixtureCommit.importDirectory(from: source, detail: detail, into: alias)
         let localFile = try #require(album.localFile(for: detail.tracks[0]))
         #expect(localFile.path.hasPrefix(alias.path + "/"))
         #expect(try Data(contentsOf: localFile) == Data("fixture".utf8))
@@ -292,8 +331,8 @@ struct OfflineManifestTests {
     @Test func missingAudioSkipsAlbumSilently() throws {
         let root = try temporaryOfflineDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
-        let manifest = try OfflineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "missing.wav"], coverPath: nil)
-        try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent(OfflineManifest.filename))
+        let manifest = try offlineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "missing.wav"], coverPath: nil)
+        try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent(LibraryManifest.filename))
         let scan = try OfflineLibraryWorker.scanDirectory(root)
         // A manifest left without any audio (e.g. after deleting the album) is not a broken download.
         #expect(scan.albums.isEmpty)
@@ -305,13 +344,13 @@ struct OfflineManifestTests {
         defer { try? FileManager.default.removeItem(at: root) }
         try writeOfflineFile("01.wav", in: root)
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星空")])
-        let manifest = try OfflineManifest(detail: detail, files: ["1": "01.wav"], coverPath: nil)
+        let manifest = try offlineManifest(detail: detail, files: ["1": "01.wav"], coverPath: nil)
         var json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(manifest)) as? [String: Any])
         json["version"] = 999
-        let future = try JSONDecoder().decode(OfflineManifest.self, from: JSONSerialization.data(withJSONObject: json))
+        let future = try JSONDecoder().decode(LibraryManifest.self, from: JSONSerialization.data(withJSONObject: json))
         #expect(throws: OfflineLibraryError.invalidManifest) { try future.validate(in: root) }
 
-        let duplicated = try OfflineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "一"), offlineTrack("2", title: "二")]), files: ["1": "01.wav", "2": "01.wav"], coverPath: nil)
+        let duplicated = try offlineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "一"), offlineTrack("2", title: "二")]), files: ["1": "01.wav", "2": "01.wav"], coverPath: nil)
         #expect(throws: OfflineLibraryError.invalidManifest) { try duplicated.validate(in: root) }
     }
 
@@ -319,9 +358,9 @@ struct OfflineManifestTests {
         let root = try temporaryOfflineDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星空")])
-        let manifest = try OfflineManifest(detail: detail, files: ["1": "../01.wav"], coverPath: nil)
+        let manifest = try offlineManifest(detail: detail, files: ["1": "../01.wav"], coverPath: nil)
         #expect(throws: OfflineLibraryError.unsafePath("../01.wav")) { try manifest.validate(in: root) }
-        #expect(OfflineAlbum(manifest: manifest, directoryURL: root).localFile(for: detail.tracks[0]) == nil)
+        #expect(LibraryCollection(manifest: manifest, directoryURL: root).localFile(for: detail.tracks[0]) == nil)
     }
 
     @Test func safeNamesCannotCreateExtraDirectoriesAndFitFilesystemLimit() {
@@ -340,11 +379,11 @@ struct OfflineManifestTests {
     @Test func duplicateDiscIDsAreNotChosenByEnumerationOrder() throws {
         let root = try temporaryOfflineDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
-        let manifest = try OfflineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "01.wav"], coverPath: nil)
+        let manifest = try offlineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "01.wav"], coverPath: nil)
         for name in ["A", "B"] {
             let album = root.appendingPathComponent(name)
             try writeOfflineFile("01.wav", in: album)
-            try JSONEncoder().encode(manifest).write(to: album.appendingPathComponent(OfflineManifest.filename))
+            try JSONEncoder().encode(manifest).write(to: album.appendingPathComponent(LibraryManifest.filename))
         }
         let scan = try OfflineLibraryWorker.scanDirectory(root)
         #expect(scan.albums.isEmpty)
@@ -357,7 +396,7 @@ struct OfflineManifestTests {
         defer { try? FileManager.default.removeItem(at: source); try? FileManager.default.removeItem(at: root) }
         try writeOfflineFile("01.wav", in: source)
         let task = Task {
-            try OfflineLibraryWorker.importDirectory(from: source, detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), into: root)
+            try OfflineFixtureCommit.importDirectory(from: source, detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), into: root)
         }
         task.cancel()
         await #expect(throws: CancellationError.self) { try await task.value }
@@ -373,7 +412,9 @@ struct OfflineManifestTests {
         let worker = OfflineLibraryWorker()
         let folder = OfflineFolderAccess(url: root)
         let task = Task {
-            let committed = try await worker.importAlbum(from: source, detail: detail, into: folder)
+            let result = try await worker.commit(staging: source, folderName: detail.folderName,
+                provenance: detail.provenance(in: source), into: folder)
+            let committed = try #require(result)
             // 模拟提交完成、调用方恢复执行时恰好收到取消。
             withUnsafeCurrentTask { $0?.cancel() }
             #expect(Task.isCancelled)
@@ -382,7 +423,7 @@ struct OfflineManifestTests {
         let committed = try await task.value
         #expect(committed.id == detail.id)
         #expect(committed.localFile(for: detail.tracks[0]) != nil)
-        #expect(FileManager.default.fileExists(atPath: committed.directoryURL.appendingPathComponent(OfflineManifest.filename).path))
+        #expect(FileManager.default.fileExists(atPath: committed.directoryURL.appendingPathComponent(LibraryManifest.filename).path))
         #expect(try OfflineLibraryWorker.scanDirectory(root).albums.map(\.id) == [detail.id])
     }
 }
@@ -403,15 +444,15 @@ struct OfflineLibraryStoreTests {
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星空")])
         let original = OfflineLibraryStore(defaults: defaults)
         try await original.selectFolder(root)
-        try await original.importAlbum(from: source, detail: detail)
-        #expect(original.albums.count == 1)
+        try await original.commit(staging: source, folderName: detail.folderName, provenance: detail.provenance(in: source))
+        #expect(original.collections.count == 1)
         #expect(original.localFile(for: detail.tracks[0]) != nil)
         #expect(!original.isScanning)
 
         let restored = OfflineLibraryStore(defaults: defaults)
         await restored.restore()
         #expect(restored.folderName == root.lastPathComponent)
-        #expect(restored.albums.map(\.id) == ["album1"])
+        #expect(restored.collections.map(\.id) == [detail.id])
         #expect(restored.localFile(for: detail.tracks[0]) != nil)
         #expect(restored.issue == nil)
     }
@@ -426,17 +467,17 @@ struct OfflineGiftTests {
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星光")])
         try writeOfflineFile("01. 星光.mp3", in: audio)
         try writeOfflineFile("画册.pdf", in: gift)
-        let imported = try OfflineLibraryWorker.importDirectory(from: audio, detail: detail, into: root)
+        let imported = try OfflineFixtureCommit.importDirectory(from: audio, detail: detail, into: root)
         let renamed = root.appendingPathComponent("custom album")
         try FileManager.default.moveItem(at: imported.directoryURL, to: renamed)
         try writeOfflineFile("特典/keep.txt", in: renamed)
         #expect(throws: OfflineLibraryError.self) {
-            try OfflineLibraryWorker.importGiftDirectory(from: gift, detail: detail, albumDirectory: renamed, into: root)
+            try OfflineFixtureCommit.importGiftDirectory(from: gift, detail: detail, albumDirectory: renamed, into: root)
         }
         #expect(try Data(contentsOf: renamed.appendingPathComponent("特典/keep.txt")) == Data("fixture".utf8))
         try FileManager.default.removeItem(at: renamed.appendingPathComponent("特典"))
         // The user can select the album itself as their library root.
-        try OfflineLibraryWorker.importGiftDirectory(from: gift, detail: detail, albumDirectory: renamed, into: renamed)
+        try OfflineFixtureCommit.importGiftDirectory(from: gift, detail: detail, albumDirectory: renamed, into: renamed)
         #expect(FileManager.default.fileExists(atPath: renamed.appendingPathComponent("特典/画册.pdf").path))
         #expect(!FileManager.default.fileExists(atPath: imported.directoryURL.path))
     }
@@ -449,7 +490,7 @@ struct OfflineGiftTests {
         try writeOfflineFile("画册.pdf", in: gift)
         let task = Task {
             while !Task.isCancelled { await Task.yield() }
-            try OfflineLibraryWorker.importGiftDirectory(from: gift, detail: detail, into: root)
+            try OfflineFixtureCommit.importGiftDirectory(from: gift, detail: detail, into: root)
         }
         task.cancel()
         await #expect(throws: CancellationError.self) { try await task.value }
@@ -469,21 +510,21 @@ struct OfflineGiftTests {
         try writeOfflineFile("歌词/01.lrc", in: gift)
         try writeOfflineFile("画册.pdf", in: gift)
         if giftFirst {
-            try OfflineLibraryWorker.importGiftDirectory(from: gift, detail: detail, into: root)
+            try OfflineFixtureCommit.importGiftDirectory(from: gift, detail: detail, into: root)
             #expect(try OfflineLibraryWorker.scanDirectory(root).albums.isEmpty)
         }
-        let album = try OfflineLibraryWorker.importDirectory(from: audio, detail: detail, into: root)
+        let album = try OfflineFixtureCommit.importDirectory(from: audio, detail: detail, into: root)
         if !giftFirst {
-            try OfflineLibraryWorker.importGiftDirectory(from: gift, detail: detail, albumDirectory: album.directoryURL, into: root)
+            try OfflineFixtureCommit.importGiftDirectory(from: gift, detail: detail, albumDirectory: album.directoryURL, into: root)
         }
         #expect(try Data(contentsOf: album.directoryURL.appendingPathComponent("01. 星光.mp3")) == Data("fixture".utf8))
         #expect(try Data(contentsOf: album.directoryURL.appendingPathComponent("特典/歌词/01.lrc")) == Data("fixture".utf8))
         #expect(FileManager.default.fileExists(atPath: album.directoryURL.appendingPathComponent("特典/画册.pdf").path))
         #expect(try OfflineLibraryWorker.scanDirectory(root).albums.count == 1)
         // Re-downloading a gift must not change the album manifest or audio.
-        let manifest = try Data(contentsOf: album.directoryURL.appendingPathComponent(OfflineManifest.filename))
-        try OfflineLibraryWorker.importGiftDirectory(from: gift, detail: detail, albumDirectory: album.directoryURL, into: root)
-        #expect(try Data(contentsOf: album.directoryURL.appendingPathComponent(OfflineManifest.filename)) == manifest)
+        let manifest = try Data(contentsOf: album.directoryURL.appendingPathComponent(LibraryManifest.filename))
+        try OfflineFixtureCommit.importGiftDirectory(from: gift, detail: detail, albumDirectory: album.directoryURL, into: root)
+        #expect(try Data(contentsOf: album.directoryURL.appendingPathComponent(LibraryManifest.filename)) == manifest)
     }
 
     @Test func giftRejectsUnrelatedDirectoryAndExternalSymlink() throws {
@@ -497,13 +538,13 @@ struct OfflineGiftTests {
         try FileManager.default.createDirectory(at: album, withIntermediateDirectories: false)
         try writeOfflineFile("keep.txt", in: album)
         #expect(throws: OfflineLibraryError.self) {
-            try OfflineLibraryWorker.importGiftDirectory(from: gift, detail: detail, albumDirectory: album, into: root)
+            try OfflineFixtureCommit.importGiftDirectory(from: gift, detail: detail, albumDirectory: album, into: root)
         }
         #expect(FileManager.default.fileExists(atPath: album.appendingPathComponent("keep.txt").path))
         let link = root.appendingPathComponent("link")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
         #expect(throws: OfflineLibraryError.self) {
-            try OfflineLibraryWorker.importGiftDirectory(from: gift, detail: detail, albumDirectory: link, into: root)
+            try OfflineFixtureCommit.importGiftDirectory(from: gift, detail: detail, albumDirectory: link, into: root)
         }
         #expect(try FileManager.default.contentsOfDirectory(atPath: outside.path).isEmpty)
     }
@@ -517,7 +558,7 @@ struct OfflineAvailabilityTests {
         defer { for directory in [root, audio, otherRoot] { try? FileManager.default.removeItem(at: directory) } }
         let track = offlineTrack("1", title: "星光")
         try writeOfflineFile("01. 星光.mp3", in: audio)
-        let album = try OfflineLibraryWorker.importDirectory(from: audio, detail: offlineDetail(tracks: [track]), into: root)
+        let album = try OfflineFixtureCommit.importDirectory(from: audio, detail: offlineDetail(tracks: [track]), into: root)
         let worker = OfflineLibraryWorker()
         let access = OfflineFolderAccess(url: root)
         #expect(try await worker.availableTrackIDs(in: album, folder: access) == [track.id])
@@ -534,8 +575,8 @@ extension OfflineManifestTests {
         let root = try temporaryOfflineDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星空")])
-        let manifest = try OfflineManifest(detail: detail, files: ["1": "01 星空.flac"], coverPath: nil)
-        let manifestURL = root.appendingPathComponent(OfflineManifest.filename)
+        let manifest = try offlineManifest(detail: detail, files: ["1": "01 星空.flac"], coverPath: nil)
+        let manifestURL = root.appendingPathComponent(LibraryManifest.filename)
         let original = try JSONEncoder().encode(manifest)
         try original.write(to: manifestURL)
         try writeOfflineFile("01 新文件名.flac", in: root)
@@ -555,8 +596,8 @@ extension OfflineManifestTests {
         try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
         try writeOfflineFile("01 星空.flac", in: old)
         let detail = offlineDetail(tracks: [offlineTrack("1", title: "星空")])
-        let manifest = try OfflineManifest(detail: detail, files: ["1": "01 星空.flac"], coverPath: nil)
-        try JSONEncoder().encode(manifest).write(to: old.appendingPathComponent(OfflineManifest.filename))
+        let manifest = try offlineManifest(detail: detail, files: ["1": "01 星空.flac"], coverPath: nil)
+        try JSONEncoder().encode(manifest).write(to: old.appendingPathComponent(LibraryManifest.filename))
         try FileManager.default.moveItem(at: old, to: root.appendingPathComponent("New"))
         let scan = try OfflineLibraryWorker.scanDirectory(root)
         #expect(scan.issues.isEmpty)
@@ -567,15 +608,15 @@ extension OfflineManifestTests {
     @Test func missingAudioReportsTrackInsteadOfRawFilesystemError() throws {
         let root = try temporaryOfflineDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
-        let manifest = try OfflineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "old.flac"], coverPath: nil)
+        let manifest = try offlineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "old.flac"], coverPath: nil)
         #expect(throws: OfflineLibraryError.missingTrack("星空")) { try manifest.validate(in: root) }
     }
 
     @Test func ambiguousRenameDoesNotGuessSiteTrackOrRewriteManifest() throws {
         let root = try temporaryOfflineDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
-        let manifest = try OfflineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "old.flac"], coverPath: nil)
-        try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent(OfflineManifest.filename))
+        let manifest = try offlineManifest(detail: offlineDetail(tracks: [offlineTrack("1", title: "星空")]), files: ["1": "old.flac"], coverPath: nil)
+        try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent(LibraryManifest.filename))
         try writeOfflineFile("01 first.flac", in: root)
         try writeOfflineFile("01 second.flac", in: root)
         let scan = try OfflineLibraryWorker.scanDirectory(root)

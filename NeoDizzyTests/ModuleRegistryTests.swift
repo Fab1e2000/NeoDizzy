@@ -36,7 +36,7 @@ struct ModuleRegistryTests {
         #expect(first.destinations.isEmpty)
         #expect(second.destinations == [route])
         #expect(registry.descriptors.map(\.id) == [first.descriptor.id, second.descriptor.id])
-        _ = registry.destination(for: AppRoute.disc(id: "not-installed"))
+        _ = registry.destination(for: AppRoute(moduleID: ModuleID(rawValue: "absent"), destination: TestRoute.item(0), title: "Missing"))
         #expect(first.destinations.isEmpty)
         #expect(second.destinations.count == 1)
     }
@@ -53,7 +53,7 @@ struct ModuleRegistryTests {
         let second = AppRoute(moduleID: ModuleID(rawValue: "b"), destination: TestRoute.item(1), title: "Item")
         #expect(first != second)
         #expect(first.destination.base as? TestRoute == .item(1))
-        #expect(AppRoute.disc(id: "album").moduleID == .dizzyLab)
+        #expect(first.moduleID.rawValue == "a")
         #expect(AppRoute.localAlbum(id: "album").moduleID == .localLibrary)
     }
 

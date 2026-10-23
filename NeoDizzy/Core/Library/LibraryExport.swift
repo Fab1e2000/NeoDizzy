@@ -61,21 +61,23 @@ nonisolated struct LibraryExport: Codable {
 
     /// 外观、导航和播放设置。全部可选：旧文件或新版本删掉的设置不影响导入其余部分。
     struct Settings: Codable, Equatable {
-        var theme: String?
+        var theme: String? // Legacy field from when the theme color was selectable, read only.
         var appearance: String?
         var immersive: Bool?
         var moduleOrder: [String]?
         var hiddenModules: [String]?
         var startupModule: String?
         var searchOrder: [String]?
-        var neteaseQuality: String?
+        var neteaseQuality: String? // Legacy v2 field, read only.
+        var providerSettings: [String: [String: String]]? = nil
         var concurrentDownloads: Int?
         var lyricsFocusPosition: Double?
     }
 
     struct Credentials: Codable, Equatable {
         /// 网易云会话 Cookie（含 MUSIC_U），与钥匙串里保存的完全相同。
-        var neteaseCookie: String?
+        var neteaseCookie: String? // Legacy v2 field, read only.
+        var providers: [String: String]? = nil
     }
 
     func data() throws -> Data {
@@ -117,7 +119,7 @@ nonisolated struct LibraryExport: Codable {
                        itemID: playlist.source?.id ?? playlist.fileURL.lastPathComponent, title: playlist.title,
                        subtitle: "本地歌单", songs: playlist.tracks.map { Song($0) }, songsComplete: true, origin: .local)
         }
-        let remote = (mirror.neteaseCollections + mirror.dizzyLabAlbums).filter { !$0.isLikedPlaylist }.map { item in
+        let remote = mirror.collections.filter { !$0.isLikedPlaylist }.map { item in
             Collection(providerID: item.providerID, kind: item.kind.rawValue, itemID: item.itemID,
                        title: item.title, subtitle: item.subtitle, songs: [], songsComplete: false, origin: .account,
                        coverURL: Song.portableCover(item.coverURL))
@@ -137,37 +139,19 @@ nonisolated struct LibraryExport: Codable {
     }
 
     /// 逐个补齐在线集合；单项失败不会丢掉其他集合，文件内标记不完整项。
-    @MainActor mutating func loadOnlineSongs(netease: NeteaseStore, progress: (Int, Int) -> Void) async throws {
-        let revision = netease.revision
+    @MainActor mutating func loadOnlineSongs(providers: LibraryProviderRegistry, progress: (Int, Int) -> Void) async throws {
         let indices = collections.indices.filter { !collections[$0].songsComplete }
         for (position, index) in indices.enumerated() {
             try Task.checkCancellation()
-            guard netease.revision == revision else { throw CancellationError() }
             progress(position + 1, indices.count)
-            let item = collections[index]
             do {
-                let tracks: [Track]
-                if item.providerID == "netease", let id = Int(item.itemID) {
-                    if item.kind == "playlist" {
-                        let playlist = try await netease.api.playlist(id)
-                        let ids = playlist.trackIds?.map(\.id) ?? playlist.tracks?.map(\.id) ?? []
-                        guard !ids.isEmpty || (playlist.trackCount ?? 0) == 0 else { throw NeteaseError.emptyResponse }
-                        var songs: [NeteaseSong] = []
-                        for start in stride(from: 0, to: ids.count, by: 400) {
-                            try Task.checkCancellation()
-                            songs += try await netease.api.songs(Array(ids[start..<min(start + 400, ids.count)]))
-                        }
-                        guard songs.count == ids.count else { throw NeteaseError.emptyResponse }
-                        tracks = songs.map(\.track)
-                    } else { tracks = try await netease.api.album(id).1.map(\.track) }
-                } else if item.providerID == "dizzylab", item.kind == "album" {
-                    tracks = try await DizzyAPI.shared.discDetail(id: item.itemID).tracks
-                } else { throw NeteaseError.response }
-                guard netease.revision == revision else { throw CancellationError() }
+                let tracks = try await providers.onlineSongs(collections[index])
+                try Task.checkCancellation()
                 collections[index].songs = tracks.map { Song($0) }
                 collections[index].songsComplete = true
+                collections[index].issue = nil
             } catch is CancellationError { throw CancellationError() }
-            catch { collections[index].issue = "未能读取完整歌曲列表，请联网后重新导出。" }
+            catch { collections[index].issue = "未能读取完整歌曲列表，请联网并启用对应模块后重新导出。" }
         }
     }
 }

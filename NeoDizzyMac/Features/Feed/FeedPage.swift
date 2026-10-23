@@ -40,7 +40,7 @@ private struct FeedLabelCard: View {
     var body: some View {
         NavigationLink(value: AppRoute.label(name: group.labelName)) {
             VStack(spacing: 8) {
-                AvatarImage(url: group.labelCoverURL, size: nil)
+                DizzyLabAvatarImage(url: group.labelCoverURL, size: nil)
                     .shadow(color: .black.opacity(isHovering ? 0.25 : 0.12), radius: isHovering ? 10 : 5, y: 3)
                     .scaleEffect(isHovering ? 1.02 : 1)
                 Text(group.labelName).font(.body.weight(.medium)).lineLimit(1)

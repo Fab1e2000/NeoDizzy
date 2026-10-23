@@ -154,7 +154,7 @@ nonisolated enum LibraryImporter {
         let folder = root.appendingPathComponent(name, isDirectory: true)
         var isDirectory: ObjCBool = false
         if manager.fileExists(atPath: folder.path, isDirectory: &isDirectory) {
-            if isDirectory.boolValue, !manager.fileExists(atPath: folder.appendingPathComponent(OfflineManifest.filename).path) {
+            if isDirectory.boolValue, !manager.fileExists(atPath: folder.appendingPathComponent(LibraryManifest.filename).path) {
                 return folder
             }
             let unique = uniqueURL(folder)

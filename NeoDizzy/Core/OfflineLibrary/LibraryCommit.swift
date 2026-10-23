@@ -2,6 +2,8 @@ import Foundation
 
 nonisolated enum LibraryProvenance: Sendable {
     case collection(LibraryManifest, merge: Bool, preserving: [String], placeholderMarker: String?)
+    /// Opt-in replacement by stable item ID, e.g. changing a downloaded song's quality.
+    case updatingCollection(LibraryManifest)
     case attachment(LibrarySource, subdirectory: String, marker: String)
 }
 
@@ -97,6 +99,62 @@ extension OfflineLibraryWorker {
                 let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
                 try encoder.encode(manifest).write(to: manifestURL, options: .atomic)
             }
+            try manifest.validate(in: temporary)
+            try Task.checkCancellation()
+            if exists { try commit(temporary, replacing: target) }
+            else { try fm.moveItem(at: temporary, to: target) }
+            return LibraryCollection(manifest: manifest, directoryURL: target)
+        case .updatingCollection(let incoming):
+            guard !folderName.isEmpty else { throw OfflineLibraryError.unsafePath(folderName) }
+            try incoming.validate(in: source)
+            var manifest = incoming
+            if exists {
+                let manifestURL = try OfflinePaths.file(LibraryManifest.filename, inside: target)
+                guard fm.fileExists(atPath: manifestURL.path) else { throw OfflineLibraryError.existingAlbum }
+                let data = try Data(contentsOf: manifestURL)
+                guard (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["version"] as? Int == LibraryManifest.currentVersion else {
+                    throw OfflineLibraryError.existingAlbum
+                }
+                let previous = try JSONDecoder().decode(LibraryManifest.self, from: data)
+                guard previous.source == incoming.source else { throw OfflineLibraryError.existingAlbum }
+                try previous.validate(in: target)
+                let replacements = Dictionary(uniqueKeysWithValues: incoming.entries.map { ($0.itemID, $0) })
+                let replacedPaths = Set(previous.entries.filter { replacements[$0.itemID] != nil }.map(\.relativePath))
+                // Preserve every unrelated file, including user-added hidden files and
+                // directories. Reject symlinks before copying the entire old directory.
+                var enumerationError: Error?
+                guard let enumerator = fm.enumerator(at: target,
+                    includingPropertiesForKeys: [.isSymbolicLinkKey, .isRegularFileKey, .isDirectoryKey],
+                    options: [], errorHandler: { _, error in enumerationError = error; return false }) else {
+                    throw OfflineLibraryError.invalidFolder
+                }
+                var retainedPaths = Set<String>()
+                for case let file as URL in enumerator {
+                    try Task.checkCancellation()
+                    let values = try file.resourceValues(forKeys: [.isSymbolicLinkKey, .isRegularFileKey, .isDirectoryKey])
+                    guard values.isSymbolicLink != true, values.isRegularFile == true || values.isDirectory == true else {
+                        throw OfflineLibraryError.unsafePath(file.lastPathComponent)
+                    }
+                    if values.isRegularFile == true {
+                        let path = try OfflinePaths.relativePath(of: file, inside: target)
+                        if !replacedPaths.contains(path) { retainedPaths.insert(path) }
+                    }
+                }
+                if let enumerationError { throw enumerationError }
+                guard Set(paths).isDisjoint(with: retainedPaths) else { throw OfflineLibraryError.existingAlbum }
+                try fm.removeItem(at: temporary)
+                try fm.copyItem(at: target, to: temporary)
+                for path in replacedPaths { try fm.removeItem(at: OfflinePaths.file(path, inside: temporary)) }
+                try fm.removeItem(at: temporary.appendingPathComponent(LibraryManifest.filename))
+                let known = Set(previous.entries.map(\.itemID))
+                manifest = LibraryManifest(source: previous.source, title: previous.title, artist: previous.artist,
+                    artworkURL: previous.artworkURL, coverPath: previous.coverPath,
+                    entries: previous.entries.map { replacements[$0.itemID] ?? $0 } + incoming.entries.filter { !known.contains($0.itemID) },
+                    extra: previous.extra)
+            }
+            try copy(paths, from: source, to: temporary)
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            try encoder.encode(manifest).write(to: temporary.appendingPathComponent(LibraryManifest.filename), options: .atomic)
             try manifest.validate(in: temporary)
             try Task.checkCancellation()
             if exists { try commit(temporary, replacing: target) }

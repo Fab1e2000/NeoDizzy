@@ -211,7 +211,11 @@ struct LocalLibraryTests {
                       localSource: LocalTrackSource(albumID: "album", trackID: "track"))
         #expect(try JSONDecoder().decode(Track.self, from: JSONEncoder().encode(local)) == local)
         var requests = 0
-        let resolver = StreamResolver(fetch: { _ in requests += 1; return [:] })
+        let resolver = StreamResolver()
+        resolver.register("dizzylab", provider: PlaybackProvider(stream: { _ in
+            requests += 1
+            throw PlaybackError.unavailable
+        }))
         for preferLocal in [true, false] {
             await #expect(throws: PlaybackError.localUnavailable) { try await resolver.stream(for: local, preferLocal: preferLocal) }
         }
@@ -301,7 +305,7 @@ extension LocalLibraryTests {
         let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { _ in AudioMetadata() })
         let library = OfflineLibraryStore(defaults: defaults, scanner: scanner)
         try await library.addScanFolder(root)
-        #expect(library.albums.isEmpty)
+        #expect(library.collections.isEmpty)
         #expect(library.localAlbums.count == 1)
         #expect(library.issue != nil)
     }
@@ -333,23 +337,21 @@ extension LocalLibraryTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let track = Track(discID: "download", number: "1", title: "原曲名", artists: "", albumTitle: "专辑", coverURL: nil)
-        let detail = DiscDetail(summary: DiscSummary(id: "download", title: "专辑", coverURL: nil), releaseDate: nil,
-                                description: "", credits: "", labelDescription: "", hasGift: false, tracks: [track], streams: [:])
-        let manifest = try OfflineManifest(detail: detail, files: ["1": "原曲名.flac"], coverPath: nil)
+        let manifest = LibraryManifest(source: .init(provider: "dizzylab", kind: "album", id: "download"), title: "专辑", artist: "", entries: [.init(relativePath: "原曲名.flac", itemID: "download/1", track: track)])
         let original = try JSONEncoder().encode(manifest)
-        try original.write(to: root.appendingPathComponent(OfflineManifest.filename))
+        try original.write(to: root.appendingPathComponent(LibraryManifest.filename))
         let audio = root.appendingPathComponent("完全不同的名字.flac")
         try Fixture.data("audio-local-tags.flac").write(to: audio)
         let library = OfflineLibraryStore(defaults: defaults, scanner: LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache")))
         try await library.addScanFolder(root)
         #expect(library.issue == nil)
-        #expect(library.albums.isEmpty)
+        #expect(library.collections.isEmpty)
         let local = try #require(library.localAlbums.first?.tracks.first)
         #expect(local.title == "测试曲目")
         let playable = try #require(library.localFile(for: local))
         #expect(LocalLibraryScanner.canonical(playable) == LocalLibraryScanner.canonical(audio))
         #expect(try Data(contentsOf: playable) == Fixture.data("audio-local-tags.flac"))
-        #expect(try Data(contentsOf: root.appendingPathComponent(OfflineManifest.filename)) == original)
+        #expect(try Data(contentsOf: root.appendingPathComponent(LibraryManifest.filename)) == original)
     }
 }
 
@@ -478,12 +480,10 @@ extension LocalLibraryTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let site = Track(discID: "download", number: "1", title: "Song", artists: "Artist", albumTitle: "Album", coverURL: nil)
-        let detail = DiscDetail(summary: DiscSummary(id: "download", title: "Album", coverURL: nil), releaseDate: nil,
-                                description: "", credits: "", labelDescription: "", hasGift: false, tracks: [site], streams: [:])
-        let manifest = try OfflineManifest(detail: detail, files: ["1": "01.flac"], coverPath: nil)
+        let manifest = LibraryManifest(source: .init(provider: "dizzylab", kind: "album", id: "download"), title: "Album", artist: "", entries: [.init(relativePath: "01.flac", itemID: "download/1", track: site)])
         for folder in ["A", "B"] {
             _ = try localTestFile("\(folder)/01.flac", in: root)
-            try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent("\(folder)/\(OfflineManifest.filename)"))
+            try JSONEncoder().encode(manifest).write(to: root.appendingPathComponent("\(folder)/\(LibraryManifest.filename)"))
         }
         let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { _ in AudioMetadata() })
         let library = OfflineLibraryStore(defaults: defaults, scanner: scanner)
@@ -499,7 +499,7 @@ extension LocalLibraryTests {
             #expect(library.localAlbum(for: entry.track)?.id == album.id)
         }
         #expect(library.localFile(for: site) != nil, "Site playback still finds the downloaded album")
-        try FileManager.default.removeItem(at: root.appendingPathComponent("B/\(OfflineManifest.filename)"))
+        try FileManager.default.removeItem(at: root.appendingPathComponent("B/\(LibraryManifest.filename)"))
         await library.scan()
         #expect(before.flatMap(\.tracks).map(\.id) == library.localAlbums.flatMap(\.tracks).map(\.id))
     }
@@ -523,10 +523,8 @@ extension LocalLibraryTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         let file = try localTestFile("01.flac", in: root)
         let site = Track(discID: "download", number: "1", title: "Old title", artists: "Artist", albumTitle: "Album", coverURL: nil)
-        let detail = DiscDetail(summary: DiscSummary(id: "download", title: "Album", coverURL: nil), releaseDate: nil,
-                                description: "", credits: "", labelDescription: "", hasGift: false, tracks: [site], streams: [:])
-        try JSONEncoder().encode(OfflineManifest(detail: detail, files: ["1": "01.flac"], coverPath: nil))
-            .write(to: root.appendingPathComponent(OfflineManifest.filename))
+        try JSONEncoder().encode(LibraryManifest(source: .init(provider: "dizzylab", kind: "album", id: "download"), title: "Album", artist: "", entries: [.init(relativePath: "01.flac", itemID: "download/1", track: site)]))
+            .write(to: root.appendingPathComponent(LibraryManifest.filename))
         let reader = EditableMetadataReader()
         let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { try await reader.read($0) })
         let library = OfflineLibraryStore(defaults: defaults, scanner: scanner)

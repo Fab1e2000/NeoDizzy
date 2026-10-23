@@ -11,7 +11,7 @@ struct LabelRow: View {
     var body: some View {
         NavigationLink(value: AppRoute.label(name: name)) {
             HStack(alignment: .top, spacing: 14) {
-                AvatarImage(url: coverURL, size: 72)
+                DizzyLabAvatarImage(url: coverURL, size: 72)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(name).font(.headline).lineLimit(1)
                     if !description.isEmpty {
@@ -52,7 +52,7 @@ struct UserChip: View {
     var body: some View {
         NavigationLink(value: AppRoute.user(id: user.id)) {
             VStack(spacing: 6) {
-                AvatarImage(url: user.avatarURL, size: size)
+                DizzyLabAvatarImage(url: user.avatarURL, size: size)
                 Text(user.name)
                     .font(.callout)
                     .lineLimit(1)
@@ -71,7 +71,7 @@ struct UserLink: View {
     var body: some View {
         NavigationLink(value: AppRoute.user(id: user.id)) {
             HStack(spacing: 8) {
-                AvatarImage(url: user.avatarURL, size: 24)
+                DizzyLabAvatarImage(url: user.avatarURL, size: 24)
                 Text(user.name).fontWeight(.semibold).foregroundStyle(DizzyPalette.info)
             }
             .contentShape(.rect)

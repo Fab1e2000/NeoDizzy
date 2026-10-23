@@ -30,7 +30,8 @@ struct NeteaseHomeView: View {
             : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
         return layout {
             DiscoveryShortcutButton(title: NeteaseRoute.radio.title) { starting in
-                NeteaseFeaturedShortcutCard(kind: .radio, isLoading: starting)
+                FeaturedShortcutCard(title: "私人 FM", subtitle: "随心听，遇见下一首",
+                                     icon: .symbol("dot.radiowaves.left.and.right"), startsPlayback: true, isLoading: starting)
             } start: {
                 guard store.profile != nil else { store.showsLogin = true; return }
                 let revision = store.revision
@@ -47,7 +48,7 @@ struct NeteaseHomeView: View {
                 nowPlaying.isPresented = true
             }
             NavigationLink(value: AppRoute.netease(.daily)) {
-                NeteaseFeaturedShortcutCard(kind: .daily)
+                FeaturedShortcutCard(title: "每日推荐", subtitle: "每天 6 点，为你更新", icon: .today)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(NeteaseRoute.daily.title)
@@ -80,7 +81,7 @@ struct NeteaseCollectionView: View {
         switch route { case .album, .playlist: true; default: false }
     }
     private var collectionID: Int? { supportsFavorite ? sourceID : nil }
-    /// 账号自带的「我喜欢的音乐」歌单：不能收藏自己的歌单，换成心动模式。
+    /// 账号自带的「我喜欢的音乐」歌单不提供收藏操作。
     private var isOwnLikedPlaylist: Bool {
         model.playlist?.specialType == 5 && model.playlist?.creator?.userId == store.profile?.userId
     }
@@ -107,9 +108,7 @@ struct NeteaseCollectionView: View {
                                 player.play(tracks, startAt: shuffled ? Int.random(in: tracks.indices) : 0, sourceID: sourceID)
                                 if player.isShuffled != shuffled { player.toggleShuffle() }
                             }) {
-                                if route == .liked || isOwnLikedPlaylist {
-                                    NeteaseHeartModeButton()
-                                } else if supportsFavorite {
+                                if supportsFavorite && !isOwnLikedPlaylist {
                                     NeteaseCollectionFavorite(playlist: model.playlist, album: model.album)
                                 }
                             }.padding(.horizontal, 20)
@@ -250,7 +249,7 @@ struct NeteaseResults: View {
         NeteaseResultStatus(model: model, skeletonLayout: skeletonLayout, retry: loadMore)
     }
     private func card(_ title: String, url: URL?) -> some View {
-        DiscCard(disc: DiscSummary(id: url?.absoluteString ?? title, title: title, coverURL: url), showsLabel: false)
+        CoverCard(title: title, artworkURL: url)
     }
 }
 

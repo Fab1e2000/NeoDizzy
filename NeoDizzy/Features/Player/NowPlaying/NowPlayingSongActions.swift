@@ -41,36 +41,7 @@ struct NowPlayingSongActions: View {
                 openRoute(.localAlbum(id: library.localAlbum(for: track)?.id ?? source.albumID))
             }] + ArtistMenu.elements(artists) { openRoute($0) }
         }
-        if let source = track.remoteSource {
-            guard source.providerID == "netease" else { return [] }
-            var items: [UIMenuElement] = []
-            if let albumID = Int(track.discID), albumID > 0 {
-                items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "music.note.list")) { _ in openRoute(.netease(.album(albumID))) })
-            }
-            return items
-        }
-        let discID = track.discID
-        let downloadedLabel = library.collection(provider: "dizzylab", kind: "album", id: discID)?.detail.summary.labelName
-        var items: [UIMenuElement] = [
-            UIAction(title: String(localized: "前往专辑「\(track.albumTitle)」"), image: UIImage(systemName: "music.note.list")) { _ in
-                openRoute(.disc(id: discID))
-            },
-            // DizzyLab 的「歌手」是发行专辑的社团；没下载过的专辑打开菜单时再查一次。
-            UIDeferredMenuElement.uncached { [openRoute] completion in
-                Task { @MainActor in
-                    var label = downloadedLabel
-                    if label == nil { label = try? await DizzyAPI.shared.discDetail(id: discID).summary.labelName }
-                    let artists = label.map { [(name: $0, route: AppRoute.label(name: $0))] } ?? []
-                    completion(ArtistMenu.elements(artists, title: "查看社团") { openRoute($0) })
-                }
-            },
-        ]
-        if player.isPreview {
-            items.append(UIAction(title: String(localized: "前往专辑购买"), image: UIImage(systemName: "cart")) { _ in
-                openRoute(.disc(id: discID))
-            })
-        }
-        return items
+        return []
     }
 }
 
