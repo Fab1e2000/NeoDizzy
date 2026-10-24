@@ -118,3 +118,29 @@ struct QQMusicCollectionFavorite: View {
         }
     }
 }
+
+/// QQ 音乐专辑页的第三个按钮：先是「加入资料库」，加入之后同一个位置变成「下载」。
+/// 取消收藏改为长按下载按钮。
+struct QQMusicAlbumLibraryAction: View {
+    let collection: QQMusicCollection
+    let isLoaded: Bool
+    @Environment(QQMusicStore.self) private var store
+
+    var body: some View {
+        #if os(iOS)
+        if store.library.isSubscribed(collection.id, kind: .album) == true {
+            QQMusicDownloadButton(kind: "album", id: collection.id, title: collection.title, coverURL: collection.coverURL)
+                .disabled(!isLoaded)
+                .contextMenu {
+                    Button("从资料库移除", systemImage: "minus.circle", role: .destructive) {
+                        Task { try? await store.library.toggleAlbum(collection) }
+                    }
+                }
+        } else {
+            QQMusicCollectionFavorite(collection: collection, kind: .album)
+        }
+        #else
+        QQMusicCollectionFavorite(collection: collection, kind: .album)
+        #endif
+    }
+}

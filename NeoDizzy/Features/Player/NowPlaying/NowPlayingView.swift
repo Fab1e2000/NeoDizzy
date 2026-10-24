@@ -333,7 +333,10 @@ struct NowPlayingView: View {
                 queueSongHeaderOffset = $0
             }
         )
+        // 列表通栏，超出外层水平内边距；先放宽再裁剪，再收回，裁剪范围才是整屏宽度。
+        .padding(.horizontal, Self.portraitHorizontalPadding)
         .clipped()
+        .padding(.horizontal, -Self.portraitHorizontalPadding)
         .nowPlayingQueuePagePresentation(
             visualState: visualState,
             opacityTransition: pageTransition.queueOpacityTransition,

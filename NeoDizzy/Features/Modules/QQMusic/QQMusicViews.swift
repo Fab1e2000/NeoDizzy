@@ -120,8 +120,10 @@ struct QQMusicCollectionView: View {
                 AlbumDetailScrollView(artworkURL: artwork) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         AlbumHero(artworkURL: artwork, title: model.title.isEmpty ? route.title : model.title,
-                                  metadata: model.hasLoaded ? "\(tracks.count) 首歌曲" : "正在加载…") {
+                                  metadata: model.hasLoaded ? "\(tracks.count) 首歌曲" : "歌曲数量",
+                                  reservesTitleSpace: true, metadataIsPlaceholder: showsInitialSkeleton) {
                             Text(isAlbum ? model.songs.first?.artist ?? "QQ 音乐" : "QQ 音乐")
+                                .redacted(reason: showsInitialSkeleton ? .placeholder : [])
                         } actions: {
                             AlbumPlaybackActions(isEmpty: tracks.isEmpty, play: play) {
                                 collectionActions
@@ -176,18 +178,19 @@ struct QQMusicCollectionView: View {
         .refreshable { await load() }
     }
 
+    /// 首次加载前（含任务启动前的第一帧）显示占位，出错或已有内容时不再显示。
+    private var showsInitialSkeleton: Bool {
+        model.songs.isEmpty && model.error == nil && (!model.hasLoaded || model.loading)
+    }
+
     @ViewBuilder private var collectionActions: some View {
         switch route {
         case .album(let id):
-            QQMusicCollectionFavorite(collection: collection(id), kind: .album)
-            #if os(iOS)
-            QQMusicDownloadButton(kind: "album", id: id, title: model.title, coverURL: model.artwork)
-            #endif
+            // 先收藏，收藏后同一个位置变成下载。
+            QQMusicAlbumLibraryAction(collection: collection(id), isLoaded: model.hasLoaded)
         case .playlist(let id):
+            // 歌单不提供下载，只保留收藏。
             QQMusicCollectionFavorite(collection: collection(id), kind: .playlist)
-            #if os(iOS)
-            QQMusicDownloadButton(kind: "playlist", id: id, title: model.title, coverURL: model.artwork)
-            #endif
         case .song(let mid):
             #if os(iOS)
             QQMusicDownloadButton(kind: "song", id: mid, title: model.title, coverURL: model.artwork)

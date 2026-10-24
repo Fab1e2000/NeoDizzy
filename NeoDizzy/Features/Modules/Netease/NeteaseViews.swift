@@ -129,12 +129,12 @@ struct NeteaseCollectionView: View {
                                 player.play(tracks, startAt: shuffled ? Int.random(in: tracks.indices) : 0, sourceID: sourceID)
                                 if player.isShuffled != shuffled { player.toggleShuffle() }
                             }) {
-                                if supportsFavorite && !isOwnLikedPlaylist {
+                                if isAlbum, let collectionID {
+                                    // 专辑：先收藏，收藏后同一个位置变成下载。
+                                    NeteaseAlbumLibraryAction(album: model.album, id: collectionID, title: model.title,
+                                                              coverURL: artwork, isLoaded: model.hasLoaded)
+                                } else if supportsFavorite && !isOwnLikedPlaylist {
                                     NeteaseCollectionFavorite(playlist: model.playlist, album: model.album)
-                                }
-                                if let collectionID, model.hasLoaded {
-                                    NeteaseDownloadButton(kind: isAlbum ? "album" : "playlist", id: collectionID,
-                                                          title: model.title, coverURL: artwork)
                                 }
                             }.padding(.horizontal, 20)
                         }

@@ -99,10 +99,15 @@ struct AlbumPlaybackActions<Accessory: View>: View {
     let play: (Bool) -> Void
     @ViewBuilder var accessory: () -> Accessory
     @Environment(\.colorScheme) private var colorScheme
+    /// 圆形按钮的实际宽度，量出来后用来算播放按钮的宽度。
+    @State private var circleWidth: CGFloat = 50
+
+    private var spacing: CGFloat { 14 }
+    private var pageInset: CGFloat { 20 }
 
     var body: some View {
         // 页面内容里的普通按钮，不用液态玻璃：玻璃只留给浮在内容之上的控件。
-        HStack(spacing: 14) {
+        HStack(spacing: spacing) {
             Button { play(true) } label: {
                 Image(systemName: "shuffle")
                     .font(.title2.weight(.semibold))
@@ -113,11 +118,13 @@ struct AlbumPlaybackActions<Accessory: View>: View {
             .controlSize(.large)
             .disabled(isEmpty)
             .accessibilityLabel(isPreview ? "随机试听" : "随机播放")
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { circleWidth = $0 }
 
+            // 播放按钮固定为"一排四个按钮"时的宽度：按钮少的页面不再把它拉长，整排居中。
             Button { play(false) } label: {
                 Label(isPreview ? "试听" : "播放", systemImage: "play.fill")
                     .font(.title3.bold())
-                    .frame(minWidth: 72, maxWidth: .infinity)
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
@@ -125,12 +132,16 @@ struct AlbumPlaybackActions<Accessory: View>: View {
             .tint(colorScheme == .dark ? Color.white : .black)
             .foregroundStyle(colorScheme == .dark ? Color.black : .white)
             .disabled(isEmpty)
+            .containerRelativeFrame(.horizontal) { width, _ in
+                max(width - 2 * pageInset - 3 * circleWidth - 3 * spacing, 72)
+            }
 
             accessory()
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.circle)
                 .controlSize(.large)
         }
+        .frame(maxWidth: .infinity)
         .tint(DizzyPalette.text)
     }
 }

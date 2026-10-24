@@ -78,7 +78,8 @@ struct RootView: View {
                             .tint(descriptor.accent.color(for: .light))
                             .background {
                                 ShellTabBarAppearance(colorScheme: .light,
-                                                      accent: descriptor.accent, isSelected: host.selection == id)
+                                                      accent: descriptor.accent, isSelected: host.selection == id,
+                                                      onReselect: { popToRoot(id) })
                             }
                     } label: {
                         Label { Text(descriptor.title) } icon: { descriptor.icon }
@@ -91,7 +92,8 @@ struct RootView: View {
                     .toolbarColorScheme(.light, for: .tabBar)
                     .background {
                         ShellTabBarAppearance(colorScheme: .light,
-                                              accent: .neutral, isSelected: host.selection == .search)
+                                              accent: .neutral, isSelected: host.selection == .search,
+                                              onReselect: { popToRoot(.search) })
                     }
             }
         }
@@ -176,6 +178,13 @@ struct RootView: View {
         guard let route = pendingPlayerRoute else { return }
         pendingPlayerRoute = nil
         host.paths[host.selection, default: []].append(route)
+    }
+
+    /// 再点一次当前标签：有推入的页面就先回到根页面，已经在根页面则返回 false，交给滚动到顶部。
+    private func popToRoot(_ tab: ModuleID) -> Bool {
+        guard !(host.paths[tab] ?? []).isEmpty else { return false }
+        host.paths[tab] = []
+        return true
     }
 
     private func path(for tab: ModuleID) -> Binding<[AppRoute]> {

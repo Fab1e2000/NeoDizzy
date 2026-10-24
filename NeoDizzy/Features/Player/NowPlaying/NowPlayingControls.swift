@@ -270,16 +270,16 @@ struct NowPlayingPageSelector: View {
             ZStack {
                 // Screenshot visibility is sample data. Keep the lyrics feature
                 // available whenever the current track actually has lyrics.
+                // 没有歌词时按钮照常显示，只是变灰且不可点。
                 pageButton(page: .lyrics, systemImage: "quote.bubble", accessibilityLabel: "歌词")
                     .disabled(!hasLyrics)
-                    .opacity(hasLyrics ? 1 : 0)
-                    .accessibilityHidden(!hasLyrics)
+                    .opacity(hasLyrics ? 1 : 0.32)
                     .position(x: layout.x(86.75), y: 25)
                 AirPlayButton(opacity: 0.72)
                     .frame(width: 44, height: 44)
                     .scaleEffect(1.27)
                     .accessibilityLabel("隔空播放")
-                    .position(x: hasLyrics ? proxy.size.width / 2 : layout.x(86.75), y: 25)
+                    .position(x: proxy.size.width / 2, y: 25)
                 pageButton(page: .queue, systemImage: "list.bullet", accessibilityLabel: "继续播放",
                            badgeSystemImage: page == .queue ? nil : player.queueModeBadgeSystemImage)
                     .position(x: layout.x(315.25), y: 25)

@@ -13,6 +13,8 @@ struct NowPlayingQueuePage: View {
     let onSongHeaderHiddenChange: (Bool) -> Void
     let onSongHeaderOffsetChange: (CGFloat) -> Void
 
+    private static let contentHorizontalInset: CGFloat = 32
+
     @State private var scrollOffset: CGFloat = 0
     @State private var isSongHeaderHidden = false
     @State private var isSongHeaderAtRest = true
@@ -39,59 +41,18 @@ struct NowPlayingQueuePage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            List {
-                // Permanent space for the song header and mode controls. The
-                // overlay moves over this space without resizing the List.
-                Color.clear
-                    .frame(height: songHeaderHeight + 60)
-                    .listRowInsets(.init())
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-
-                Section {
-                    Text("继续播放")
-                        .font(.title2.bold())
-                        .padding(.top, 14)
-                        .padding(.bottom, 10)
-                        .listRowInsets(.init())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-
-                    if upcomingEntries.isEmpty {
-                        ContentUnavailableView(
-                            "后面没有要播放的曲目了",
-                            systemImage: "list.bullet"
-                        )
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .listRowInsets(
-                            .init(
-                                top: 24,
-                                leading: 0,
-                                bottom: 24,
-                                trailing: 0
-                            )
-                        )
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(upcomingEntries) { entry in
-                            NowPlayingQueueRow(entry: entry)
-                        }
-                        .onMove(perform: moveQueueItems)
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .listSectionSpacing(0)
-            .scrollContentBackground(.hidden)
-            .scrollIndicators(.visible)
-            .contentMargins(.top, 0, for: .scrollContent)
-            .environment(\.defaultMinListRowHeight, 1)
-            .environment(\.defaultMinListHeaderHeight, 0)
-            .environment(\.editMode, .constant(.active))
+            NowPlayingQueueList(
+                entries: upcomingEntries,
+                headerHeight: songHeaderHeight,
+                horizontalInset: Self.contentHorizontalInset,
+                onPlay: { player.playFromQueue(at: $0) },
+                onMove: moveQueueItems,
+                onScroll: updateSongHeaderState
+            )
+            // 页面外层有 32pt 的水平内边距；列表自己向两侧多出同样的宽度，行内容再缩进回来。
             .mask {
                 Rectangle()
+                    .padding(.horizontal, -Self.contentHorizontalInset)
                     .padding(.top, modeControlsOffset + 60)
             }
             .overlay(alignment: .top) {
@@ -114,14 +75,6 @@ struct NowPlayingQueuePage: View {
                 }
             }
             .padding(.bottom, bottomContentInset)
-            .onScrollGeometryChange(
-                for: CGFloat.self,
-                of: { geometry in
-                    min(max(geometry.contentOffset.y + geometry.contentInsets.top, 0), songHeaderHeight)
-                }
-            ) { _, offset in
-                updateSongHeaderState(for: offset)
-            }
         }
         .onAppear {
             if presentation == .portrait {
@@ -266,13 +219,12 @@ private struct NowPlayingQueueModeControls: View {
 
 }
 
-private struct NowPlayingQueueRow: View {
-    @Environment(PlayerStore.self) private var player
-
+struct NowPlayingQueueRow: View {
     let entry: UpcomingQueueEntry
+    let onPlay: () -> Void
 
     var body: some View {
-        Button(action: play) {
+        Button(action: onPlay) {
             HStack(spacing: 12) {
                 ArtworkImage(
                     url: entry.song.coverURL,
@@ -283,6 +235,7 @@ private struct NowPlayingQueueRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.song.title)
                         .font(.body)
+                        .foregroundStyle(.white)
                         .lineLimit(1)
 
                     Text(entry.song.artists)
@@ -296,30 +249,5 @@ private struct NowPlayingQueueRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .listRowInsets(
-            .init(
-                top: 4,
-                leading: 0,
-                bottom: 4,
-                trailing: 0
-            )
-        )
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
     }
-
-    private func play() {
-        player.playFromQueue(at: entry.queueIndex)
-    }
-}
-
-private struct UpcomingQueueEntry: Identifiable {
-    struct ID: Hashable {
-        let songID: String
-        let occurrence: Int
-    }
-
-    let id: ID
-    let queueIndex: Int
-    let song: Track
 }

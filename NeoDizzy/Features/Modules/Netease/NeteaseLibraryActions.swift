@@ -187,3 +187,34 @@ struct NeteaseCollectionFavorite: View {
     }
 
 }
+
+/// 网易云专辑页的第三个按钮：先是「加入资料库」，加入之后同一个位置变成「下载」。
+/// 取消收藏改为长按下载按钮。
+struct NeteaseAlbumLibraryAction: View {
+    let album: NeteaseAlbum?
+    let id: Int
+    let title: String
+    let coverURL: URL?
+    let isLoaded: Bool
+    @Environment(NeteaseStore.self) private var store
+
+    var body: some View {
+        #if os(iOS)
+        if store.library.albumStates[id] == true {
+            NeteaseDownloadButton(kind: "album", id: id, title: title, coverURL: coverURL)
+                .disabled(!isLoaded)
+                .contextMenu {
+                    if let album {
+                        Button("从资料库移除", systemImage: "minus.circle", role: .destructive) {
+                            Task { try? await store.library.toggleAlbum(album) }
+                        }
+                    }
+                }
+        } else {
+            NeteaseCollectionFavorite(playlist: nil, album: album)
+        }
+        #else
+        NeteaseCollectionFavorite(playlist: nil, album: album)
+        #endif
+    }
+}

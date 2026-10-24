@@ -400,14 +400,6 @@ private struct DiscStoreCard: View {
             .tint(DizzyPalette.download)
             .fontWeight(.semibold)
             .accessibilityHint("选择格式和特典")
-            if detail.hasGift {
-                Label("含特典", systemImage: "gift")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.adaptive(light: 0x8F4A0C, dark: 0xFFB35C))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.orange.opacity(0.14), in: .rect(cornerRadius: 6))
-            }
         }
     }
 
