@@ -1,7 +1,10 @@
 import SwiftUI
 
 final class QQMusicModule: AppModule {
-    static var metadata: ModuleDescriptor { .init(id: .qqmusic, title: "QQ 音乐", systemImage: "music.note", accent: accent) }
+    static var metadata: ModuleDescriptor {
+        .init(id: .qqmusic, title: "QQ 音乐", systemImage: "music.note",
+              accent: accent, imageAsset: "QQMusicTabIcon")
+    }
     /// QQ 音乐的品牌绿；绿底太亮，实底上配深绿字。
     static let accent = AccentPalette(light: 0x13824D, dark: 0x31C27C, lightFill: 0x31C27C, darkFill: 0x31C27C,
                                       lightInk: 0x0B3D24, darkInk: 0x0B3D24)
@@ -25,9 +28,18 @@ final class QQMusicModule: AppModule {
         return AnyView(QQMusicPlayerActions(track: track, onImportLyrics: onImportLyrics))
     }
     func loginView() -> AnyView? { AnyView(QQMusicLoginView(store: store)) }
+    func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] {
+        guard store.active, track.remoteSource?.providerID == descriptor.id.rawValue,
+              let mid = track.remoteSource?.itemID else { return [] }
+        let revision = store.revision
+        let song = try await store.api.song(mid: mid)
+        try Task.checkCancellation()
+        guard store.active, revision == store.revision else { throw CancellationError() }
+        return song.singers.map { PlayerArtistDestination(name: $0.name, route: .qqmusic(.artist($0.id))) }
+    }
     func playlistPicker(for track: Track) -> AnyView? {
         guard track.remoteSource?.providerID == "qqmusic", let mid = track.remoteSource?.itemID else { return nil }
-        return store.credential == nil ? loginView() : AnyView(QQMusicPlaylistPicker(songMid: mid).environment(store))
+        return AnyView(QQMusicPlaylistPicker(songMid: mid).environment(store))
     }
     func collectionRemoval(for item: MirroredCollection) -> LibraryRemoval? {
         guard !item.isPermanent, collectionRoute(kind: item.kind.rawValue, itemID: item.itemID) != nil else { return nil }

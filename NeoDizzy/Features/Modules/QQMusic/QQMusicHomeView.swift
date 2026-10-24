@@ -1,32 +1,19 @@
 import SwiftUI
 
 struct QQMusicHomeView: View {
-    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(QQMusicStore.self) private var store
     @Environment(QQMusicContentCache.self) private var cache
+    @State private var refreshCompletion = 0
     private var recommendations: QQMusicPageModel { cache.page(.recommended, revision: store.revision) }
     private var charts: QQMusicPageModel { cache.page(.charts, revision: store.revision) }
-    private var newAlbums: QQMusicPageModel { cache.page(.newAlbums(1), revision: store.revision) }
-    private var radar: QQMusicPageModel { cache.page(.radar, revision: store.revision) }
 
     var body: some View {
-        MainTabPage(title: "QQ 音乐", onRefresh: { await load(refresh: true) }) {
+        MainTabPage(title: "QQ 音乐", onRefresh: {
+            await load(refresh: true)
+            guard !Task.isCancelled else { return }
+            refreshCompletion += 1
+        }) {
             QQMusicDiscoveryShortcuts()
-            VStack(alignment: .leading, spacing: 14) {
-                QQMusicSectionLink(title: "雷达推荐", route: .radar)
-                QQMusicSongRows(songs: Array(radar.songs.prefix(3)))
-                if radar.songs.isEmpty && radar.error == nil && (!radar.hasLoaded || radar.loading) {
-                    ContentSkeleton(layout: .songs)
-                } else if let error = radar.error {
-                    HStack {
-                        Text(error).font(.footnote).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("重试") { Task { await radar.load(store: store, route: .radar) } }
-                    }
-                } else if radar.hasLoaded && radar.songs.isEmpty {
-                    Text("暂无内容").font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
             VStack(alignment: .leading, spacing: 14) {
                 QQMusicSectionLink(title: "推荐歌单", route: .recommended)
                 if !recommendations.playlists.isEmpty {
@@ -36,57 +23,56 @@ struct QQMusicHomeView: View {
                     await recommendations.load(store: store, route: .recommended)
                 }
             }
-            if charts.chartGroups.isEmpty {
-                VStack(alignment: .leading, spacing: 14) {
-                    QQMusicSectionLink(title: "排行榜", route: .charts)
-                    QQMusicShelfStatus(model: charts, isEmpty: true) {
-                        await charts.load(store: store, route: .charts)
-                    }
+            VStack(alignment: .leading, spacing: 14) {
+                QQMusicSectionLink(title: "排行榜", route: .charts)
+                if !charts.charts.isEmpty {
+                    QQMusicCoverShelf(collections: Array(charts.charts.prefix(8)), isChart: true)
                 }
-            } else {
-                ForEach(charts.chartGroups) { group in
-                    VStack(alignment: .leading, spacing: 14) {
-                        QQMusicSectionLink(title: group.title, route: .chartGroup(group.id))
-                        QQMusicCoverShelf(collections: Array(group.charts.prefix(8)), isChart: true)
-                    }
-                }
-                QQMusicShelfStatus(model: charts, isEmpty: false) {
+                QQMusicShelfStatus(model: charts, isEmpty: charts.charts.isEmpty) {
                     await charts.load(store: store, route: .charts)
                 }
             }
-            VStack(alignment: .leading, spacing: 14) {
-                QQMusicSectionLink(title: "新碟上架", route: .newAlbums(1))
-                if !newAlbums.albums.isEmpty {
-                    ScrollView(.horizontal) {
-                        LazyHStack(alignment: .top, spacing: 14) {
-                            ForEach(newAlbums.albums.prefix(8)) { album in
-                                NavigationLink(value: AppRoute.qqmusic(.album(album.id))) {
-                                    CoverCard(title: album.title, artworkURL: album.coverURL, reservesTitleLines: true)
-                                }.buttonStyle(.plain).frame(width: typeSize.isAccessibilitySize ? 220 : 156)
-                            }
-                        }
-                    }.scrollIndicators(.hidden)
-                }
-                QQMusicShelfStatus(model: newAlbums, isEmpty: newAlbums.albums.isEmpty) {
-                    await newAlbums.load(store: store, route: .newAlbums(1))
-                }
-            }
-            QQMusicSectionLink(title: "热门歌手", route: .artists)
-
         }
+        .modifier(QQMusicHomeRefreshRecovery(completion: refreshCompletion))
         .task(id: store.revision) { await load() }
     }
 
     private func load(refresh: Bool = false) async {
         async let recommended: Void = load(recommendations, route: .recommended, refresh: refresh)
         async let ranked: Void = load(charts, route: .charts, refresh: refresh)
-        async let discovered: Void = load(radar, route: .radar, refresh: refresh)
-        async let albums: Void = load(newAlbums, route: .newAlbums(1), refresh: refresh)
-        _ = await (recommended, ranked, discovered, albums)
+        _ = await (recommended, ranked)
     }
 
     private func load(_ model: QQMusicPageModel, route: QQMusicRoute, refresh: Bool) async {
         if refresh || !model.hasLoaded { await model.load(store: store, route: route) }
+    }
+}
+
+/// QQ 首页的多个分区异步更新后，收起可能残留的下拉空隙。
+/// 只修正顶部区域，不打断等待刷新时已经滚入正文的用户。
+struct QQMusicHomeRefreshRecovery: ViewModifier {
+    let completion: Int
+    @State private var position = ScrollPosition(edge: .top)
+    @State private var isAtTop = true
+    @State private var isInteracting = false
+
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position)
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top <= 1
+            } action: { _, atTop in
+                isAtTop = atTop
+            }
+            .onScrollPhaseChange { _, phase in
+                isInteracting = phase == .tracking || phase == .interacting
+            }
+            .onChange(of: completion) { _, _ in
+                guard isAtTop, !isInteracting else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    position.scrollTo(edge: .top)
+                }
+            }
     }
 }
 
@@ -137,7 +123,8 @@ private struct QQMusicCollectionCard: View {
     var reservesTitleLines = false
 
     var body: some View {
-        NavigationLink(value: AppRoute.qqmusic(isChart ? .chart(collection.id) : .playlist(collection.id))) {
+        AlbumNavigationLink(value: AppRoute.qqmusic(isChart ? .chart(collection.id) : .playlist(collection.id)),
+                            artworkURL: collection.coverURL) {
             CoverCard(title: collection.title, artworkURL: collection.coverURL, reservesTitleLines: reservesTitleLines)
         }.buttonStyle(.plain)
     }
@@ -193,8 +180,6 @@ struct QQMusicBrowseView: View {
     let route: QQMusicRoute
     @Environment(QQMusicStore.self) private var store
     @Environment(QQMusicContentCache.self) private var cache
-    @State private var paginationRequest = 0
-    @State private var handledPaginationRequest = 0
     private var sourceRoute: QQMusicRoute { if case .chartGroup = route { .charts } else { route } }
     private var model: QQMusicPageModel { cache.page(sourceRoute, revision: store.revision) }
     private var selectedGroup: QQMusicChartGroup? {
@@ -231,9 +216,9 @@ struct QQMusicBrowseView: View {
                     ContentUnavailableView("暂无内容", systemImage: "music.note.list")
                 }
                 if model.more && model.error == nil && !model.loading {
-                    Button("加载更多") { paginationRequest += 1 }
-                        .buttonStyle(.bordered)
-                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                    AutoLoadMoreFooter(progress: model.playlists.count, load: { await load(append: true) }) {
+                        ContentSkeleton(layout: .grid)
+                    }
                 }
             }.padding(20)
         }
@@ -244,13 +229,6 @@ struct QQMusicBrowseView: View {
         .task(id: RequestIdentity(route: route, revision: store.revision)) {
             if !model.hasLoaded { await load() }
         }
-        .task(id: paginationRequest) {
-            if paginationRequest > handledPaginationRequest {
-                handledPaginationRequest = paginationRequest
-                await load(append: true)
-            }
-        }
-        .onDisappear { handledPaginationRequest = paginationRequest }
         .refreshable { await load() }
     }
 

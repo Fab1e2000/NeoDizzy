@@ -5,10 +5,18 @@ import Observation
 /// cannot replace the content after account changes or module deactivation.
 @MainActor @Observable
 final class QQMusicPageModel {
+    struct InitialPresentation {
+        let route: QQMusicRoute
+        let revision: Int
+        let title: String
+        let artwork: URL?
+    }
+
     private(set) var songs: [QQMusicSong] = []
     private(set) var albums: [QQMusicAlbum] = []
     private(set) var artists: [QQMusicArtist] = []
     private(set) var biography = ""
+    private(set) var detailDescription = ""
     private(set) var libraryRevision = -1
     private(set) var playlists: [QQMusicCollection] = []
     private(set) var charts: [QQMusicCollection] = []
@@ -31,8 +39,14 @@ final class QQMusicPageModel {
     private var loadedRevision: Int?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var loadingAppend = false
+    @ObservationIgnored private var initialPresentation: InitialPresentation?
 
-    init(now: @escaping () -> Date = { .now }) { self.now = now }
+    init(presentation: InitialPresentation? = nil, now: @escaping () -> Date = { .now }) {
+        self.now = now
+        initialPresentation = presentation
+        title = presentation?.title ?? ""
+        artwork = presentation?.artwork
+    }
 
     var needsDailyRefresh: Bool {
         dailyDate != Calendar.current.startOfDay(for: now())
@@ -42,10 +56,11 @@ final class QQMusicPageModel {
         loadTask?.cancel(); loadTask = nil
         generation += 1
         songs = []; playlists = []; charts = []; chartGroups = []; albums = []; artists = []; biography = ""; libraryRevision = -1
-        title = ""; artwork = nil; loading = false; hasLoaded = false
+        title = ""; artwork = nil; detailDescription = ""; loading = false; hasLoaded = false
         more = false; error = nil; retryAppend = false
         nextPage = 1; nextOffset = 0; nextCursor = nil; consumedCursors.removeAll()
         loadedRoute = nil; loadedRevision = nil; loadingAppend = false
+        initialPresentation = nil
         dailyDate = nil
     }
 
@@ -61,7 +76,15 @@ final class QQMusicPageModel {
             return
         }
         if loadedRevision != revision || loadedRoute != route || libraryRevision != contentRevision {
+            // A list supplies only the initial title/artwork, never loaded songs.
+            // Keep it through the matching first request, but never across reset,
+            // account changes, or a different route.
+            let presentation = initialPresentation.flatMap { $0.route == route && $0.revision == revision ? $0 : nil }
             reset()
+            if let presentation {
+                title = presentation.title
+                artwork = presentation.artwork
+            }
         } else {
             // An explicit refresh replaces a pending append while preserving
             // already published content until the refresh succeeds.
@@ -86,6 +109,7 @@ final class QQMusicPageModel {
             var newAlbums: [QQMusicAlbum] = []
             var newArtists: [QQMusicArtist] = []
             var newBiography = ""
+            var newDetailDescription = ""
             var browsePage: QQMusicBrowsePage?
             let offset = append ? nextOffset : 0
             var newSongs: [QQMusicSong] = []
@@ -132,9 +156,11 @@ final class QQMusicPageModel {
                     < ($1.element.discNumber ?? 1, $1.element.trackNumber ?? Int.max, $1.offset)
                 }.map(\.element)
                 newTitle = collection.title; newArtwork = collection.coverURL
+                newDetailDescription = collection.detailDescription
             case .playlist(let id):
                 let collection = try await store.api.playlist(id: id)
                 newSongs = collection.songs; newTitle = collection.title; newArtwork = collection.coverURL
+                newDetailDescription = collection.detailDescription
             case .chart(let id):
                 let collection = try await store.api.chart(id: id)
                 newSongs = collection.songs; newTitle = collection.title; newArtwork = collection.coverURL
@@ -190,6 +216,7 @@ final class QQMusicPageModel {
             charts = newCharts.filter { chartIDs.insert($0.id).inserted }
             chartGroups = newChartGroups
             title = newTitle; artwork = newArtwork ?? songs.first?.coverURL
+            detailDescription = newDetailDescription
             nextPage = browsePage?.nextPage ?? page + 1
             nextOffset = browsePage?.nextOffset ?? 0; hasLoaded = true
             dailyDate = route == .daily ? requestDate : nil

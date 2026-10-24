@@ -30,7 +30,7 @@ struct DiscoverView: View {
                         } else {
                             LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                                 ForEach(showcase.deals) { deal in
-                                    NavigationLink(value: AppRoute.disc(id: deal.disc.id)) {
+                                    AlbumNavigationLink(value: AppRoute.disc(id: deal.disc.id), artworkURL: deal.disc.coverURL) {
                                         DiscCard(disc: deal.disc, caption: deal.deadline)
                                     }
                                     .buttonStyle(.plain)

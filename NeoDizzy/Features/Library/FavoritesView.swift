@@ -31,10 +31,11 @@ struct FavoriteButton: View {
         } label: {
             if playerStyle {
                 Image(systemName: liked ? "heart.fill" : "heart")
-                    .font(.title3.weight(.semibold))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 19.14, height: 19.14)
                     .foregroundStyle(liked ? DizzyPalette.accentOnDark : .white)
                     .frame(width: 44, height: 44)
-                    .background(.white.opacity(0.15), in: .circle)
             } else {
                 Label(liked ? "取消喜欢" : "喜欢", systemImage: liked ? "heart.fill" : "heart")
             }
@@ -56,7 +57,7 @@ struct FavoritesPage: View {
         let artwork = songs.first?.track.coverURL
         AlbumDetailScrollView(artworkURL: artwork) {
             LazyVStack(alignment: .leading, spacing: 0) {
-                AlbumHero(artworkURL: artwork, title: "喜欢", metadata: "\(songs.count) 首歌曲") {
+                AlbumHero(artworkURL: artwork, title: "喜欢的歌", metadata: "\(songs.count) 首歌曲") {
                     EmptyView()
                 } actions: {
                     AlbumPlaybackActions(isEmpty: tracks.isEmpty) { shuffled in

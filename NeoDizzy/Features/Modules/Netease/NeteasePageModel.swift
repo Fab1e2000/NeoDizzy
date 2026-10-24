@@ -68,6 +68,7 @@ final class NeteasePageModel {
                 case .album(let id):
                     let result = try await api.album(id)
                     newAlbum = result.0
+                    newDescription = result.0.description ?? ""
                     newAlbums = []; newSongs = result.1; newTitle = result.0.name; newArtwork = result.0.artworkURL
                 case .playlist(let id):
                     let ids: [Int]

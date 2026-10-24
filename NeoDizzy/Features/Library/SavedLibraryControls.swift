@@ -1,15 +1,33 @@
 import SwiftUI
 
-/// 专辑、歌单页工具栏上的「加入资料库 / 已在资料库」开关。
+/// 收藏入口统一放在封面下的主要操作区；平台仍各自拥有写入逻辑。
+struct CollectionLibraryActionLabel: View {
+    let isAdded: Bool
+    var isWorking = false
+
+    var body: some View {
+        ZStack {
+            Image(systemName: isAdded ? "checkmark" : "plus").opacity(isWorking ? 0 : 1)
+            if isWorking { ProgressView() }
+        }
+        .font(.title2.weight(.semibold))
+        .frame(width: 30, height: 30)
+    }
+}
+
+/// 专辑、播放列表主要操作区的「加入资料库 / 已在资料库」开关。
 struct SavedLibraryToggle: View {
     let item: SavedLibraryItem
     @Environment(SavedLibraryStore.self) private var saved
 
     var body: some View {
         let added = saved.contains(item.kind, providerID: item.providerID, itemID: item.itemID)
-        Button(added ? "从资料库移除" : "加入资料库", systemImage: added ? "rectangle.stack.fill" : "rectangle.stack.badge.plus") {
+        Button {
             saved.toggle(item)
+        } label: {
+            CollectionLibraryActionLabel(isAdded: added)
         }
+        .accessibilityLabel(added ? "从资料库移除" : "加入资料库")
         .sensoryFeedback(.success, trigger: added) { _, isAdded in isAdded }
     }
 }

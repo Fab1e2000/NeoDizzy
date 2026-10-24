@@ -7,7 +7,7 @@ nonisolated struct RemoteTrackKey: Hashable, Codable, Sendable {
 }
 
 extension Track {
-    var remoteKey: RemoteTrackKey? {
+    nonisolated var remoteKey: RemoteTrackKey? {
         if let remoteSource {
             return RemoteTrackKey(provider: remoteSource.providerID, itemID: remoteSource.itemID)
         }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BrowsingHistoryView: View {
     @Environment(BrowsingHistoryStore.self) private var history
+    @Environment(DizzyLabContentCache.self) private var contentCache
     @State private var confirmingClear = false
 
     var body: some View {
@@ -12,7 +13,7 @@ struct BrowsingHistoryView: View {
             } else {
                 Section {
                     ForEach(history.entries) { entry in
-                        NavigationLink(value: AppRoute.disc(id: entry.id)) {
+                        AlbumNavigationLink(value: AppRoute.disc(id: entry.id), artworkURL: entry.coverURL) {
                             HStack(spacing: 12) {
                                 ArtworkImage(url: entry.coverURL, cornerRadius: 10)
                                     .frame(width: 56, height: 56)
@@ -27,6 +28,10 @@ struct BrowsingHistoryView: View {
                             }
                             .padding(.vertical, 4)
                             .prefetchAlbumArtwork(url: entry.coverURL)
+                        }
+                        .onChange(of: entry, initial: true) { _, entry in
+                            contentCache.remember([DiscSummary(id: entry.id, title: entry.title,
+                                                             coverURL: entry.coverURL, labelName: entry.labelName)])
                         }
                     }
                     .onDelete { offsets in

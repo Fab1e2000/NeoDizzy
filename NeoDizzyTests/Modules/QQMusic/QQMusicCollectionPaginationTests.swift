@@ -3,6 +3,22 @@ import Testing
 @testable import NeoDizzy
 
 struct QQMusicCollectionPaginationTests {
+    @Test(arguments: ["album", "playlist"])
+    func collectionDescriptionsKeepParagraphsAcrossSongPages(kind: String) async throws {
+        let result = try await collection(kind, scenario: "description")
+        #expect(result.detailDescription == "第一段 & 介绍\n第二行\n第三段")
+        #expect(result.songs.map(\.mid) == ["song0", "song1", "song2"])
+    }
+
+    @Test(arguments: ["album", "playlist"])
+    func missingOrMalformedDescriptionsDoNotFailCollectionLoading(kind: String) async throws {
+        for scenario in ["complete", "malformedDescription"] {
+            let result = try await collection(kind, scenario: scenario)
+            #expect(result.detailDescription.isEmpty)
+            #expect(result.songs.count == 3)
+        }
+    }
+
     @Test(arguments: ["album", "playlist", "chart"])
     func collectionsLoadEveryAdvertisedPage(kind: String) async throws {
         let result = try await collection(kind, scenario: "complete")
@@ -80,7 +96,12 @@ nonisolated private final class QQMusicCollectionProtocol: URLProtocol, @uncheck
     override func stopLoading() {}
 
     private func response(method: String, param: [String: Any], scenario: String) throws -> [String: Any] {
-        if method == "GetAlbumDetail" { return ["basicInfo": ["title": "Test Album"]] }
+        let description: Any? = scenario == "description" ? "<p>第一段 &amp; 介绍<br />第二行</p><p>第三段</p>" : scenario == "malformedDescription" ? 123 : nil
+        if method == "GetAlbumDetail" {
+            var basic: [String: Any] = ["title": "Test Album"]
+            basic["desc"] = description
+            return ["basicInfo": basic]
+        }
         let offset = (param["begin"] ?? param["offset"] ?? param["song_begin"]) as? Int ?? -1
         guard offset == 0 || offset == 2 else { throw URLError(.badServerResponse) }
         let empty = scenario == "empty" || (scenario == "truncated" && offset > 0)
@@ -107,7 +128,10 @@ nonisolated private final class QQMusicCollectionProtocol: URLProtocol, @uncheck
             return ["data": info, "songInfoList": songs]
         case "CgiGetDiss":
             let more = !empty && offset == 0
-            var data: [String: Any] = ["dirinfo": ["title": "Test Playlist"], "songlist": songs, "hasmore": more ? 1 : 0]
+            var info: [String: Any] = ["title": "Test Playlist"]
+            // Later song pages can omit metadata that was present on the first page.
+            if offset == 0 { info["desc"] = description }
+            var data: [String: Any] = ["dirinfo": info, "songlist": songs, "hasmore": more ? 1 : 0]
             data["total_song_num"] = total
             switch scenario {
             case "missingMore": data["hasmore"] = nil

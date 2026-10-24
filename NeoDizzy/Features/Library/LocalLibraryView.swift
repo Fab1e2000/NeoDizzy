@@ -13,36 +13,45 @@ struct LocalLibraryView: View {
     @State private var localRecent: [RecentLibraryItem] = []
 
     var body: some View {
-        MainTabPage(
-            title: "资料库",
-            onRefresh: {
-                // 下拉刷新同步所有已注册平台。
-                async let likes: Void = favorites.refresh()
-                async let scan: Void = library.scan()
-                async let sync: Void = mirror.refresh(force: true)
-                _ = await (scan, sync, likes)
-            },
-            headerAction: PageHeaderAction(title: "下载队列", systemImage: "arrow.down.circle",
-                                           badge: downloads.jobs.filter(\.isActive).count) { showsDownloads = true }
-        ) {
-            Group {
-                LibraryQuickTiles()
+        let recent = recentItems
+        let played = history.availableSongs(library: library, modules: modules)
+        List {
+            Section {
+                LibraryCategoryRows(recentlyPlayedCount: played.count)
+            }
+            .listSectionSeparator(.hidden)
+            Section {
                 if let issue = library.issue {
                     Label(issue, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(DizzyPalette.accent)
                 }
-                let recent = recentItems
-                let played = playedItems
                 if recent.isEmpty && played.isEmpty && (library.isImporting || library.isScanning) {
                     ContentSkeleton(layout: .grid)
                 } else if recent.isEmpty && played.isEmpty {
                     ContentUnavailableView("资料库还是空的", systemImage: "music.note.list",
                         description: Text("导入音乐，或登录已启用的音乐平台：喜欢的歌、收藏的歌单与专辑、已购专辑会出现在这里。"))
-                } else {
-                    if !played.isEmpty { LibraryShelfRow(title: "最近播放", items: played) }
-                    if !recent.isEmpty { LibraryShelfRow(title: "最近添加", items: recent) }
+                } else if !recent.isEmpty {
+                    RecentlyAddedGrid(items: recent)
+                        .padding(.vertical, 16)
                 }
             }
+            .listSectionSeparator(.hidden)
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .dizzyPageBackground()
+        .rootPageChrome(title: "资料库", action:
+            PageHeaderAction(title: "下载队列", systemImage: "arrow.down.circle",
+                             badge: downloads.jobs.filter(\.isActive).count) { showsDownloads = true })
+        .refreshable {
+            // 下拉刷新同步所有已注册平台。
+            async let likes: Void = favorites.refresh()
+            async let scan: Void = library.scan()
+            async let sync: Void = mirror.refresh(force: true)
+            _ = await (scan, sync, likes)
         }
         .sheet(isPresented: $showsDownloads) { DownloadQueueSheet() }
         .task(id: library.contentRevision) {
@@ -65,89 +74,77 @@ struct LocalLibraryView: View {
         return Array((local + online).sorted { $0.addedAt > $1.addedAt }.prefix(RecentLibraryItem.limit))
     }
 
-    /// 最近播放过的专辑；本地专辑已被删除的不再显示。
-    private var playedItems: [LibraryShelfItem] {
-        let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules)
-        let albums = contents.onlineAlbumsByKey
-        return history.entries.compactMap { entry in
-            switch entry.kind {
-            case .localAlbum:
-                guard let album = library.localAlbum(id: entry.itemID) else { return nil }
-                return contents.localAlbumItem(id: album.id, title: album.title, subtitle: album.artist,
-                                               coverURL: album.coverURL, addedAt: entry.playedAt, online: albums)
-            default:
-                guard let origin = modules.origin(providerID: entry.providerID),
-                      let route = modules.collectionRoute(providerID: entry.providerID, kind: "album", itemID: entry.itemID) else { return nil }
-                var item = LibraryShelfItem(id: entry.id, title: entry.title, subtitle: entry.subtitle, coverURL: entry.coverURL,
-                                            origin: origin, route: route, addedAt: entry.playedAt)
-                item.trackKey = CollectionTrackIndex.key(provider: entry.providerID, kind: "album", id: entry.itemID)
-                return item
-            }
-        }
-    }
 }
 
-/// 首页一行横向滑动的专辑与歌单；超过一行能放的数量时标题带箭头，点开查看全部。
-private struct LibraryShelfRow: View {
-    let title: LocalizedStringKey
+/// 最近添加只在首页展示最新十项，固定两列、最多五行。
+private struct RecentlyAddedGrid: View {
     let items: [LibraryShelfItem]
-    private static let rowLimit = 20
-    @Environment(\.dynamicTypeSize) private var typeSize
+    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     var body: some View {
-        // 卡片宽度、间距与网易云、DizzyLab 首页的横向封面行一致。
         VStack(alignment: .leading, spacing: 14) {
-            // 与网易云、QQ 音乐首页的分区标题一致：可展开时整行是链接，右侧带箭头。
-            if items.count > Self.rowLimit {
-                NavigationLink(value: AppRoute.page { LibraryShelfGridPage(title: title, items: items) }) {
-                    HStack {
-                        Text(title).font(.title2.bold())
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                    .foregroundStyle(.primary)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityHint("查看全部")
-            } else {
-                Text(title).font(.title2.bold()).accessibilityAddTraits(.isHeader)
-            }
-            ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 14) {
-                    ForEach(items.prefix(Self.rowLimit)) { item in
-                        LibraryShelfCard(item: item, showsOrigin: true).frame(width: typeSize.isAccessibilitySize ? 220 : 156)
-                    }
+            Text("最近添加").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 22) {
+                ForEach(items.prefix(10)) { item in
+                    LibraryShelfCard(item: item, showsOrigin: true)
                 }
             }
-            .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, 20, for: .scrollContent)
-            .padding(.horizontal, -20)
         }
     }
 }
 
-/// 「查看全部」：同一份条目铺成网格。
-private struct LibraryShelfGridPage: View {
-    let title: LocalizedStringKey
-    let items: [LibraryShelfItem]
+/// 从分类列表进入，按实际播放顺序展示歌曲。
+private struct RecentlyPlayedPage: View {
+    @Environment(PlaybackHistoryStore.self) private var history
+    @Environment(OfflineLibraryStore.self) private var library
+    @Environment(ModuleRegistry.self) private var modules
+    @Environment(PlayerStore.self) private var player
 
     var body: some View {
+        let songs = history.availableSongs(library: library, modules: modules)
+        let tracks = songs.map(\.track)
         ScrollView {
-            LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
-                ForEach(items) { LibraryShelfCard(item: $0, showsOrigin: true) }
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if songs.isEmpty {
+                    ContentUnavailableView("暂无最近播放", systemImage: "clock",
+                                           description: Text("播放过的歌曲会显示在这里。"))
+                } else {
+                    AlbumPlaybackActions(isEmpty: false) { shuffled in
+                        player.play(tracks, startAt: shuffled ? Int.random(in: tracks.indices) : 0)
+                        if player.isShuffled != shuffled { player.toggleShuffle() }
+                    }
+                    .padding(.bottom, 12)
+                    ForEach(songs.enumerated(), id: \.element.id) { index, song in
+                        LibrarySongRow(song: song) { player.play(tracks, startAt: index) }
+                    }
+                }
             }
             .padding(.horizontal, 20).padding(.vertical, 8)
         }
         .dizzyPageBackground()
-        .navigationTitle(title)
+        .navigationTitle("最近播放")
         .navigationBarTitleDisplayMode(.large)
     }
 }
 
+private extension PlaybackHistoryStore {
+    func availableSongs(library: OfflineLibraryStore, modules: ModuleRegistry) -> [LibrarySong] {
+        songs.compactMap { entry in
+            let track = entry.track
+            if track.localSource != nil {
+                guard library.localFile(for: track) != nil else { return nil }
+                return LibrarySong(track: track, origin: .local)
+            }
+            guard let provider = track.playbackProviderID,
+                  let origin = modules.origin(providerID: provider) else { return nil }
+            return LibrarySong(track: track, origin: origin)
+        }
+    }
+}
+
 /// 资料库首页的分类列表：与「音乐」App 资料库相同，一行一类，图标用主题色，数量计入全部来源。
-private struct LibraryQuickTiles: View {
+private struct LibraryCategoryRows: View {
+    let recentlyPlayedCount: Int
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(SavedLibraryStore.self) private var saved
     @Environment(ModuleRegistry.self) private var modules
@@ -167,50 +164,32 @@ private struct LibraryQuickTiles: View {
         let contents = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules)
         let songs = contents.songs(.all)
         let rows = [
-            Row(title: "喜欢", systemImage: "heart", count: favorites.songs.count, route: .favorites),
-            Row(title: "歌单", systemImage: "music.note.list", count: contents.playlists(.all).count, route: .libraryPlaylists(.all)),
+            Row(title: "播放列表", systemImage: "music.note.list", count: contents.playlists(.all).count + 1, route: .libraryPlaylists(.all)),
             Row(title: "专辑", systemImage: "square.stack", count: contents.albums(.all).count, route: .libraryAlbums(.all)),
             Row(title: "歌曲", systemImage: "music.note", count: songs.count, route: .librarySongs(.all)),
             Row(title: "歌手", systemImage: "music.microphone", count: LibraryContents.artists(in: songs).count,
                 route: .libraryArtists(.all)),
+            Row(title: "最近播放", systemImage: "clock", count: recentlyPlayedCount,
+                route: .page { RecentlyPlayedPage() }),
         ]
-        VStack(spacing: 0) {
-            ForEach(rows) { row in
-                NavigationLink(value: row.route) {
-                    HStack(spacing: 14) {
-                        Image(systemName: row.systemImage)
-                            .font(.title3)
-                            .foregroundStyle(DizzyPalette.accent)
-                            .frame(width: iconWidth)
-                            .accessibilityHidden(true)
-                        Text(row.title).font(.title3).foregroundStyle(DizzyPalette.text)
-                        Spacer(minLength: 8)
-                        Text("\(row.count)").font(.body).monospacedDigit().foregroundStyle(DizzyPalette.mutedText)
-                        Image(systemName: "chevron.right")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 52)
-                    .contentShape(.rect)
+        ForEach(rows) { row in
+            NavigationLink(value: row.route) {
+                HStack(spacing: 14) {
+                    Image(systemName: row.systemImage)
+                        .font(.title3)
+                        .foregroundStyle(DizzyPalette.accent)
+                        .frame(width: iconWidth)
+                        .accessibilityHidden(true)
+                    Text(row.title).font(.title3).foregroundStyle(DizzyPalette.text)
+                    Spacer(minLength: 8)
+                    Text("\(row.count)").font(.body).monospacedDigit().foregroundStyle(DizzyPalette.mutedText)
                 }
-                .buttonStyle(LibraryRowButtonStyle())
-                if row.id != rows.last?.id {
-                    Divider().padding(.leading, 16 + iconWidth + 14)
-                }
+                .frame(minHeight: 44)
             }
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+            .listRowBackground(Color.clear)
         }
-        .background(DizzyPalette.surface, in: .rect(cornerRadius: 20, style: .continuous))
-        .clipShape(.rect(cornerRadius: 20, style: .continuous))
-    }
-}
-
-/// 列表行按下时整行变暗，与系统列表一致。
-private struct LibraryRowButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(configuration.isPressed ? Color.primary.opacity(0.08) : .clear)
     }
 }
 
@@ -494,7 +473,7 @@ struct LibraryShelfCard: View {
     @Environment(FavoritesStore.self) private var favorites
 
     var body: some View {
-        let link = NavigationLink(value: item.route) {
+        let link = AlbumNavigationLink(value: item.route, artworkURL: item.coverURL) {
             VStack(alignment: .leading, spacing: 6) {
                 ArtworkImage(url: item.coverURL)
                     .libraryOriginMark(showsOrigin ? item.origin : nil, item: item)
@@ -584,7 +563,7 @@ struct LibrarySearchSection: View {
                         allResults: result.collections.count > collections.count || result.songs.count > songs.count
                             ? .librarySearch(query) : nil) {
                 ForEach(collections) { item in
-                    NavigationLink(value: item.route) {
+                    AlbumNavigationLink(value: item.route, artworkURL: item.coverURL) {
                         SearchMediaRow(title: item.title, subtitle: "\(item.origin.label) · \(item.subtitle)", artworkURL: item.coverURL)
                     }
                     .buttonStyle(.plain)
@@ -616,7 +595,7 @@ struct LibrarySearchPage: View {
             if !result.collections.isEmpty {
                 Section("专辑与歌单") {
                     ForEach(result.collections) { item in
-                        NavigationLink(value: item.route) {
+                        AlbumNavigationLink(value: item.route, artworkURL: item.coverURL) {
                             SearchMediaRow(title: item.title, subtitle: "\(item.origin.label) · \(item.subtitle)", artworkURL: item.coverURL,
                                            showsChevron: false)
                         }
@@ -767,11 +746,11 @@ struct LocalPlaylistsPage: View {
     var body: some View {
         let online = LibraryContents(library: library, saved: saved, mirror: mirror, favorites: favorites, modules: modules).online(.playlist, filter)
         ScrollView {
-            LocalPlaylistsView(online: online, showsLocal: filter.includes(.local), showsOrigin: filter == .all)
+            LocalPlaylistsView(online: online, showsLocal: filter.includes(.local), showsOrigin: filter == .all, showsFavorites: filter == .all)
             .padding(.horizontal, 20).padding(.vertical, 8)
         }
         .dizzyPageBackground()
-        .navigationTitle("歌单")
+        .navigationTitle("播放列表")
         .navigationBarTitleDisplayMode(.large)
     }
 }
@@ -949,9 +928,17 @@ private struct LocalLibraryAlbumCard: View {
     var showsOrigin = false
     let delete: () -> Void
     @Environment(\.openRoute) private var openRoute
+    @Environment(\.albumNavigationNamespace) private var transitionNamespace
     @State private var confirmingRemoval = false
+    @State private var navigationPreparation = AlbumNavigationPreparation()
+    @State private var transitionID = UUID()
     private var isSelected: Bool { selection.ids.contains(album.id) }
     private var isDownloaded: Bool { shelf.downloadedAlbumID != nil }
+
+    private var transitionSource: AlbumNavigationSource? {
+        guard let transitionNamespace, let artworkURL = album.coverURL else { return nil }
+        return AlbumNavigationSource(id: transitionID, namespace: transitionNamespace, artworkURL: artworkURL)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -987,6 +974,17 @@ private struct LocalLibraryAlbumCard: View {
             .buttonStyle(.plain)
         }
         .prefetchAlbumArtwork(url: album.coverURL)
+        .task(id: navigationPreparation.request) {
+            guard let pending = navigationPreparation.request else { return }
+            if let route = await navigationPreparation.finish(pending), !selection.isSelecting,
+               shelf.route == pending.route, album.coverURL == pending.artworkURL {
+                navigate(to: route)
+            }
+        }
+        .onChange(of: selection.isSelecting) { navigationPreparation.cancel() }
+        .onChange(of: album.id) { navigationPreparation.cancel() }
+        .onChange(of: album.coverURL) { navigationPreparation.cancel() }
+        .onDisappear { navigationPreparation.cancel() }
         .libraryRemovalConfirmation(shelf.removal, title: album.title, isPresented: $confirmingRemoval)
     }
 
@@ -1009,6 +1007,7 @@ private struct LocalLibraryAlbumCard: View {
                             .padding(8)
                     }
                 }
+                .environment(\.albumNavigationSource, transitionSource)
 
         }
         .buttonStyle(.plain)
@@ -1021,7 +1020,13 @@ private struct LocalLibraryAlbumCard: View {
         if selection.isSelecting {
             guard !isDeleting else { return }
             selection.toggle(album.id)
-        } else { openRoute(shelf.route) }
+        } else if let route = navigationPreparation.begin(shelf.route, artworkURL: album.coverURL) {
+            navigate(to: route)
+        }
+    }
+
+    private func navigate(to route: AppRoute) {
+        openRoute(transitionSource.map { route.zooming(from: $0.id) } ?? route)
     }
 }
 

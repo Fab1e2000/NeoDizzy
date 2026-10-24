@@ -10,6 +10,8 @@ struct NowPlayingBottomControls: View {
     @Environment(\.accessibilityReduceMotion)
     private var accessibilityReduceMotion
 
+    @Environment(\.nowPlayingLayout) private var layout
+
     let song: Track
     @Binding var page: NowPlayingPage
     let hasLyrics: Bool
@@ -19,49 +21,30 @@ struct NowPlayingBottomControls: View {
     let isInterfaceHidden: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Reserved utility row follows MeloX's overlay geometry. LocalLyrics
-            // has no independently selectable translation/romanization channels.
-            Color.clear.frame(height: Self.utilityHeight)
+        GeometryReader { proxy in
+            ZStack {
+                interfaceLayer(.progress) {
+                    NowPlayingProgressControl(song: song)
+                }
+                .position(x: proxy.size.width / 2, y: layout.controlsY(587))
 
-            coreControls
+                interfaceLayer(.transport) {
+                    NowPlayingTransportControls()
+                }
+                .position(x: proxy.size.width / 2, y: layout.controlsY(664))
+
+                interfaceLayer(.volume) {
+                    NowPlayingVolumeControl()
+                }
+                .position(x: proxy.size.width / 2, y: layout.controlsY(756.5))
+
+                interfaceLayer(.pageSelector) {
+                    NowPlayingPageSelector(page: $page, hasLyrics: hasLyrics)
+                }
+                .position(x: proxy.size.width / 2, y: layout.controlsY(811.23))
+            }
         }
         .frame(height: Self.overlayHeight)
-    }
-
-    private var coreControls: some View {
-        VStack(spacing: 0) {
-            interfaceLayer(.progress) {
-                NowPlayingProgressControl(song: song)
-            }
-
-            Color.clear
-                .frame(height: 19)
-
-            interfaceLayer(.transport) {
-                NowPlayingTransportControls()
-            }
-
-            Color.clear
-                .frame(height: 31)
-
-            interfaceLayer(.volume) {
-                NowPlayingVolumeControl()
-            }
-
-            Color.clear
-                .frame(height: 3)
-
-            interfaceLayer(.pageSelector) {
-                NowPlayingPageSelector(page: $page, hasLyrics: hasLyrics)
-            }
-        }
-        .frame(height: Self.coreHeight)
-        .background {
-            Color.clear
-                .contentShape(.rect)
-                .onTapGesture {}
-        }
     }
 
     private func interfaceLayer<Content: View>(

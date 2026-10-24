@@ -13,7 +13,7 @@ struct NowPlayingQueuePage: View {
     let onSongHeaderHiddenChange: (Bool) -> Void
     let onSongHeaderOffsetChange: (CGFloat) -> Void
 
-    @State private var songHeaderHeight: CGFloat = 0
+    @State private var scrollOffset: CGFloat = 0
     @State private var isSongHeaderHidden = false
     @State private var isSongHeaderAtRest = true
 
@@ -39,46 +39,14 @@ struct NowPlayingQueuePage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            NowPlayingQueueModeControls()
-                .padding(.vertical, 8)
-                .frame(height: isSongHeaderHidden ? 60 : 0)
-                .clipped()
-                .opacity(isSongHeaderHidden ? 1 : 0)
-                .allowsHitTesting(isSongHeaderHidden)
-                .accessibilityHidden(!isSongHeaderHidden)
-
             List {
-                if presentation == .portrait {
-                    Group {
-                        if showsSongHeader {
-                            NowPlayingSongHeader(
-                                song: song,
-                                artworkNamespace: artworkNamespace,
-                                usesReferenceLayout: true,
-                                usesArtworkTransition:
-                                    usesArtworkTransition
-                                    && isSongHeaderAtRest
-                            )
-                        } else {
-                            Color.clear
-                                .frame(
-                                    height:
-                                        NowPlayingSongHeader
-                                        .referenceHeight
-                                )
-                        }
-                    }
-                    .onGeometryChange(for: CGFloat.self) { geometry in
-                        geometry.size.height
-                    } action: { newHeight in
-                        if newHeight > 0 {
-                            songHeaderHeight = newHeight
-                        }
-                    }
+                // Permanent space for the song header and mode controls. The
+                // overlay moves over this space without resizing the List.
+                Color.clear
+                    .frame(height: songHeaderHeight + 60)
                     .listRowInsets(.init())
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
-                }
 
                 Section {
                     Text("继续播放")
@@ -112,21 +80,6 @@ struct NowPlayingQueuePage: View {
                         }
                         .onMove(perform: moveQueueItems)
                     }
-                } header: {
-                    NowPlayingQueueModeControls()
-                        .padding(.vertical, 8)
-                        .frame(
-                            height:
-                                isSongHeaderHidden
-                                    ? 0
-                                    : 60
-                        )
-                        .clipped()
-                        .opacity(isSongHeaderHidden ? 0 : 1)
-                        .allowsHitTesting(!isSongHeaderHidden)
-                        .accessibilityHidden(isSongHeaderHidden)
-                        .textCase(nil)
-                        .listRowInsets(.init())
                 }
             }
             .listStyle(.plain)
@@ -137,15 +90,34 @@ struct NowPlayingQueuePage: View {
             .environment(\.defaultMinListRowHeight, 1)
             .environment(\.defaultMinListHeaderHeight, 0)
             .environment(\.editMode, .constant(.active))
+            .mask {
+                Rectangle()
+                    .padding(.top, modeControlsOffset + 60)
+            }
+            .overlay(alignment: .top) {
+                NowPlayingQueueModeControls()
+                    .padding(.vertical, 8)
+                    .frame(height: 60)
+                    .offset(y: modeControlsOffset)
+            }
+            .overlay(alignment: .top) {
+                if presentation == .portrait && showsSongHeader {
+                    NowPlayingSongHeader(
+                        song: song,
+                        artworkNamespace: artworkNamespace,
+                        usesReferenceLayout: true,
+                        usesArtworkTransition: usesArtworkTransition && isSongHeaderAtRest
+                    )
+                    .frame(height: songHeaderHeight)
+                    .offset(y: -scrollOffset)
+                    .clipped()
+                }
+            }
             .padding(.bottom, bottomContentInset)
             .onScrollGeometryChange(
                 for: CGFloat.self,
                 of: { geometry in
-                    max(
-                        geometry.contentOffset.y
-                            + geometry.contentInsets.top,
-                        0
-                    )
+                    min(max(geometry.contentOffset.y + geometry.contentInsets.top, 0), songHeaderHeight)
                 }
             ) { _, offset in
                 updateSongHeaderState(for: offset)
@@ -153,6 +125,7 @@ struct NowPlayingQueuePage: View {
         }
         .onAppear {
             if presentation == .portrait {
+                scrollOffset = 0
                 isSongHeaderHidden = false
                 isSongHeaderAtRest = true
                 onSongHeaderHiddenChange(false)
@@ -173,6 +146,14 @@ struct NowPlayingQueuePage: View {
         }
     }
 
+    private var songHeaderHeight: CGFloat {
+        presentation == .portrait ? NowPlayingSongHeader.referenceHeight : 0
+    }
+
+    private var modeControlsOffset: CGFloat {
+        max(songHeaderHeight - scrollOffset, 0)
+    }
+
     private var bottomContentInset: CGFloat {
         presentation == .portrait
             ? NowPlayingBottomControls.coreHeight
@@ -181,6 +162,7 @@ struct NowPlayingQueuePage: View {
 
     private func updateSongHeaderState(for offset: CGFloat) {
         guard presentation == .portrait else { return }
+        scrollOffset = offset
 
         onSongHeaderOffsetChange(
             -min(offset, max(songHeaderHeight, 0))

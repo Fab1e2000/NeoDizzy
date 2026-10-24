@@ -37,7 +37,7 @@ CASES = {
     "remove-all": ("dizzylab", "netease", "qqmusic"),
 }
 COPY_ROOTS = (
-    "NeoDizzy", "NeoDizzyMac", "NeoDizzyWidget", "WidgetShared",
+    "NeoDizzy", "NeoDizzyWidget", "WidgetShared",
     "NeoDizzyTests", "NeoDizzy.xcodeproj", "Packages", "Config", "scripts", "project.yml",
 )
 EXCLUDED_NAMES = {".git", ".build", "build", "dist", "xcuserdata", ".DS_Store", "__pycache__"}
@@ -165,7 +165,7 @@ def read_module_id(source_root, relative):
 def rewrite_project_membership(source, remove_paths):
     """Delete only removed module entries in the NeoDizzy synced-folder exceptions.
 
-    XcodeGen lists each excluded iOS view in the macOS membership exceptions.
+    XcodeGen records per-target exclusions in synced-folder membership exceptions.
     A stale entry can make Xcode treat a deleted file as an explicit build input.
     This changes assembly metadata, not a target, build setting, or host source.
     """

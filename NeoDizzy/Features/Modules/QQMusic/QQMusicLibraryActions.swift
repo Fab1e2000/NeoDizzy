@@ -4,13 +4,16 @@ struct QQMusicPlaylistPicker: View {
     let songMid: String
     @Environment(QQMusicStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @State private var showsLogin = false
     @State private var loading = true
     @State private var adding: String?
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            List {
+        Section("QQ 音乐") {
+            if store.credential == nil {
+                Button("登录 QQ 音乐") { showsLogin = true }
+            } else {
                 if let error { Text(error).foregroundStyle(.secondary) }
                 if loading && store.library.writablePlaylists.isEmpty { ProgressView("正在加载歌单") }
                 else if !loading && error == nil && store.library.writablePlaylists.isEmpty {
@@ -41,14 +44,14 @@ struct QQMusicPlaylistPicker: View {
                 }
                 if !loading && error != nil { Button("重新加载") { Task { await load() } } }
             }
-            .navigationTitle("加入歌单")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消", role: .cancel) { dismiss() } } }
-            .task(id: store.revision) { adding = nil; await load() }
         }
+        .sheet(isPresented: $showsLogin) { QQMusicLoginView(store: store) }
+        .task(id: store.revision) { adding = nil; await load() }
     }
 
     private func load() async {
         let revision = store.revision
+        guard store.credential != nil else { loading = false; return }
         loading = true; error = nil
         defer { if store.revision == revision { loading = false } }
         do { try await store.library.loadPlaylists() }
@@ -73,10 +76,7 @@ struct QQMusicCollectionFavorite: View {
             guard store.credential != nil else { store.showsAccount = true; return }
             if selected == true { confirmsRemoval = true } else { toggle() }
         } label: {
-            ZStack {
-                Image(systemName: owned || selected == true ? "checkmark" : "plus").opacity(working ? 0 : 1)
-                if working { ProgressView() }
-            }.font(.title2.weight(.semibold)).frame(width: 30, height: 30)
+            CollectionLibraryActionLabel(isAdded: owned || selected == true, isWorking: working)
         }
         .disabled(working || owned || (store.credential != nil && selected == nil))
         .accessibilityLabel(owned ? "我的歌单" : selected == true ? "从资料库移除" : "加入资料库")

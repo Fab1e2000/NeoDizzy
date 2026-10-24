@@ -102,3 +102,10 @@ THE SOFTWARE.
 
 - 来源：[Yyyangshenghao/simple-music](https://github.com/Yyyangshenghao/simple-music)，参考提交 `b7e1943ceb0cb8861bf3b0f1fa107c84e3a2ec49` 的 [`server/lib/qq-client.ts`](https://github.com/Yyyangshenghao/simple-music/blob/b7e1943ceb0cb8861bf3b0f1fa107c84e3a2ec49/server/lib/qq-client.ts)。
 - 许可证：GNU GPL v3.0。QQ 分类搜索仅对照该项目的 module 键请求信封及省略 `comm` 的协议行为，以 Swift 实现；未嵌入其服务程序。
+
+## LNPopupUI / LNPopupController
+
+- 来源：https://github.com/LeoNatan/LNPopupUI （`60853564423524c9ed15cc74c5969d3e1ca666f1`）与 https://github.com/LeoNatan/LNPopupController （4.6.1）。
+- MIT 许可证；源码及许可保留在 `Packages/LNPopupUI`、`Packages/LNPopupController`，应用内附带 `LNPopupLicenses.txt`。
+- 主应用采用上述固定版本：LNPopupUI 移除重复的 split-view API 声明、依赖指向本地 LNPopupController；LNPopupController 移除不存在的工程排除项。运行时实现未修改。
+- 用于 iOS 迷你播放器与全屏转场；全屏内容使用原有 MeloX 移植实现。

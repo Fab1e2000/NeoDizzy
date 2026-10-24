@@ -40,6 +40,31 @@ import Testing
         #expect(try await client().likedSongs().map(\.mid) == ["b", "a", "c"])
     }
 
+    @Test func libraryCollectionsSeedDetailArtworkWithoutADetailRequest() async throws {
+        configure { _, call in
+            switch call["method"] as? String {
+            case "GetPlaylistByUin":
+                return .init(data: ["v_playlist": [["tid": 123, "dirId": 7, "title": "Saved playlist", "picUrl": "https://example.invalid/saved.jpg"]], "bFinish": true, "total": 1])
+            case "CgiGetPlaylistFavInfo":
+                return .init(data: ["v_list": [], "hasmore": 0, "total": 0])
+            case "CgiGetAlbumFavInfo":
+                return .init(data: ["v_list": [["id": 7, "mid": "savedAlbum", "name": "Saved album"]], "hasmore": 0, "total": 1])
+            default:
+                Issue.record("Unexpected detail request while seeding presentation")
+                throw QQMusicError.invalidResponse
+            }
+        }
+        let library = library(), cache = QQMusicContentCache()
+        try await library.loadPlaylists()
+        try await library.loadAlbums()
+        let playlist = cache.page(.playlist("123"), revision: 0, library: library)
+        #expect(playlist.title == "Saved playlist" && playlist.artwork == library.playlists.first?.coverURL)
+        #expect(!playlist.hasLoaded && playlist.songs.isEmpty)
+        let album = cache.page(.album("savedAlbum"), revision: 0, library: library)
+        #expect(album.title == "Saved album" && album.artwork == library.albums.first?.coverURL)
+        #expect(!album.hasLoaded && album.songs.isEmpty)
+    }
+
     @Test func partialOrRepeatedPagesDoNotReplaceTheSnapshot() async throws {
         configure { _, _ in .init(data: ["total_song_num": 1, "hasmore": 0, "songlist": [Self.song("saved", 1)]]) }
         let library = library()

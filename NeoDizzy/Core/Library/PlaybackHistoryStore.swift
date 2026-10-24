@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 资料库「最近播放」：一首歌真正开始播放时记下它所在的专辑，最新的在前，最多 30 张。
+/// 实际开始播放时记录歌曲；保留专辑历史供搜索推荐和旧封面恢复使用。
 @MainActor
 @Observable
 final class PlaybackHistoryStore {
@@ -25,6 +25,15 @@ final class PlaybackHistoryStore {
         var id: String { "\(providerID)/album/\(itemID)" }
     }
 
+    nonisolated struct SongEntry: Codable, Identifiable, Sendable {
+        let track: Track
+        let playedAt: Date
+        var id: String { track.id }
+    }
+
+    static let songLimit = 100
+    private(set) var songs: [SongEntry]
+    private static let songsKey = "playbackHistory.songs.v1"
     static let limit = 30
     private(set) var entries: [Entry]
     @ObservationIgnored private let defaults: UserDefaults
@@ -36,10 +45,18 @@ final class PlaybackHistoryStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        songs = defaults.data(forKey: Self.songsKey).flatMap { try? JSONDecoder().decode([SongEntry].self, from: $0) } ?? []
         entries = defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode([Entry].self, from: $0) } ?? []
     }
 
     func record(_ track: Track, at date: Date = .now) {
+        // An unregistered source must not publish late playback history.
+        guard track.localSource != nil || track.playbackProviderID.map({ providers[$0] != nil }) == true else { return }
+        songs.removeAll { $0.id == track.id }
+        songs.insert(SongEntry(track: track, playedAt: date), at: 0)
+        songs = Array(songs.prefix(Self.songLimit))
+        if let data = try? JSONEncoder().encode(songs) { defaults.set(data, forKey: Self.songsKey) }
+
         let kind: Entry.Kind, itemID: String, sourceID: String?
         if let local = track.localSource {
             kind = .localAlbum; itemID = local.albumID; sourceID = nil

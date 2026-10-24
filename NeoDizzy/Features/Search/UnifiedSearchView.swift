@@ -28,7 +28,7 @@ struct UnifiedSearchView: View {
         .scrollDismissesKeyboard(.interactively)
         .dizzyPageBackground()
         .navigationTitle("搜索")
-        .navigationBarTitleDisplayMode(.large)
+        .rootTabNavigationBehavior()
         // 与 MeloX 相同：搜索框固定在页面顶部，不挂在标签栏上；手势收起键盘只收起键盘，关键词和结果保留。
         .searchable(text: $search.text, isPresented: $search.isActive,
                     placement: .navigationBarDrawer(displayMode: .always), prompt: Text("歌曲、专辑、歌单、社团"))
@@ -103,10 +103,12 @@ private struct ContinueListening: View {
         } else {
             SearchGroup(title: String(localized: "接着听")) {
                 ForEach(entries) { entry in
-                    NavigationLink(value: route(entry)) {
-                        SearchMediaRow(title: entry.title, subtitle: "\(source(entry)) · \(entry.subtitle)", artworkURL: entry.coverURL)
+                    if let route = route(entry) {
+                        AlbumNavigationLink(value: route, artworkURL: entry.coverURL) {
+                            SearchMediaRow(title: entry.title, subtitle: "\(source(entry)) · \(entry.subtitle)", artworkURL: entry.coverURL)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }

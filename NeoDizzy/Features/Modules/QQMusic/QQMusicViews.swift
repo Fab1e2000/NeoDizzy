@@ -52,18 +52,36 @@ struct QQMusicCollectionView: View {
     @Environment(QQMusicStore.self) private var store
     @Environment(PlayerStore.self) private var player
     @Environment(QQMusicContentCache.self) private var cache
+    @Environment(AccountLibraryMirror.self) private var accountLibrary
+    @Environment(SavedLibraryStore.self) private var savedLibrary
     @Environment(\.scenePhase) private var scenePhase
-    @State private var paginationRequest = 0
-    @State private var handledPaginationRequest = 0
     @State private var foregroundRevision = 0
-    private var model: QQMusicPageModel { cache.page(route, revision: store.revision) }
+    private var model: QQMusicPageModel { cache.page(route, revision: store.revision, library: store.library) }
 
     private var isSearch: Bool { if case .search = route { true } else { false } }
     private var isDirectory: Bool {
         switch route { case .artists, .artistAlbums, .newAlbums: true; default: false }
     }
     private var contentRevision: Int { QQMusicPageModel.contentRevision(store: store, route: route) }
+    private var artwork: URL? { model.artwork ?? libraryArtwork }
+    private var libraryArtwork: URL? {
+        let kind: MirroredCollection.Kind
+        let id: String
+        switch route {
+        case .album(let albumID): kind = .album; id = albumID
+        case .playlist(let playlistID): kind = .playlist; id = playlistID
+        default: return nil
+        }
+        return accountLibrary.collections.first {
+            $0.providerID == "qqmusic" && $0.kind == kind && $0.itemID == id
+        }?.coverURL ?? savedLibrary.items.first {
+            $0.providerID == "qqmusic" && $0.kind.rawValue == kind.rawValue && $0.itemID == id
+        }?.coverURL
+    }
     private var isAlbum: Bool { if case .album = route { true } else { false } }
+    private var descriptionTitle: String? {
+        switch route { case .album: "专辑介绍"; case .playlist: "歌单介绍"; default: nil }
+    }
     private var needsLogin: Bool { route == .daily && store.credential == nil }
     private var tracks: [Track] { model.songs.map(\.track) }
 
@@ -86,7 +104,7 @@ struct QQMusicCollectionView: View {
                         QQMusicResultStatus(model: model, isEmpty: model.albums.isEmpty && model.artists.isEmpty) {
                             await load(append: model.retryAppend)
                         }
-                        loadMore
+                        paginationFooter
                     }.padding(20)
                 }.dizzyPageBackground()
             } else if isSearch {
@@ -95,13 +113,13 @@ struct QQMusicCollectionView: View {
                         Text(model.title).font(.title2.bold())
                         QQMusicSongRows(songs: model.songs)
                         status
-                        loadMore
+                        paginationFooter
                     }.padding(20)
                 }.dizzyPageBackground()
             } else {
-                AlbumDetailScrollView(artworkURL: model.artwork) {
+                AlbumDetailScrollView(artworkURL: artwork) {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        AlbumHero(artworkURL: model.artwork, title: model.title.isEmpty ? route.title : model.title,
+                        AlbumHero(artworkURL: artwork, title: model.title.isEmpty ? route.title : model.title,
                                   metadata: model.hasLoaded ? "\(tracks.count) 首歌曲" : "正在加载…") {
                             Text(isAlbum ? model.songs.first?.artist ?? "QQ 音乐" : "QQ 音乐")
                         } actions: {
@@ -109,6 +127,13 @@ struct QQMusicCollectionView: View {
                                 collectionActions
                             }
                                 .padding(.horizontal, 20)
+                        }
+                        if let descriptionTitle, !model.detailDescription.isEmpty {
+                            AlbumDescriptionExcerpt(text: model.detailDescription, title: model.title,
+                                                    subtitle: isAlbum ? model.songs.first?.artist : nil,
+                                                    accessibilityTitle: descriptionTitle)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 20)
                         }
                         if case .artist(let mid) = route {
                             NavigationLink(value: AppRoute.qqmusic(.artistAlbums(mid))) {
@@ -120,13 +145,14 @@ struct QQMusicCollectionView: View {
                             }
                         }
                         if case .song = route, let song = model.songs.first, !song.albumMid.isEmpty {
-                            NavigationLink(value: AppRoute.qqmusic(.album(song.albumMid))) {
+                            AlbumNavigationLink(value: AppRoute.qqmusic(.album(song.albumMid)), artworkURL: song.coverURL,
+                                                zoomsFromArtwork: false) {
                                 Label(song.albumTitle.isEmpty ? "前往专辑" : song.albumTitle, systemImage: "square.stack")
                             }.padding(.horizontal, 20).padding(.bottom, 12)
                         }
                         QQMusicSongRows(songs: model.songs, numbered: isAlbum).padding(.horizontal, 20)
                         status.padding(20)
-                        loadMore.padding(.horizontal, 20)
+                        paginationFooter.padding(.horizontal, 20)
                     }.padding(.bottom, 32)
                 }
             }
@@ -147,13 +173,6 @@ struct QQMusicCollectionView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && route == .daily { foregroundRevision += 1 }
         }
-        .task(id: paginationRequest) {
-            if paginationRequest > handledPaginationRequest {
-                handledPaginationRequest = paginationRequest
-                await load(append: true)
-            }
-        }
-        .onDisappear { handledPaginationRequest = paginationRequest }
         .refreshable { await load() }
     }
 
@@ -187,11 +206,12 @@ struct QQMusicCollectionView: View {
         }
     }
 
-    @ViewBuilder private var loadMore: some View {
+    @ViewBuilder private var paginationFooter: some View {
         if model.more && model.error == nil && !model.loading {
-            Button("加载更多") { paginationRequest += 1 }
-                .buttonStyle(.bordered)
-                .frame(maxWidth: .infinity).padding(.vertical, 12)
+            AutoLoadMoreFooter(progress: model.songs.count + model.albums.count + model.artists.count,
+                               load: { await load(append: true) }) {
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
+            }
         }
     }
 
@@ -220,6 +240,7 @@ struct QQMusicSongRows: View {
     @Environment(QQMusicStore.self) private var store
     @Environment(PlayerStore.self) private var player
     @Environment(\.openRoute) private var openRoute
+    @State private var albumNavigation = AlbumNavigationPreparation()
     #if os(iOS)
     @Environment(DownloadStore.self) private var downloads
     @State private var showsDownloadQueue = false
@@ -236,6 +257,9 @@ struct QQMusicSongRows: View {
         #if os(iOS)
         .sheet(isPresented: $showsDownloadQueue) { DownloadQueueSheet() }
         #endif
+        .preparedAlbumNavigation(albumNavigation)
+        .onChange(of: songs.map(\.mid)) { _, _ in albumNavigation.cancel() }
+        .onChange(of: store.revision) { _, _ in albumNavigation.cancel() }
     }
 
     private func actions(_ song: QQMusicSong) -> [SongRowAction] {
@@ -246,7 +270,10 @@ struct QQMusicSongRows: View {
         ]
         if !song.albumMid.isEmpty {
             actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") {
-                openRoute(.qqmusic(.album(song.albumMid)))
+                guard store.active else { return }
+                if let route = albumNavigation.begin(.qqmusic(.album(song.albumMid)), artworkURL: QQMusicSong.cover(albumMid: song.albumMid)) {
+                    openRoute(route)
+                }
             })
         }
         actions.append(.init(id: "similar", title: "相似歌曲", systemImage: "sparkles") {
@@ -324,7 +351,7 @@ struct QQMusicSearchPage: View {
                 case .artists: QQMusicArtistRows(artists: model.artists)
                 case .playlists:
                     ForEach(model.playlists) { playlist in
-                        NavigationLink(value: AppRoute.qqmusic(.playlist(playlist.id))) {
+                        AlbumNavigationLink(value: AppRoute.qqmusic(.playlist(playlist.id)), artworkURL: playlist.coverURL) {
                             SearchMediaRow(title: playlist.title, subtitle: nil, artworkURL: playlist.coverURL, showsChevron: false)
                         }.buttonStyle(.plain)
                     }
@@ -351,7 +378,8 @@ struct QQMusicAlbumRows: View {
     let albums: [QQMusicAlbum]
     var body: some View {
         ForEach(albums) { album in
-            NavigationLink(value: AppRoute.qqmusic(.album(album.id))) {
+            AlbumNavigationLink(value: AppRoute.qqmusic(.album(album.id)), artworkURL: QQMusicSong.cover(albumMid: album.id),
+                                sourceArtworkURL: album.coverURL) {
                 SearchMediaRow(title: album.title,
                                subtitle: [album.artist, album.releaseDate].filter { !$0.isEmpty }.joined(separator: " · "),
                                artworkURL: album.coverURL, showsChevron: false)

@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 
@@ -6,12 +7,14 @@ struct DizzyLabPlayerActions: View {
     let onImportLyrics: (() -> Void)?
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
+    @Environment(DizzyLabContentCache.self) private var contentCache
     @Environment(\.openRoute) private var openRoute
     @State private var showsPlaylist = false
+    @State private var albumNavigation = AlbumNavigationPreparation()
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 4.25) {
             FavoriteButton(track: track, playerStyle: true)
-            NowPlayingMenuButton {
+            NowPlayingMenuButton(track: track) {
                 var items: [UIMenuElement] = [UIAction(title: "加入歌单", image: UIImage(systemName: "text.badge.plus")) { _ in showsPlaylist = true }] + menuItems()
                 if let onImportLyrics {
                     items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() })
@@ -19,29 +22,27 @@ struct DizzyLabPlayerActions: View {
                 return items
             }.frame(width: 44, height: 44)
         }.songPlaylistSheet(isPresented: $showsPlaylist, track: track)
+            .preparedAlbumNavigation(albumNavigation)
+            .onChange(of: track.id) { albumNavigation.cancel() }
+            .onReceive(NotificationCenter.default.publisher(for: .dizzyAccountDidChange)) { _ in albumNavigation.cancel() }
     }
     private func menuItems() -> [UIMenuElement] {
-        let discID = track.discID
-        let downloadedLabel = library.collection(provider: "dizzylab", kind: "album", id: discID)?.detail.summary.labelName
         var items: [UIMenuElement] = [
             UIAction(title: String(localized: "前往专辑「\(track.albumTitle)」"), image: UIImage(systemName: "music.note.list")) { _ in
-                openRoute(.disc(id: discID))
-            },
-            // DizzyLab 的「歌手」是发行专辑的社团；没下载过的专辑打开菜单时再查一次。
-            UIDeferredMenuElement.uncached { [openRoute] completion in
-                Task { @MainActor in
-                    var label = downloadedLabel
-                    if label == nil { label = try? await DizzyAPI.shared.discDetail(id: discID).summary.labelName }
-                    let artists = label.map { [(name: $0, route: AppRoute.label(name: $0))] } ?? []
-                    completion(ArtistMenu.elements(artists, title: "查看社团") { openRoute($0) })
-                }
+                openAlbum()
             },
         ]
         if player.isPreview {
             items.append(UIAction(title: String(localized: "前往专辑购买"), image: UIImage(systemName: "cart")) { _ in
-                openRoute(.disc(id: discID))
+                openAlbum()
             })
         }
         return items
+    }
+
+    private func openAlbum() {
+        let artwork = library.collection(provider: "dizzylab", kind: "album", id: track.discID)?.coverURL ?? track.coverURL
+        contentCache.remember([DiscSummary(id: track.discID, title: track.albumTitle, coverURL: artwork)])
+        if let route = albumNavigation.begin(.disc(id: track.discID), artworkURL: artwork) { openRoute(route) }
     }
 }

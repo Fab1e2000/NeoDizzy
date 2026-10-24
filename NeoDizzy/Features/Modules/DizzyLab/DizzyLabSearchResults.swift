@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DiscoverSearchResults: View {
     let model: SearchModel
+    @Environment(DizzyLabContentCache.self) private var contentCache
     var body: some View {
         if model.keyword != nil, let discs = model.discs {
             if !model.labels.isEmpty {
@@ -26,7 +27,7 @@ struct DiscoverSearchResults: View {
             SectionHeading(title: "作品")
             PagedContent(list: discs, emptyMessage: "没有找到相关作品。") { results in
                 ForEach(results) { result in
-                    NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
+                    AlbumNavigationLink(value: AppRoute.disc(id: result.disc.id), artworkURL: result.disc.coverURL) {
                         SearchResultRow(
                             coverURL: result.disc.coverURL,
                             title: result.disc.title,
@@ -36,6 +37,7 @@ struct DiscoverSearchResults: View {
                         .prefetchAlbumArtwork(url: result.disc.coverURL)
                     }
                     .buttonStyle(.plain)
+                    .onChange(of: result.disc, initial: true) { _, disc in contentCache.remember([disc]) }
                 }
             }
         }
@@ -90,6 +92,7 @@ private struct SearchResultRow: View {
 /// 统一搜索里的「DizzyLab」一组：最多两个社团、三张作品。
 struct DizzyLabSearchSection: View {
     let query: String
+    @Environment(DizzyLabContentCache.self) private var contentCache
     @State private var model = SearchModel()
 
     var body: some View {
@@ -117,10 +120,11 @@ struct DizzyLabSearchSection: View {
                         .buttonStyle(.plain)
                     }
                     ForEach(discs) { result in
-                        NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
+                        AlbumNavigationLink(value: AppRoute.disc(id: result.disc.id), artworkURL: result.disc.coverURL) {
                             SearchMediaRow(title: result.disc.title, subtitle: result.disc.labelName, artworkURL: result.disc.coverURL)
                         }
                         .buttonStyle(.plain)
+                        .onChange(of: result.disc, initial: true) { _, disc in contentCache.remember([disc]) }
                     }
                 }
             }
@@ -136,6 +140,7 @@ struct DizzyLabSearchSection: View {
 /// 「查看全部」：照搬 MeloX 的搜索结果，普通列表依次是社团、用户和作品，滚到底继续加载。
 struct DizzyLabSearchPage: View {
     let query: String
+    @Environment(DizzyLabContentCache.self) private var contentCache
     @State private var model = SearchModel()
 
     var body: some View {
@@ -169,11 +174,12 @@ struct DizzyLabSearchPage: View {
             if let discs, !discs.items.isEmpty {
                 Section("作品") {
                     ForEach(discs.items) { result in
-                        NavigationLink(value: AppRoute.disc(id: result.disc.id)) {
+                        AlbumNavigationLink(value: AppRoute.disc(id: result.disc.id), artworkURL: result.disc.coverURL) {
                             SearchMediaRow(title: result.disc.title, subtitle: result.disc.labelName ?? result.excerpt,
                                            artworkURL: result.disc.coverURL, showsChevron: false)
                         }
                         .songListRow()
+                        .onChange(of: result.disc, initial: true) { _, disc in contentCache.remember([disc]) }
                         .onAppear {
                             if result.id == discs.items.last?.id, discs.hasMore, !discs.isLoading { Task { await discs.loadMore() } }
                         }
