@@ -56,7 +56,8 @@ jobs:
           xcrun simctl boot "$SIMULATOR_ID"
           xcrun simctl bootstatus "$SIMULATOR_ID" -b
       - name: iOS tests
-        timeout-minutes: 12
+        # 冷启动的 runner 上编译测试 target 就要 8–12 分钟，12 分钟的上限没有余量（2026-10-24 的 PR #10 在编译阶段超时）；整个 job 仍受 45 分钟限制。
+        timeout-minutes: 25
         run: |
           xcodebuild -project NeoDizzy.xcodeproj -scheme NeoDizzy -configuration Debug \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" -derivedDataPath build/tests \
