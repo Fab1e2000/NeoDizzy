@@ -6,15 +6,17 @@ struct NeteasePlayerActions: View {
     let track: Track
     var onImportLyrics: (() -> Void)?
     @Environment(NeteaseStore.self) private var store
+    @Environment(NeteaseContentCache.self) private var contentCache
     @Environment(DownloadStore.self) private var downloads
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(\.openRoute) private var openRoute
     @State private var showsPicker = false
+    @State private var albumNavigation = AlbumNavigationPreparation()
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 4.25) {
             if let id = (track.remoteSource?.itemID).flatMap(Int.init) {
                 FavoriteButton(track: track, playerStyle: true)
-                NowPlayingMenuButton {
+                NowPlayingMenuButton(track: track) {
                     var items: [UIMenuElement] = [
                         UIAction(title: "加入歌单", image: UIImage(systemName: "text.badge.plus")) { _ in
                             showsPicker = true
@@ -22,7 +24,12 @@ struct NeteasePlayerActions: View {
                         UIAction(title: "相似歌曲", image: UIImage(systemName: "music.note.list")) { _ in openRoute(.netease(.similar(id))) }
                     ]
                     if let albumID = Int(track.discID), albumID > 0 {
-                        items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "square.stack")) { _ in openRoute(.netease(.album(albumID))) })
+                        items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "square.stack")) { _ in
+                            let page = contentCache.page(.route(.album(albumID)), revision: store.revision)
+                            if page.title.isEmpty { page.title = track.albumTitle }
+                            if page.artwork == nil { page.artwork = track.coverURL }
+                            if let route = albumNavigation.begin(.netease(.album(albumID)), artworkURL: page.artwork) { openRoute(route) }
+                        })
                     }
                     // 听完缓存好的歌可以直接存成下载，不再联网。
                     if library.localFile(for: track) == nil, player.cachedQuality(for: track) != nil {
@@ -31,22 +38,15 @@ struct NeteasePlayerActions: View {
                             Task { await downloads.enqueueNeteaseSong(track, quality: quality) }
                         })
                     }
-                    // 播放中的曲目只记着歌手名字；打开菜单时查一次歌曲详情拿到歌手 ID。
-                    let api = store.api
-                    items.append(UIDeferredMenuElement.uncached { [openRoute] completion in
-                        Task { @MainActor in
-                            let song = try? await api.songs([id]).first
-                            let artists = (song?.artists ?? []).filter { $0.id > 0 }
-                                .map { (name: $0.name, route: AppRoute.netease(.artist($0.id))) }
-                            completion(ArtistMenu.elements(artists) { openRoute($0) })
-                        }
-                    })
                     if let onImportLyrics { items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() }) }
                     return items
                 }.frame(width: 44, height: 44)
             }
         }
         .songPlaylistSheet(isPresented: $showsPicker, track: track)
+        .preparedAlbumNavigation(albumNavigation)
+        .onChange(of: track.id) { albumNavigation.cancel() }
+        .onChange(of: store.revision) { albumNavigation.cancel() }
     }
 }
 
@@ -54,12 +54,15 @@ struct NeteasePlaylistPicker: View {
     let songID: Int
     @Environment(NeteaseStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @State private var showsLogin = false
     @State private var loading = true
     @State private var adding: Int?
     @State private var error: String?
     var body: some View {
-        NavigationStack {
-            List {
+        Section("网易云音乐") {
+            if store.profile == nil {
+                Button("登录网易云音乐") { showsLogin = true }
+            } else {
                 if let error { Text(error).foregroundStyle(.secondary) }
                 if loading && store.library.writablePlaylists.isEmpty {
                     ForEach(0..<5) { _ in
@@ -79,11 +82,15 @@ struct NeteasePlaylistPicker: View {
                 ForEach(store.library.writablePlaylists) { playlist in
                     Button {
                         adding = playlist.id; error = nil
+                        let revision = store.revision
                         Task {
-                            defer { adding = nil }
-                            do { try await store.library.addSong(songID, to: playlist); dismiss() }
-                            catch is CancellationError { }
-                            catch { self.error = error.localizedDescription }
+                            defer { if store.revision == revision { adding = nil } }
+                            do {
+                                try await store.library.addSong(songID, to: playlist)
+                                guard store.revision == revision else { return }
+                                dismiss()
+                            } catch is CancellationError { }
+                            catch { if store.revision == revision { self.error = error.localizedDescription } }
                         }
                     } label: {
                         HStack(spacing: 12) {
@@ -96,17 +103,19 @@ struct NeteasePlaylistPicker: View {
                 }
                 if !loading && error != nil { Button("重新加载") { Task { await load() } } }
             }
-            .navigationTitle("加入歌单")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消", role: .cancel) { dismiss() } } }
-            .task(id: store.revision) { await load() }
         }
+        .sheet(isPresented: $showsLogin) { NeteaseLoginView(store: store) }
+        .task(id: store.revision) { adding = nil; await load() }
     }
+
     private func load() async {
+        guard store.profile != nil else { loading = false; return }
+        let revision = store.revision
         loading = true; error = nil
-        defer { loading = false }
+        defer { if store.revision == revision { loading = false } }
         do { try await store.library.loadPlaylists() }
         catch is CancellationError { }
-        catch { self.error = error.localizedDescription }
+        catch { if !Task.isCancelled && store.revision == revision { self.error = error.localizedDescription } }
     }
 }
 
@@ -136,13 +145,7 @@ struct NeteaseCollectionFavorite: View {
             guard store.profile != nil else { store.showsLogin = true; return }
             if selected { confirmsRemoval = true } else { toggle() }
         } label: {
-            ZStack {
-                Image(systemName: owned || selected ? "checkmark" : "plus")
-                    .opacity(working ? 0 : 1)
-                if working { ProgressView() }
-            }
-            .font(.title2.weight(.semibold))
-            .frame(width: 30, height: 30)
+            CollectionLibraryActionLabel(isAdded: owned || selected, isWorking: working)
         }
         .disabled(working || owned || !isReady)
         .accessibilityLabel(owned ? "我的歌单" : selected ? "从资料库移除" : "加入资料库")
@@ -183,4 +186,35 @@ struct NeteaseCollectionFavorite: View {
         catch { if !Task.isCancelled { self.error = error.localizedDescription } }
     }
 
+}
+
+/// 网易云专辑页的第三个按钮：先是「加入资料库」，加入之后同一个位置变成「下载」。
+/// 取消收藏改为长按下载按钮。
+struct NeteaseAlbumLibraryAction: View {
+    let album: NeteaseAlbum?
+    let id: Int
+    let title: String
+    let coverURL: URL?
+    let isLoaded: Bool
+    @Environment(NeteaseStore.self) private var store
+
+    var body: some View {
+        #if os(iOS)
+        if store.library.albumStates[id] == true {
+            NeteaseDownloadButton(kind: "album", id: id, title: title, coverURL: coverURL)
+                .disabled(!isLoaded)
+                .contextMenu {
+                    if let album {
+                        Button("从资料库移除", systemImage: "minus.circle", role: .destructive) {
+                            Task { try? await store.library.toggleAlbum(album) }
+                        }
+                    }
+                }
+        } else {
+            NeteaseCollectionFavorite(playlist: nil, album: album)
+        }
+        #else
+        NeteaseCollectionFavorite(playlist: nil, album: album)
+        #endif
+    }
 }

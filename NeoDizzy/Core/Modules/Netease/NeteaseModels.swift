@@ -14,6 +14,7 @@ nonisolated struct NeteaseAlbum: Decodable, Identifiable, Hashable, Sendable {
     let name: String
     let picUrl: String?
     let artist: NeteaseArtist?
+    var description: String? = nil
     var artworkURL: URL? { NeteaseArtwork.url(picUrl) }
 }
 nonisolated struct NeteasePlaylist: Decodable, Identifiable, Hashable, Sendable {

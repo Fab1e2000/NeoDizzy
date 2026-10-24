@@ -27,6 +27,10 @@ struct AccentPalette: Equatable, Sendable {
 
     var color: Color { .adaptive(light: light, dark: dark) }
 
+    /// UIKit tab bars can have a toolbar scheme different from their SwiftUI
+    /// host. Resolve at the owning chrome scope rather than the host's traits.
+    func color(for scheme: ColorScheme) -> Color { Color(hex: scheme == .dark ? dark : light) }
+
     /// 主题色铺满的实底：卡片、角标、主要按钮。
     var fill: Color { .adaptive(light: lightFill ?? light, dark: darkFill ?? dark) }
 
@@ -66,9 +70,17 @@ final class AppearanceSettings {
     static let shared = AppearanceSettings()
     static let modeKey = "appearance.mode"
 
+    #if os(iOS)
+    /// 保留旧设置和备份的读写入口，但不允许恢复深色或跟随系统。
+    var mode: AppAppearance {
+        get { .light }
+        set { defaults.set(AppAppearance.light.rawValue, forKey: Self.modeKey) }
+    }
+    #else
     var mode: AppAppearance {
         didSet { defaults.set(mode.rawValue, forKey: Self.modeKey) }
     }
+    #endif
 
     /// 当前标签页来源的主题色，由宿主在切换标签页时设置。
     var accent: AccentPalette = .neutral
@@ -77,7 +89,11 @@ final class AppearanceSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        #if os(iOS)
+        defaults.set(AppAppearance.light.rawValue, forKey: Self.modeKey)
+        #else
         mode = defaults.string(forKey: Self.modeKey).flatMap(AppAppearance.init(rawValue:)) ?? .system
+        #endif
     }
 }
 

@@ -12,6 +12,8 @@ nonisolated struct LocalPlaylist: Identifiable, Sendable {
 
 /// 歌单只保存引用；所有路径先按根目录归一化，再沿途拒绝符号链接。
 nonisolated enum LocalPlaylistFile {
+    private static let remotePrefix = "#NEODIZZY-TRACK:"
+
     private static func validSourceComponent(_ value: String) -> Bool {
         !value.isEmpty && !value.contains(where: { $0 == ":" || $0 == "\0" || $0.isNewline })
     }
@@ -66,6 +68,17 @@ nonisolated enum LocalPlaylistFile {
                     source = LibrarySource(provider: String(parts[1]), kind: String(parts[2]), id: String(parts[3]))
                 }
             }
+            if line.hasPrefix(remotePrefix) {
+                do {
+                    guard let data = Data(base64Encoded: String(line.dropFirst(remotePrefix.count))) else {
+                        throw OfflineLibraryError.invalidManifest
+                    }
+                    let track = try JSONDecoder().decode(Track.self, from: data)
+                    try validateRemote(track)
+                    entries.append(track)
+                } catch { issues.append("\(url.lastPathComponent)：无法读取在线歌曲引用") }
+                continue
+            }
             guard !line.isEmpty, !line.hasPrefix("#") else { continue }
             do {
                 let audio = try resolve(line, root: root)
@@ -80,7 +93,7 @@ nonisolated enum LocalPlaylistFile {
         return (LocalPlaylist(fileURL: file, title: file.deletingPathExtension().lastPathComponent, tracks: entries, source: source), issues)
     }
 
-    static func write(title: String, entries: [(Track, URL)], source: LibrarySource?, existing: URL?, root: URL) throws {
+    static func write(title: String, entries: [(Track, URL?)], source: LibrarySource?, existing: URL?, root: URL) throws {
         let directory = try checked("Playlists", root: root)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let name = OfflinePaths.directoryName(title, fallback: "新歌单") + ".m3u8"
@@ -97,6 +110,11 @@ nonisolated enum LocalPlaylistFile {
             lines.append("#NEODIZZY-SOURCE:\(source.provider):\(source.kind):\(source.id)")
         }
         for (track, file) in entries {
+            guard let file else {
+                try validateRemote(track)
+                lines.append(remotePrefix + (try JSONEncoder().encode(track)).base64EncodedString())
+                continue
+            }
             let relative = try OfflinePaths.relativePath(of: file, inside: root)
             _ = try checked(relative, root: root)
             guard !relative.contains(where: \.isNewline), !relative.contains(":"), FileManager.default.fileExists(atPath: file.path) else {
@@ -106,15 +124,28 @@ nonisolated enum LocalPlaylistFile {
             lines.append("#EXTINF:\(Int(track.duration ?? -1)),\(label)")
             lines.append("../\(relative)")
         }
+        try Task.checkCancellation()
         try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: target, options: .atomic)
+    }
+
+    private static func validateRemote(_ track: Track) throws {
+        guard track.localSource == nil, let key = track.remoteKey,
+              validSourceComponent(key.provider), !key.itemID.isEmpty,
+              !key.itemID.contains(where: { $0 == "\0" || $0.isNewline }),
+              track.coverURL == nil || ["http", "https"].contains(track.coverURL?.scheme?.lowercased() ?? "") else {
+            throw OfflineLibraryError.invalidManifest
+        }
     }
 }
 
 extension OfflineLibraryStore {
     func savePlaylist(title: String, tracks: [Track], source: LibrarySource? = nil, existing: LocalPlaylist? = nil) async throws {
-        let entries = try tracks.map { track in
-            guard let file = localFile(for: track) else { throw OfflineLibraryError.invalidFolder }
-            return (track, file)
+        let entries: [(Track, URL?)] = try tracks.map { track in
+            if let file = localFile(for: track) { return (track, file) }
+            guard track.remoteKey != nil else { throw OfflineLibraryError.invalidFolder }
+            var reference = track
+            reference.localSource = nil
+            return (reference, nil)
         }
         let previous = existing ?? source.flatMap { value in localPlaylists.first { $0.source == value } }
         try await performImport { worker, access in
@@ -125,8 +156,11 @@ extension OfflineLibraryStore {
     }
 
     func add(_ track: Track, to playlist: LocalPlaylist) async throws {
-        let tracks = playlist.tracks.contains(where: { $0.id == track.id }) ? playlist.tracks : playlist.tracks + [track]
-        try await savePlaylist(title: playlist.title, tracks: tracks, existing: playlist)
+        guard let current = localPlaylists.first(where: { $0.id == playlist.id }) else {
+            throw OfflineLibraryError.invalidFolder
+        }
+        let tracks = current.tracks.contains(where: { $0.id == track.id }) ? current.tracks : current.tracks + [track]
+        try await savePlaylist(title: current.title, tracks: tracks, existing: current)
     }
 
     func deletePlaylist(_ playlist: LocalPlaylist) async throws {
@@ -153,7 +187,7 @@ extension OfflineLibraryStore {
 }
 
 extension OfflineLibraryWorker {
-    func writePlaylist(title: String, entries: [(Track, URL)], source: LibrarySource?, existing: URL?, access: OfflineFolderAccess) throws {
+    func writePlaylist(title: String, entries: [(Track, URL?)], source: LibrarySource?, existing: URL?, access: OfflineFolderAccess) throws {
         try coordinatedWrite(access.url) { root in
             try LocalPlaylistFile.write(title: title, entries: entries, source: source, existing: existing, root: root)
         }

@@ -3,6 +3,7 @@ import SwiftUI
 /// 专辑卡片：封面、标题、社团和价格。
 struct DiscCard: View {
     let disc: DiscSummary
+    @Environment(DizzyLabContentCache.self) private var contentCache
     var showsLabel = true
     /// 额外的一行说明，例如限时优惠的截止日期。
     var caption: String?
@@ -38,6 +39,7 @@ struct DiscCard: View {
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
         .prefetchAlbumArtwork(url: disc.coverURL)
+        .onChange(of: disc, initial: true) { _, disc in contentCache.remember([disc]) }
     }
 }
 
@@ -87,7 +89,7 @@ struct DiscGrid: View {
     var body: some View {
         LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
             ForEach(discs) { disc in
-                NavigationLink(value: AppRoute.disc(id: disc.id)) {
+                AlbumNavigationLink(value: AppRoute.disc(id: disc.id), artworkURL: disc.coverURL) {
                     DiscCard(disc: disc, showsLabel: showsLabel)
                 }
                 .buttonStyle(.plain)

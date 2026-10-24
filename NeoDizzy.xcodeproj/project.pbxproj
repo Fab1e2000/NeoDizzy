@@ -8,16 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		0DC54EB46AE7F6B61E147831 /* NeoDizzyWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		1BEEA9CD6936284340A0EC33 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 1BAC143009061BC618983E57 /* Nuke */; };
-		6CC6FFB1533EA361B0420189 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 105A3BCA6B90A96E1D42BEBB /* Nuke */; };
-		741A17DBA1B89E66C458471D /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 499B2BFF8E5C41E5CEF046E7 /* ZIPFoundation */; };
-		772575A20A1EF37BFAE04B6E /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = D86F4983F3F39F5B922ABE02 /* NukeUI */; };
-		84B28BB4FD69D71FCE95C490 /* AudioTagBridge in Frameworks */ = {isa = PBXBuildFile; productRef = 80EA74AE6223A351CEA64EEE /* AudioTagBridge */; };
-		8F8DEA3D7F0F789F9A551E87 /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1C2A642678125560CE0A97F3 /* NukeUI */; };
-		97AFD1AFD751F90A6ED100BF /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F2CDE0A42D050399B21C3B9F /* ZIPFoundation */; };
-		97C905530F6452DFE66DF69E /* AudioTagBridge in Frameworks */ = {isa = PBXBuildFile; productRef = 9143E6C68D78B82B1C2FB09D /* AudioTagBridge */; };
-		BF24F0A1C511A792DA13271C /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = E1C03E7CA9A83560F908C20F /* SwiftSoup */; };
-		EB01F93C9E7DF72EA0C787D1 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 8C14917B9BC11B86CFC74577 /* SwiftSoup */; };
+		5D63992D4559466CBB2BA166 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F2CDE0A42D050399B21C3B9F /* ZIPFoundation */; };
+		6CC6FFB1533EA361B0420189 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 8C14917B9BC11B86CFC74577 /* SwiftSoup */; };
+		8F8DEA3D7F0F789F9A551E87 /* Nuke in Frameworks */ = {isa = PBXBuildFile; productRef = 105A3BCA6B90A96E1D42BEBB /* Nuke */; };
+		97AFD1AFD751F90A6ED100BF /* NukeUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1C2A642678125560CE0A97F3 /* NukeUI */; };
+		97C905530F6452DFE66DF69E /* LNPopupUI-Static in Frameworks */ = {isa = PBXBuildFile; productRef = 51F57C8F3F7C397A0D77653B /* LNPopupUI-Static */; };
+		EB01F93C9E7DF72EA0C787D1 /* AudioTagBridge in Frameworks */ = {isa = PBXBuildFile; productRef = 9143E6C68D78B82B1C2FB09D /* AudioTagBridge */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,7 +52,7 @@
 		89175AF12F06E62B7BC35428 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NeoDizzy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NeoDizzyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		A87D9E8001FA29A97C53BD6E /* NeoDizzyMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NeoDizzyMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB61D25E583CD7A0464ACC87 /* LNPopupUI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LNPopupUI; path = Packages/LNPopupUI; sourceTree = SOURCE_ROOT; };
 		FD46C7D8C96414D162079D9A /* AudioTags */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AudioTags; path = Packages/AudioTags; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -68,157 +64,6 @@
 			);
 			target = 044F953941CB40672A6A121F /* NeoDizzyWidget */;
 		};
-		49E59DC00E4F8222A2C05521 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				App/ModuleSettings.swift,
-				App/Modules,
-				App/Modules/AppComposition.swift,
-				App/Modules/AppModule.swift,
-				App/Modules/NowPlayingPresentation.swift,
-				App/Modules/PlatformRuntime.swift,
-				App/NeoDizzyApp.swift,
-				App/NowPlayingWidgetBridge.swift,
-				App/RootView.swift,
-				App/WindowAppearance.swift,
-				Core/Playback/AudioSessionConfigurator.swift,
-				Core/UI/AlbumPresentation.swift,
-				Core/UI/CollectionLayout.swift,
-				Core/UI/CoverCard.swift,
-				Core/UI/DiscoveryShortcutButton.swift,
-				Core/UI/ExpandableText.swift,
-				Core/UI/LoadStateViews.swift,
-				Core/UI/PageHeader.swift,
-				Core/UI/PlaceholderCard.swift,
-				Features/Downloads,
-				Features/Downloads/DownloadQueueSection.swift,
-				Features/Downloads/DownloadQueueSheet.swift,
-				Features/Library,
-				Features/Library/AudioTagEditorSheet.swift,
-				Features/Library/BatchAudioTagEditorSheet.swift,
-				Features/Library/FavoritesView.swift,
-				Features/Library/LibraryExportView.swift,
-				Features/Library/LocalLibraryView.swift,
-				Features/Library/LocalPlaylistViews.swift,
-				Features/Library/SavedLibraryControls.swift,
-				Features/Library/SongLibraryActions.swift,
-				Features/Library/SongRow.swift,
-				Features/Mine,
-				Features/Mine/AppearanceSettingsView.swift,
-				Features/Mine/DisclaimerView.swift,
-				Features/Mine/LyricsSettingsView.swift,
-				Features/Mine/ManualView.swift,
-				Features/Mine/MineView.swift,
-				Features/Mine/TabSettingsView.swift,
-				Features/Modules,
-				Features/Modules/DizzyLab,
-				Features/Modules/DizzyLab/Account,
-				Features/Modules/DizzyLab/Account/LoginView.swift,
-				Features/Modules/DizzyLab/BrowsingHistory,
-				Features/Modules/DizzyLab/BrowsingHistory/BrowsingHistoryView.swift,
-				Features/Modules/DizzyLab/Community,
-				Features/Modules/DizzyLab/Community/CommunityPages.swift,
-				Features/Modules/DizzyLab/Community/DiscCommunityView.swift,
-				Features/Modules/DizzyLab/Community/FollowLabelButton.swift,
-				Features/Modules/DizzyLab/Community/ReviewDetailView.swift,
-				Features/Modules/DizzyLab/Disc,
-				Features/Modules/DizzyLab/Disc/DiscDetailView.swift,
-				Features/Modules/DizzyLab/Discover,
-				Features/Modules/DizzyLab/Discover/DiscoverView.swift,
-				Features/Modules/DizzyLab/Discover/DizzyLabShortcuts.swift,
-				Features/Modules/DizzyLab/Discover/ShuffleView.swift,
-				Features/Modules/DizzyLab/DizzyLabAccountSettings.swift,
-				Features/Modules/DizzyLab/DizzyLabCards.swift,
-				Features/Modules/DizzyLab/DizzyLabContentCache.swift,
-				Features/Modules/DizzyLab/DizzyLabDestination.swift,
-				Features/Modules/DizzyLab/DizzyLabModule.swift,
-				Features/Modules/DizzyLab/DizzyLabPlayerActions.swift,
-				Features/Modules/DizzyLab/DizzyLabPurchasedView.swift,
-				Features/Modules/DizzyLab/DizzyLabRuntime.swift,
-				Features/Modules/DizzyLab/DizzyLabSearchResults.swift,
-				Features/Modules/DizzyLab/DownloadAlbumView.swift,
-				Features/Modules/DizzyLab/Feed,
-				Features/Modules/DizzyLab/Feed/FeedView.swift,
-				Features/Modules/DizzyLab/Labels,
-				Features/Modules/DizzyLab/Labels/LabelDetailView.swift,
-				Features/Modules/DizzyLab/Labels/LabelsView.swift,
-				Features/Modules/DizzyLab/Pack,
-				Features/Modules/DizzyLab/Pack/PackDetailView.swift,
-				Features/Modules/DizzyLab/Purchase,
-				Features/Modules/DizzyLab/Purchase/CheckoutWebView.swift,
-				Features/Modules/DizzyLab/Purchase/PurchaseView.swift,
-				Features/Modules/DizzyLab/Routes,
-				Features/Modules/DizzyLab/Routes/DizzyLabPage.swift,
-				Features/Modules/DizzyLab/Tags,
-				Features/Modules/DizzyLab/Tags/TagDiscsView.swift,
-				Features/Modules/LocalLibraryModule.swift,
-				Features/Modules/Netease,
-				Features/Modules/Netease/NeteaseContentCache.swift,
-				Features/Modules/Netease/NeteaseDownloadButton.swift,
-				Features/Modules/Netease/NeteaseHomeSections.swift,
-				Features/Modules/Netease/NeteaseLibraryActions.swift,
-				Features/Modules/Netease/NeteaseLoginView.swift,
-				Features/Modules/Netease/NeteaseModule.swift,
-				Features/Modules/Netease/NeteasePageModel.swift,
-				Features/Modules/Netease/NeteaseRuntime.swift,
-				Features/Modules/Netease/NeteaseSettingsView.swift,
-				Features/Modules/Netease/NeteaseViews.swift,
-				Features/Modules/QQMusic,
-				Features/Modules/QQMusic/QQMusicAccountView.swift,
-				Features/Modules/QQMusic/QQMusicContentCache.swift,
-				Features/Modules/QQMusic/QQMusicDiscoveryShortcuts.swift,
-				Features/Modules/QQMusic/QQMusicDownloadButton.swift,
-				Features/Modules/QQMusic/QQMusicHomeView.swift,
-				Features/Modules/QQMusic/QQMusicLibraryActions.swift,
-				Features/Modules/QQMusic/QQMusicLoginView.swift,
-				Features/Modules/QQMusic/QQMusicModule.swift,
-				Features/Modules/QQMusic/QQMusicPageModel.swift,
-				Features/Modules/QQMusic/QQMusicPlaybackSettingsSection.swift,
-				Features/Modules/QQMusic/QQMusicPlayerActions.swift,
-				Features/Modules/QQMusic/QQMusicStore.swift,
-				Features/Modules/QQMusic/QQMusicViews.swift,
-				Features/Player,
-				Features/Player/MiniPlayerView.swift,
-				Features/Player/NowPlaying,
-				Features/Player/NowPlaying/NowPlayingAirPlayButton.swift,
-				Features/Player/NowPlaying/NowPlayingArtworkPage.swift,
-				Features/Player/NowPlaying/NowPlayingBottomControls.swift,
-				Features/Player/NowPlaying/NowPlayingControls.swift,
-				Features/Player/NowPlaying/NowPlayingInterfaceTransition.swift,
-				Features/Player/NowPlaying/NowPlayingInterruptibleProgress.swift,
-				Features/Player/NowPlaying/NowPlayingLyricsModel.swift,
-				Features/Player/NowPlaying/NowPlayingLyricsPage.swift,
-				Features/Player/NowPlaying/NowPlayingLyricsPagePresentation.swift,
-				Features/Player/NowPlaying/NowPlayingMotionSpec.swift,
-				Features/Player/NowPlaying/NowPlayingPageTransition.swift,
-				Features/Player/NowPlaying/NowPlayingPages.swift,
-				Features/Player/NowPlaying/NowPlayingPortraitArtwork.swift,
-				Features/Player/NowPlaying/NowPlayingQueuePage.swift,
-				Features/Player/NowPlaying/NowPlayingSongActions.swift,
-				Features/Player/NowPlaying/NowPlayingSongHeader.swift,
-				Features/Player/NowPlaying/NowPlayingTransitionCoordinator.swift,
-				Features/Player/NowPlaying/NowPlayingTransportButtonStyle.swift,
-				Features/Player/NowPlaying/NowPlayingView.swift,
-				Features/Routes,
-				Features/Routes/AppRouteDestination.swift,
-				Features/Routes/InlinePageRoute.swift,
-				Features/Routes/MiniPlayerSuppression.swift,
-				Features/Search,
-				Features/Search/SearchRows.swift,
-				Features/Search/UnifiedSearchView.swift,
-				Info.plist,
-				"Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png",
-				Resources/Assets.xcassets/AppIcon.appiconset/Contents.json,
-			);
-			target = 4F18C0F88F5D3983448496BD /* NeoDizzyMac */;
-		};
-		A751D87839DDCCDA8E31DDFD /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 4F18C0F88F5D3983448496BD /* NeoDizzyMac */;
-		};
 		E015CD3412C03FCB4E9E7A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -229,7 +74,18 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		0D8FCDB38B251488A6FA8FEC /* NeoDizzy */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E015CD3412C03FCB4E9E7A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */, 49E59DC00E4F8222A2C05521 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = NeoDizzy; sourceTree = "<group>"; };
+		0D8FCDB38B251488A6FA8FEC /* NeoDizzy */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				E015CD3412C03FCB4E9E7A0E /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
+			explicitFileTypes = {
+			};
+			explicitFolders = (
+			);
+			path = NeoDizzy;
+			sourceTree = "<group>";
+		};
 		976EFF2EBCA4EB2742D677A7 /* NeoDizzyTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			explicitFileTypes = {
@@ -260,18 +116,6 @@
 			path = NeoDizzyWidget;
 			sourceTree = "<group>";
 		};
-		E27E12D563830DA22A0BEC1E /* NeoDizzyMac */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				A751D87839DDCCDA8E31DDFD /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
-			);
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
-			path = NeoDizzyMac;
-			sourceTree = "<group>";
-		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -279,23 +123,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				97C905530F6452DFE66DF69E /* AudioTagBridge in Frameworks */,
-				EB01F93C9E7DF72EA0C787D1 /* SwiftSoup in Frameworks */,
-				6CC6FFB1533EA361B0420189 /* Nuke in Frameworks */,
-				8F8DEA3D7F0F789F9A551E87 /* NukeUI in Frameworks */,
-				97AFD1AFD751F90A6ED100BF /* ZIPFoundation in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A9AA5088C902A83E5D5C9C16 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				84B28BB4FD69D71FCE95C490 /* AudioTagBridge in Frameworks */,
-				BF24F0A1C511A792DA13271C /* SwiftSoup in Frameworks */,
-				1BEEA9CD6936284340A0EC33 /* Nuke in Frameworks */,
-				772575A20A1EF37BFAE04B6E /* NukeUI in Frameworks */,
-				741A17DBA1B89E66C458471D /* ZIPFoundation in Frameworks */,
+				97C905530F6452DFE66DF69E /* LNPopupUI-Static in Frameworks */,
+				EB01F93C9E7DF72EA0C787D1 /* AudioTagBridge in Frameworks */,
+				6CC6FFB1533EA361B0420189 /* SwiftSoup in Frameworks */,
+				8F8DEA3D7F0F789F9A551E87 /* Nuke in Frameworks */,
+				97AFD1AFD751F90A6ED100BF /* NukeUI in Frameworks */,
+				5D63992D4559466CBB2BA166 /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -314,7 +147,6 @@
 			isa = PBXGroup;
 			children = (
 				893980F7EE1C2ED09F5CF86B /* NeoDizzy.app */,
-				A87D9E8001FA29A97C53BD6E /* NeoDizzyMac.app */,
 				911EC9791A70B7D3C103E761 /* NeoDizzyTests.xctest */,
 				25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */,
 			);
@@ -326,7 +158,6 @@
 			children = (
 				1B175AE3D509711C8319F80D /* Config */,
 				0D8FCDB38B251488A6FA8FEC /* NeoDizzy */,
-				E27E12D563830DA22A0BEC1E /* NeoDizzyMac */,
 				976EFF2EBCA4EB2742D677A7 /* NeoDizzyTests */,
 				DE526EDCB9439C2D576FC12B /* NeoDizzyWidget */,
 				ECDD35C4244B04A526CB54F7 /* Packages */,
@@ -339,6 +170,7 @@
 			isa = PBXGroup;
 			children = (
 				FD46C7D8C96414D162079D9A /* AudioTags */,
+				DB61D25E583CD7A0464ACC87 /* LNPopupUI */,
 			);
 			path = Packages;
 			sourceTree = "<group>";
@@ -368,34 +200,6 @@
 			productReference = 25BEEBAC17C06AE12C3D8EF5 /* NeoDizzyWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		4F18C0F88F5D3983448496BD /* NeoDizzyMac */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 7B7D6525206FE3594665CDFB /* Build configuration list for PBXNativeTarget "NeoDizzyMac" */;
-			buildPhases = (
-				2FED6AA60F7D5B1802368C6F /* Sources */,
-				D57C160976BB31D066D4CABA /* Resources */,
-				A9AA5088C902A83E5D5C9C16 /* Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				0D8FCDB38B251488A6FA8FEC /* NeoDizzy */,
-				E27E12D563830DA22A0BEC1E /* NeoDizzyMac */,
-			);
-			name = NeoDizzyMac;
-			packageProductDependencies = (
-				80EA74AE6223A351CEA64EEE /* AudioTagBridge */,
-				E1C03E7CA9A83560F908C20F /* SwiftSoup */,
-				1BAC143009061BC618983E57 /* Nuke */,
-				D86F4983F3F39F5B922ABE02 /* NukeUI */,
-				499B2BFF8E5C41E5CEF046E7 /* ZIPFoundation */,
-			);
-			productName = NeoDizzyMac;
-			productReference = A87D9E8001FA29A97C53BD6E /* NeoDizzyMac.app */;
-			productType = "com.apple.product-type.application";
-		};
 		7B34A05017631F95C6D93E8C /* NeoDizzy */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = ABEB43AB8CA0D73C04B6AB9C /* Build configuration list for PBXNativeTarget "NeoDizzy" */;
@@ -416,6 +220,7 @@
 			);
 			name = NeoDizzy;
 			packageProductDependencies = (
+				51F57C8F3F7C397A0D77653B /* LNPopupUI-Static */,
 				9143E6C68D78B82B1C2FB09D /* AudioTagBridge */,
 				8C14917B9BC11B86CFC74577 /* SwiftSoup */,
 				105A3BCA6B90A96E1D42BEBB /* Nuke */,
@@ -460,9 +265,6 @@
 					044F953941CB40672A6A121F = {
 						ProvisioningStyle = Automatic;
 					};
-					4F18C0F88F5D3983448496BD = {
-						ProvisioningStyle = Automatic;
-					};
 					7B34A05017631F95C6D93E8C = {
 						ProvisioningStyle = Automatic;
 					};
@@ -485,6 +287,7 @@
 				1171EEEEDD225D914850D491 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				39BDCE3049C11DDAFB54709B /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 				5CFFCC20E6E9DF4C840DC0A0 /* XCLocalSwiftPackageReference "Packages/AudioTags" */,
+				4CC6D1460D1292C4A3D64FA1 /* XCLocalSwiftPackageReference "Packages/LNPopupUI" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6CD405DB60C4F274B4821664 /* Products */;
@@ -493,7 +296,6 @@
 			targets = (
 				7B34A05017631F95C6D93E8C /* NeoDizzy */,
 				044F953941CB40672A6A121F /* NeoDizzyWidget */,
-				4F18C0F88F5D3983448496BD /* NeoDizzyMac */,
 				FFA693109D8BA51FB749A914 /* NeoDizzyTests */,
 			);
 		};
@@ -521,24 +323,10 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D57C160976BB31D066D4CABA /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		231809BA963B45D2F8D06DB8 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2FED6AA60F7D5B1802368C6F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -596,28 +384,6 @@
 			};
 			name = Release;
 		};
-		64B79DEE7E7539FE4E34E734 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = NeoDizzyIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NeoDizzyMac/NeoDizzyMac.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = NeoDizzyMac/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.elsterlee.NeoDizzyMac;
-				PRODUCT_NAME = NeoDizzy;
-				SDKROOT = macosx;
-			};
-			name = Debug;
-		};
 		6A2F1A2BEB17914E890F2ABC /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 89175AF12F06E62B7BC35428 /* Signing.xcconfig */;
@@ -666,10 +432,10 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -718,28 +484,6 @@
 				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
-		};
-		7BFE6D79E3276EE8D5BC7AFC /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = NeoDizzyIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NeoDizzyMac/NeoDizzyMac.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = NeoDizzyMac/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.elsterlee.NeoDizzyMac;
-				PRODUCT_NAME = NeoDizzy;
-				SDKROOT = macosx;
-			};
-			name = Release;
 		};
 		8A1AD5BEBE1CC61839B613EF /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -814,11 +558,11 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -880,15 +624,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		7B7D6525206FE3594665CDFB /* Build configuration list for PBXNativeTarget "NeoDizzyMac" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				64B79DEE7E7539FE4E34E734 /* Debug */,
-				7BFE6D79E3276EE8D5BC7AFC /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
 		9C5D5D88C870D52310A35AC2 /* Build configuration list for PBXNativeTarget "NeoDizzyTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -919,6 +654,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		4CC6D1460D1292C4A3D64FA1 /* XCLocalSwiftPackageReference "Packages/LNPopupUI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LNPopupUI;
+		};
 		5CFFCC20E6E9DF4C840DC0A0 /* XCLocalSwiftPackageReference "Packages/AudioTags" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/AudioTags;
@@ -958,24 +697,14 @@
 			package = FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */;
 			productName = Nuke;
 		};
-		1BAC143009061BC618983E57 /* Nuke */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */;
-			productName = Nuke;
-		};
 		1C2A642678125560CE0A97F3 /* NukeUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */;
 			productName = NukeUI;
 		};
-		499B2BFF8E5C41E5CEF046E7 /* ZIPFoundation */ = {
+		51F57C8F3F7C397A0D77653B /* LNPopupUI-Static */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 39BDCE3049C11DDAFB54709B /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
-			productName = ZIPFoundation;
-		};
-		80EA74AE6223A351CEA64EEE /* AudioTagBridge */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = AudioTagBridge;
+			productName = "LNPopupUI-Static";
 		};
 		8C14917B9BC11B86CFC74577 /* SwiftSoup */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -985,16 +714,6 @@
 		9143E6C68D78B82B1C2FB09D /* AudioTagBridge */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AudioTagBridge;
-		};
-		D86F4983F3F39F5B922ABE02 /* NukeUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FCE3EF79F6B0B253285A6DBD /* XCRemoteSwiftPackageReference "Nuke" */;
-			productName = NukeUI;
-		};
-		E1C03E7CA9A83560F908C20F /* SwiftSoup */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1171EEEEDD225D914850D491 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
-			productName = SwiftSoup;
 		};
 		F2CDE0A42D050399B21C3B9F /* ZIPFoundation */ = {
 			isa = XCSwiftPackageProductDependency;

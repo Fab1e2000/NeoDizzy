@@ -107,6 +107,47 @@ import Testing
         try await library.togglePlaylist(playlist(owner: 1))
         #expect(paths.withLock { $0 } == ["/weapi/playlist/subscribe", "/weapi/playlist/unsubscribe"])
     }
+    @Test func removalPublishesMirrorBeforeReturningAndFailureKeepsCollection() async throws {
+        let succeeds = Mutex(false)
+        LibraryStub.handler = { request in
+            switch request.url?.path {
+            case "/eapi/user/playlist":
+                return .init(body: #"{"code":200,"playlist":[{"id":7,"name":"Saved","creator":{"userId":2,"nickname":"Other"}},{"id":8,"name":"Keep","creator":{"userId":2,"nickname":"Other"}}]}"#)
+            case "/weapi/playlist/unsubscribe":
+                return .init(body: succeeds.withLock { $0 } ? #"{"code":200}"# : #"{"code":403}"#)
+            default:
+                Issue.record("Unexpected endpoint: \(request.url?.path ?? "")")
+                return .init(body: #"{"code":500}"#)
+            }
+        }
+        let store = NeteaseStore(api: api(), saveCredential: { _ in })
+        store.library.reset(userID: 1)
+        try await store.library.loadPlaylists()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let mirror = AccountLibraryMirror(directory: directory)
+        mirror.register("netease", account: { "1" }) { _ in }
+        mirror.rebuildNetease(from: store)
+        var publications = 0
+        let module = NeteaseModule(store: store, onLibraryChange: {
+            publications += 1
+            mirror.rebuildNetease(from: store)
+        })
+        // Exercise the removal entry point without SwiftUI's onChange or a refresh.
+        await #expect(throws: (any Error).self) {
+            try await module.removeCollection(kind: "playlist", itemID: "7")
+        }
+        #expect(publications == 0)
+        #expect(mirror.collections.map(\.itemID) == ["7", "8"])
+        succeeds.withLock { $0 = true }
+        try await module.removeCollection(kind: "playlist", itemID: "7")
+        #expect(publications == 1)
+        #expect(mirror.collections.map(\.itemID) == ["8"])
+        let restored = AccountLibraryMirror(directory: directory)
+        restored.register("netease", account: { "1" }) { _ in }
+        #expect(restored.collections.map(\.itemID) == ["8"])
+    }
+
     @Test func authenticatedWriteProfileMatchesMeloXAndCookiesMatchEncryptedHeader() throws {
         let client = api().client
         let request = try client.makeRequest("/api/playlist/subscribe", data: ["id": 7], authenticated: true, checkToken: "fresh-test-token")

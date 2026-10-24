@@ -37,27 +37,23 @@ extension View {
     }
 }
 
-private struct SongPlaylistSheet: View {
+struct SongPlaylistSheet: View {
     let track: Track
-    @Environment(OfflineLibraryStore.self) private var library
     @Environment(ModuleRegistry.self) private var modules
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        if let picker = modules.playlistPicker(for: track) {
-            picker
-        } else if library.localFile(for: track) != nil {
-            LocalPlaylistPicker(track: track)
-        } else {
-            unavailable("这首歌尚无可用的平台歌单接口。下载歌曲后，可以加入本地歌单。")
-        }
-    }
-
-    private func unavailable(_ message: String) -> some View {
         NavigationStack {
-            ContentUnavailableView("暂时无法加入歌单", systemImage: "music.note.list", description: Text(message))
-                .navigationTitle("加入歌单")
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() } } }
+            List {
+                LocalPlaylistPickerContent(track: track)
+                if let picker = modules.playlistPicker(for: track) { picker }
+            }
+            .navigationTitle("加入播放列表")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消", role: .cancel) { dismiss() }
+                }
+            }
         }
     }
 }

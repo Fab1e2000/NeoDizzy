@@ -5,6 +5,8 @@ struct DiscDetailView: View {
     @Environment(BrowsingHistoryStore.self) private var history
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(AccountLibraryMirror.self) private var accountLibrary
+    @Environment(SavedLibraryStore.self) private var savedLibrary
+    @Environment(PlaybackHistoryStore.self) private var playbackHistory
     @State private var model: DiscDetailModel
 
     let initialArtworkURL: URL?
@@ -19,12 +21,23 @@ struct DiscDetailView: View {
     }
 
     private var displayedArtworkURL: URL? {
-        offline.collection(provider: "dizzylab", kind: "album", id: model.id)?.coverURL ?? model.detail.value?.summary.coverURL ?? initialArtworkURL
+        offline.collection(provider: "dizzylab", kind: "album", id: model.id)?.coverURL
+            ?? model.detail.value?.summary.coverURL ?? initialArtworkURL ?? libraryArtworkURL
+    }
+
+    private var libraryArtworkURL: URL? {
+        accountLibrary.collections.first {
+            $0.providerID == "dizzylab" && $0.kind == .album && $0.itemID == model.id
+        }?.coverURL ?? savedLibrary.items.first {
+            $0.providerID == "dizzylab" && $0.kind == .album && $0.itemID == model.id
+        }?.coverURL ?? playbackHistory.entries.first {
+            $0.providerID == "dizzylab" && $0.itemID == model.id
+        }?.coverURL
     }
 
     var body: some View {
         // Keep background state alive when loading content is replaced by album details.
-        AlbumDetailScrollView(artworkURL: displayedArtworkURL) {
+        AlbumDetailScrollView(artworkURL: initialArtworkURL ?? libraryArtworkURL ?? displayedArtworkURL) {
             if let album = offline.collection(provider: "dizzylab", kind: "album", id: model.id) {
                 // 已扫描到的专辑立即显示，不发起详情或试听时长请求。
                 DiscDetailContent(detail: album.detail, tracks: album.tracks, artworkURL: album.coverURL)
@@ -66,14 +79,6 @@ struct DiscDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
-            // 已购专辑自动在资料库里；没买的可以手动加入（只记在 App 里）。
-            if let summary = model.detail.value?.summary, !summary.isOwned, !accountLibrary.isDizzyLabAlbumPurchased(summary.id) {
-                ToolbarItem(placement: .topBarTrailing) {
-                    SavedLibraryToggle(item: SavedLibraryItem(
-                        kind: .album, providerID: "dizzylab", itemID: summary.id, title: summary.title,
-                        subtitle: summary.labelName ?? "DizzyLab", coverURL: summary.coverURL, addedAt: .now))
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ShareLink(item: DizzyURL.disc(model.id)) { Label("分享", systemImage: "square.and.arrow.up") }
@@ -102,6 +107,7 @@ private struct DiscDetailContent: View {
     var artworkURL: URL?
     @Environment(PlayerStore.self) private var player
     @Environment(OfflineLibraryStore.self) private var offline
+    @Environment(AccountLibraryMirror.self) private var accountLibrary
     @State private var purchaseSheet: PurchaseSheet?
     @State private var checkedLocalTrackIDs: Set<String>?
 
@@ -125,7 +131,10 @@ private struct DiscDetailContent: View {
         LazyVStack(alignment: .leading, spacing: 0) {
             header
             if !detail.description.isEmpty || !detail.credits.isEmpty {
-                DiscNotesExcerpt(detail: detail)
+                AlbumDescriptionExcerpt(title: summary.title, subtitle: summary.labelName, sections: [
+                    .init(title: "介绍", text: detail.description),
+                    .init(title: "曲目与制作人员", text: detail.credits)
+                ], accessibilityTitle: "专辑介绍")
                     .padding(.horizontal, 20)
                     .padding(.bottom, 20)
             }
@@ -173,10 +182,22 @@ private struct DiscDetailContent: View {
                     .foregroundStyle(.primary)
             }
         } actions: {
-            AlbumPlaybackActions(isEmpty: tracks.isEmpty, isPreview: isPreviewOnly) { shuffled in
+            AlbumPlaybackActions(isEmpty: tracks.isEmpty, isPreview: isPreviewOnly, play: { shuffled in
                 guard !tracks.isEmpty else { return }
                 play(from: shuffled ? Int.random(in: tracks.indices) : 0)
                 if player.isShuffled != shuffled { player.toggleShuffle() }
+            }) {
+                if summary.isOwned || accountLibrary.isDizzyLabAlbumPurchased(summary.id) {
+                    Button {} label: {
+                        CollectionLibraryActionLabel(isAdded: true)
+                    }
+                    .disabled(true)
+                    .accessibilityLabel("已购专辑，已在资料库")
+                } else {
+                    SavedLibraryToggle(item: SavedLibraryItem(
+                        kind: .album, providerID: "dizzylab", itemID: summary.id, title: summary.title,
+                        subtitle: summary.labelName ?? "DizzyLab", coverURL: artworkURL ?? summary.coverURL, addedAt: .now))
+                }
             }
             .padding(.horizontal, 20)
         }
@@ -379,14 +400,6 @@ private struct DiscStoreCard: View {
             .tint(DizzyPalette.download)
             .fontWeight(.semibold)
             .accessibilityHint("选择格式和特典")
-            if detail.hasGift {
-                Label("含特典", systemImage: "gift")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.adaptive(light: 0x8F4A0C, dark: 0xFFB35C))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.orange.opacity(0.14), in: .rect(cornerRadius: 6))
-            }
         }
     }
 
@@ -442,144 +455,5 @@ private struct DiscStoreCard: View {
 struct PurchaseSheet: Identifiable {
     let summary: DiscSummary
     var id: String { summary.id }
-}
-
-/// 专辑介绍摘录，与 Apple Music 专辑页的介绍相同：标题下方显示前三行，段落连成一段；
-/// 被截断时「更多」接在最后一行末尾，前面的文字渐隐，轻点打开完整的「介绍」和「曲目与制作人员」。
-/// 没被截断就是全部内容，不显示「更多」，也不能点。
-private struct DiscNotesExcerpt: View {
-    let detail: DiscDetail
-    @State private var isPresented = false
-    @State private var isTruncated = false
-    @State private var collapsedHeight: CGFloat = 0
-    @State private var moreSize: CGSize = .zero
-    private static let lineLimit = 3
-    private static let fadeWidth: CGFloat = 32
-
-    private var excerpt: String {
-        [detail.description, detail.credits]
-            .flatMap { $0.split(whereSeparator: \.isNewline) }
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-            .reduce(into: "") { result, line in
-                // 中文行之间直接相连，西文行之间补一个空格。
-                if let last = result.last, !Self.isWide(last), !Self.isWide(line.first!) { result += " " }
-                result += line
-            }
-    }
-
-    /// 中日韩文字和全角标点，前后不需要空格。
-    private static func isWide(_ character: Character) -> Bool {
-        character.unicodeScalars.contains { scalar in
-            switch scalar.value {
-            case 0x2E80...0x9FFF, 0xAC00...0xD7AF, 0xF900...0xFAFF, 0xFE30...0xFE4F, 0xFF00...0xFFEF: true
-            default: false
-            }
-        }
-    }
-
-    var body: some View {
-        if isTruncated {
-            Button { isPresented = true } label: { content }
-                .buttonStyle(.plain)
-                .accessibilityLabel("专辑介绍")
-                .accessibilityValue(excerpt)
-                .accessibilityHint("显示完整介绍")
-                .sheet(isPresented: $isPresented) { DiscNotesSheet(detail: detail).restoringAppColorScheme() }
-        } else {
-            content
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("专辑介绍")
-                .accessibilityValue(excerpt)
-        }
-    }
-
-    private var content: some View {
-        styled(Text(excerpt))
-            .lineLimit(Self.lineLimit)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { collapsedHeight = $0 }
-            .background {
-                // 用不限行数的同一段文字比较高度，判断是否真的被截断。
-                styled(Text(excerpt))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .hidden()
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { full in
-                        isTruncated = full > collapsedHeight + 1
-                    }
-            }
-            .mask { if isTruncated { fadeMask } else { Rectangle() } }
-            .overlay(alignment: .bottomTrailing) {
-                if isTruncated {
-                    Text("更多")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .onGeometryChange(for: CGSize.self) { $0.size } action: { moreSize = $0 }
-                }
-            }
-            .contentShape(.rect)
-    }
-
-    private func styled(_ text: Text) -> some View {
-        text
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineSpacing(2)
-            .multilineTextAlignment(.leading)
-    }
-
-    /// 最后一行末尾给「更多」让位，文字在它前面渐隐，不会和它挤在一起。
-    private var fadeMask: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-            HStack(spacing: 0) {
-                Rectangle()
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: Self.fadeWidth)
-                Color.clear.frame(width: moreSize.width + 4)
-            }
-            .frame(height: moreSize.height)
-        }
-    }
-}
-
-private struct DiscNotesSheet: View {
-    let detail: DiscDetail
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(detail.summary.title).font(.title2.bold())
-                        if let label = detail.summary.labelName {
-                            Text(label).font(.title3).foregroundStyle(.secondary)
-                        }
-                    }
-                    if !detail.description.isEmpty { section("介绍", text: detail.description) }
-                    if !detail.credits.isEmpty { section("曲目与制作人员", text: detail.credits) }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
-            }
-            .navigationTitle("介绍")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(role: .close) { dismiss() }
-                }
-            }
-        }
-    }
-
-    private func section(_ title: LocalizedStringKey, text: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-            // 网页里常有连续好几个空行，最多保留一个，段落间距才均匀。
-            Text(text.replacing(#/\n\s*\n\s*(\n\s*)+/#, with: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines))
-                .font(.body).lineSpacing(4).textSelection(.enabled)
-        }
-    }
 }
 

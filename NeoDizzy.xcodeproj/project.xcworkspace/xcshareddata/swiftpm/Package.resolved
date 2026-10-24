@@ -1,6 +1,24 @@
 {
-  "originHash" : "e65e85e0fffe31c72ce1b2c79784faff3f6b13c99b3d9a05ab045ce92dc8f84c",
+  "originHash" : "b77d77bc5bc089f5150052d4a00dd58e285c6b8c4f18bce5f86fe86e9676f7eb",
   "pins" : [
+    {
+      "identity" : "lnswiftuiutils",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/LeoNatan/LNSwiftUIUtils.git",
+      "state" : {
+        "revision" : "181a95b992f84d99a14c562c86e8ebef3cbcdca9",
+        "version" : "1.1.5"
+      }
+    },
+    {
+      "identity" : "lnsystemmarqueelabel",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/LeoNatan/LNSystemMarqueeLabel",
+      "state" : {
+        "revision" : "a87c80c36e8cc84f05a691da33c838a8e93015f6",
+        "version" : "0.1.2"
+      }
+    },
     {
       "identity" : "nuke",
       "kind" : "remoteSourceControl",

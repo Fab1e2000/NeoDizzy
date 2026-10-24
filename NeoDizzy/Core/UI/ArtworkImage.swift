@@ -28,6 +28,9 @@ struct ArtworkImage: View {
         .aspectRatio(aspectRatio, contentMode: .fit)
         .clipShape(.rect(cornerRadius: cornerRadius))
         .accessibilityHidden(true)
+        #if os(iOS)
+        .modifier(AlbumArtworkTransitionSource(url: url, cornerRadius: cornerRadius))
+        #endif
     }
 
     private func imageRequest(for size: CGSize) -> ImageRequest? {

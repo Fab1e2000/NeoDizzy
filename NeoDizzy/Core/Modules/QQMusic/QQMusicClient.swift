@@ -227,7 +227,8 @@ actor QQMusicClient {
             tracks += batch
             if complete { break }
         }
-        return QQMusicCollection(id: mid, title: title, coverURL: QQMusicSong.cover(albumMid: mid), songs: tracks)
+        return QQMusicCollection(id: mid, title: title, coverURL: QQMusicSong.cover(albumMid: mid), songs: tracks,
+                                 detailDescription: QQMusicText.detailDescription(basic))
     }
 
     func playlist(id: String) async throws -> QQMusicCollection {
@@ -236,19 +237,22 @@ actor QQMusicClient {
         var tracks: [QQMusicSong] = []
         var pagination = QQMusicCollectionPagination()
         var title = "歌单", cover: URL?
+        var detailDescription = ""
         while true {
             guard revision == generation else { throw CancellationError() }
             let data = try await call("music.srfDissInfo.DissInfo", "CgiGetDiss", ["disstid": number, "dirid": 0, "tag": true, "song_begin": pagination.offset, "song_num": 100, "userinfo": true, "orderlist": true, "onlysonglist": false])
             guard let info = data["dirinfo"] as? [String: Any] else { throw QQMusicError.invalidResponse }
             title = (info["title"] ?? info["dirName"] ?? info["name"]) as? String ?? title
             cover = Self.url(info["picurl"] ?? info["picUrl"] ?? info["cover"])
+            if pagination.offset == 0 { detailDescription = QQMusicText.detailDescription(info) }
             let batch = try Self.dailySongs(data: data)
             let more = try QQMusicCollectionPagination.hasMore(data["hasmore"])
             let complete = try pagination.append(batch, total: data["total_song_num"], hasMore: more)
             tracks += batch
             if complete { break }
         }
-        return QQMusicCollection(id: id, title: title, coverURL: cover, songs: tracks)
+        return QQMusicCollection(id: id, title: title, coverURL: cover, songs: tracks,
+                                 detailDescription: detailDescription)
     }
 
     func stream(mid: String, quality: QQMusicQuality = .standard) async throws -> RemotePlaybackSource {

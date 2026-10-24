@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import Testing
 @testable import NeoDizzy
 
@@ -46,6 +47,11 @@ import Testing
         #expect(Set(services.modules.searchSections(query: "fixture", in: services.moduleSettings.visibleSearchModules).map(\.id)) == Set(registrations.map(\.descriptor.id)))
         for registration in registrations {
             let id = registration.descriptor.id
+            if let asset = registration.descriptor.imageAsset {
+                let icon = try #require(UIImage(named: asset), "Retained module must include its icon resource")
+                #expect(icon.renderingMode == .alwaysTemplate)
+                #expect(icon.size == CGSize(width: 24, height: 24))
+            }
             #expect(services.isEnabled(id))
             _ = services.modules.rootView(for: id)
             if registration.canDisable {

@@ -82,7 +82,7 @@ struct NowPlayingSongHeader: View {
                     )
                     .lineLimit(1)
 
-                Text(artistText)
+                NowPlayingArtistButton(track: song)
                     .font(usesReferenceLayout ? .title3 : .subheadline)
                     .foregroundStyle(.white.opacity(0.64))
                     .lineLimit(1)

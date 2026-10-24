@@ -99,10 +99,15 @@ struct AlbumPlaybackActions<Accessory: View>: View {
     let play: (Bool) -> Void
     @ViewBuilder var accessory: () -> Accessory
     @Environment(\.colorScheme) private var colorScheme
+    /// 圆形按钮的实际宽度，量出来后用来算播放按钮的宽度。
+    @State private var circleWidth: CGFloat = 50
+
+    private var spacing: CGFloat { 14 }
+    private var pageInset: CGFloat { 20 }
 
     var body: some View {
         // 页面内容里的普通按钮，不用液态玻璃：玻璃只留给浮在内容之上的控件。
-        HStack(spacing: 14) {
+        HStack(spacing: spacing) {
             Button { play(true) } label: {
                 Image(systemName: "shuffle")
                     .font(.title2.weight(.semibold))
@@ -113,11 +118,13 @@ struct AlbumPlaybackActions<Accessory: View>: View {
             .controlSize(.large)
             .disabled(isEmpty)
             .accessibilityLabel(isPreview ? "随机试听" : "随机播放")
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { circleWidth = $0 }
 
+            // 播放按钮固定为"一排四个按钮"时的宽度：按钮少的页面不再把它拉长，整排居中。
             Button { play(false) } label: {
                 Label(isPreview ? "试听" : "播放", systemImage: "play.fill")
                     .font(.title3.bold())
-                    .frame(minWidth: 116)
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
@@ -125,12 +132,16 @@ struct AlbumPlaybackActions<Accessory: View>: View {
             .tint(colorScheme == .dark ? Color.white : .black)
             .foregroundStyle(colorScheme == .dark ? Color.black : .white)
             .disabled(isEmpty)
+            .containerRelativeFrame(.horizontal) { width, _ in
+                max(width - 2 * pageInset - 3 * circleWidth - 3 * spacing, 72)
+            }
 
             accessory()
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.circle)
                 .controlSize(.large)
         }
+        .frame(maxWidth: .infinity)
         .tint(DizzyPalette.text)
     }
 }
@@ -146,13 +157,11 @@ extension AlbumPlaybackActions where Accessory == EmptyView {
 
 // Adapted from MeloX AlbumDetailView / AlbumDetailContent / MusicCollectionArtworkBackdrop
 // and ArtworkAccentColorProvider (GPL-3.0).
-/// 与 MeloX 一致：平均取色调成深浅底色，叠加离线模糊封面和渐变。
+/// 封面平均色混入白色，叠加低透明度模糊封面，始终使用浅色背景。
 struct AlbumDetailScrollView<Content: View>: View {
     let artworkURL: URL?
     @ViewBuilder var content: Content
     @State private var appearance: AlbumBackdropModel
-    @Environment(\.colorScheme) private var systemColorScheme
-    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     init(artworkURL: URL?, @ViewBuilder content: () -> Content) {
         self.artworkURL = artworkURL
@@ -162,22 +171,22 @@ struct AlbumDetailScrollView<Content: View>: View {
     }
 
     private var backdrop: AlbumBackdrop? { appearance.backdrop }
-    private var colorScheme: ColorScheme { backdrop?.colorScheme ?? systemColorScheme }
+    private var colorScheme: ColorScheme { .light }
 
     var body: some View {
         ZStack {
             AlbumArtworkBackground(backdrop: backdrop)
             ScrollView { content }
                 .scrollIndicators(.hidden)
+                .tint(.primary)
         }
         .environment(\.colorScheme, colorScheme)
-        // 与 MeloX 的专辑操作一致：控件随页面明暗配色，不继承全局主题色。
-        .tint(.primary)
-        // 表单的底色由系统按 App 外观决定，弹出的内容要换回这个外观，见 restoringAppColorScheme()。
-        .environment(\.appColorScheme, systemColorScheme)
-        .toolbarColorScheme(backdrop?.colorScheme, for: .navigationBar, .tabBar)
+        .environment(\.albumBackdrop, backdrop)
+        // 专辑及其表单统一使用浅色，操作按钮保持中性色。
+        .environment(\.appColorScheme, .light)
+        .toolbarColorScheme(.light, for: .navigationBar)
         .task(id: artworkURL) {
-            await appearance.load(artworkURL, reduceMotion: accessibilityReduceMotion)
+            await appearance.load(artworkURL)
         }
     }
 }
@@ -185,28 +194,31 @@ struct AlbumDetailScrollView<Content: View>: View {
 /// Keep background state and async loading independent of the generic content tree.
 /// Cache misses retain the displayed image, and cancellation prevents stale publication.
 @Observable
-private final class AlbumBackdropModel {
+final class AlbumBackdropModel {
     private(set) var backdrop: AlbumBackdrop?
 
     init(url: URL?) {
         backdrop = url.flatMap { AlbumBackdropCache.shared.backdrop(for: $0) }
     }
 
-    func load(_ url: URL?, reduceMotion: Bool) async {
+    func load(_ url: URL?) async {
         guard let url, !Task.isCancelled else { return }
-        let deadline = ContinuousClock.now.advanced(by: .milliseconds(350))
         let loaded = await AlbumBackdropProvider.shared.backdrop(for: url)
         guard !Task.isCancelled, let loaded,
               backdrop?.alreadyDisplays(loaded) != true else { return }
-        do { try await Task.sleep(until: deadline, clock: .continuous) } catch { return }
-        guard !Task.isCancelled else { return }
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { backdrop = loaded }
+        // Prepared navigation already has the final background on its first frame.
+        // Unknown artwork (e.g. recent songs) is applied as soon as it becomes available.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { backdrop = loaded }
     }
 }
 
 extension EnvironmentValues {
     /// 专辑页按背景色改了深浅外观时，App 本来的外观。
     @Entry var appColorScheme: ColorScheme?
+    /// 阅读页沿用当前专辑已经显示的封面背景，不重新加载或恢复成全局底色。
+    @Entry fileprivate var albumBackdrop: AlbumBackdrop?
 }
 
 extension View {
@@ -237,11 +249,11 @@ private struct AlbumArtworkBackground: View {
                         Image(decorative: image, scale: 1)
                             .resizable().scaledToFill()
                             .frame(width: proxy.size.width, height: proxy.size.height)
-                            .opacity(0.22)
+                            .opacity(0.10)
                             .transition(.opacity)
                     }
                 } else {
-                    Color(white: colorScheme == .dark ? 0.16 : 0.88)
+                    Color(white: 0.97)
                 }
                 LinearGradient(colors: overlayColors, startPoint: .top, endPoint: .bottom)
             }
@@ -253,10 +265,7 @@ private struct AlbumArtworkBackground: View {
     }
 
     private var overlayColors: [Color] {
-        let dark = backdrop?.prefersDarkAppearance ?? (colorScheme == .dark)
-        return dark
-            ? [.black.opacity(0.08), .black.opacity(0.24), .black.opacity(0.40)]
-            : [.white.opacity(0.06), .white.opacity(0.16), .white.opacity(0.30)]
+        [.white.opacity(0.06), .white.opacity(0.16), .white.opacity(0.30)]
     }
 }
 
@@ -271,15 +280,9 @@ nonisolated final class AlbumBackdrop: Equatable, Sendable {
         self.blurredImage = blurredImage
     }
 
-    // MeloX uses weighted sRGB here, without converting to linear-light values.
-    var prefersDarkAppearance: Bool {
-        averageRGB.x * 0.2126 + averageRGB.y * 0.7152 + averageRGB.z * 0.0722 < 0.52
-    }
-    var colorScheme: ColorScheme { prefersDarkAppearance ? .dark : .light }
+    /// White-based tint for every cover, including black or highly saturated art.
     var backgroundRGB: SIMD3<Double> {
-        let color = prefersDarkAppearance
-            ? averageRGB * 0.38 + SIMD3<Double>(repeating: 0.055) * 0.62
-            : averageRGB * 0.30 + SIMD3<Double>(repeating: 0.94) * 0.70
+        let color = averageRGB * 0.12 + SIMD3<Double>(repeating: 0.98) * 0.88
         return color.clamped(lowerBound: .zero, upperBound: .one)
     }
     static func == (lhs: AlbumBackdrop, rhs: AlbumBackdrop) -> Bool {
@@ -377,6 +380,14 @@ enum AlbumArtworkPreload {
 }
 
 extension AlbumArtworkPreload {
+    nonisolated static func hasPreparedBackdrop(for url: URL) -> Bool {
+        AlbumBackdropCache.shared.backdrop(for: url) != nil
+    }
+
+    static func prepareBackdrop(_ url: URL) async {
+        _ = await AlbumBackdropProvider.shared.backdrop(for: url)
+    }
+
     static func prepare(_ url: URL) async {
         async let backdrop = AlbumBackdropProvider.shared.backdrop(for: url)
         var request = heroRequest(for: url)
@@ -417,17 +428,271 @@ extension View {
     }
 }
 
-// Adapted from MeloX ExpandablePlaylistDescription (GPL-3.0).
-struct AlbumDescriptionExcerpt: View {
-    let text: String
+/// A pending tap belongs to one card identity. Replaced/cancelled work cannot push a page later.
+@Observable @MainActor
+final class AlbumNavigationPreparation {
+    struct Request: Hashable {
+        let id = UUID()
+        let route: AppRoute
+        let artworkURL: URL
+    }
+    private(set) var request: Request?
 
-    // 简介全文直接展开，不折叠。
+    func begin(_ route: AppRoute, artworkURL: URL?,
+               isReady: (URL) -> Bool = AlbumArtworkPreload.hasPreparedBackdrop) -> AppRoute? {
+        guard request == nil else { return nil }
+        guard let artworkURL, !isReady(artworkURL) else { return route }
+        request = Request(route: route, artworkURL: artworkURL)
+        return nil
+    }
+
+    func finish(_ pending: Request,
+                prepare: (URL) async -> Void = AlbumArtworkPreload.prepareBackdrop) async -> AppRoute? {
+        guard request == pending else { return nil }
+        await prepare(pending.artworkURL)
+        guard !Task.isCancelled, request == pending else { return nil }
+        request = nil
+        return pending.route
+    }
+
+    func cancel() { request = nil }
+}
+
+extension View {
+    func preparedAlbumNavigation(_ preparation: AlbumNavigationPreparation) -> some View {
+        modifier(PreparedAlbumNavigation(preparation: preparation))
+    }
+}
+
+private struct PreparedAlbumNavigation: ViewModifier {
+    let preparation: AlbumNavigationPreparation
+    @Environment(\.openRoute) private var openRoute
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: preparation.request) {
+                guard let pending = preparation.request else { return }
+                if let route = await preparation.finish(pending) { openRoute(route) }
+            }
+            .onDisappear { preparation.cancel() }
+    }
+}
+
+/// Keep a cold-cache tap on the current card until its destination can render the cover palette.
+/// Cached cards navigate synchronously; failed artwork loads still allow opening the collection.
+struct AlbumNavigationLink<Label: View>: View {
+    let value: AppRoute
+    let artworkURL: URL?
+    /// A card may display a different artwork size/URL from the detail's preload.
+    var sourceArtworkURL: URL? = nil
+    /// Disable for text-only links; zoom labels contain one matching ArtworkImage.
+    var zoomsFromArtwork = true
+    @ViewBuilder var label: () -> Label
+    @Environment(\.openRoute) private var openRoute
+    @Environment(\.albumNavigationNamespace) private var transitionNamespace
+    @State private var preparation = AlbumNavigationPreparation()
+    @State private var transitionID = UUID()
+
+    private var transitionSource: AlbumNavigationSource? {
+        guard zoomsFromArtwork, let transitionNamespace,
+              let sourceURL = sourceArtworkURL ?? artworkURL else { return nil }
+        return AlbumNavigationSource(id: transitionID, namespace: transitionNamespace, artworkURL: sourceURL)
+    }
+
     var body: some View {
-        Text(text)
-            .font(.body).foregroundStyle(.secondary)
-            .multilineTextAlignment(.leading)
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
+        Button {
+            if let route = preparation.begin(value, artworkURL: artworkURL) { navigate(to: route) }
+        } label: {
+            label()
+                .overlay {
+                    if preparation.request != nil {
+                        ProgressView().padding(10).background(.regularMaterial, in: .circle)
+                    }
+                }
+                .environment(\.albumNavigationSource, transitionSource)
+        }
+        .disabled(preparation.request != nil)
+        .prefetchAlbumArtwork(url: artworkURL)
+        .task(id: preparation.request) {
+            guard let pending = preparation.request else { return }
+            if let route = await preparation.finish(pending), value == pending.route, artworkURL == pending.artworkURL {
+                navigate(to: route)
+            }
+        }
+        .onChange(of: value) { preparation.cancel() }
+        .onChange(of: artworkURL) { preparation.cancel() }
+        .onDisappear { preparation.cancel() }
+    }
+
+    private func navigate(to route: AppRoute) {
+        openRoute(transitionSource.map { route.zooming(from: $0.id) } ?? route)
+    }
+}
+
+/// A source-neutral reading section; headings identify the sections within one description.
+struct AlbumDescriptionSection: Identifiable {
+    let title: String
+    let text: String
+    var id: String { title }
+}
+
+/// 三行摘要只在实际截断时显示「更多」；完整阅读保留段落和当前封面背景。
+struct AlbumDescriptionExcerpt: View {
+    let title: String
+    let subtitle: String?
+    let sections: [AlbumDescriptionSection]
+    let accessibilityTitle: String
+    @Environment(\.albumBackdrop) private var backdrop
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isPresented = false
+    @State private var collapsedHeight: CGFloat = 0
+    @State private var fullHeight: CGFloat = 0
+    @State private var moreSize: CGSize = .zero
+    private static let lineLimit = 3
+    private static let fadeWidth: CGFloat = 32
+
+    init(text: String, title: String, subtitle: String? = nil, accessibilityTitle: String = "介绍") {
+        self.init(title: title, subtitle: subtitle,
+                  sections: [.init(title: "介绍", text: text)], accessibilityTitle: accessibilityTitle)
+    }
+
+    init(title: String, subtitle: String? = nil, sections: [AlbumDescriptionSection], accessibilityTitle: String = "介绍") {
+        self.title = title
+        self.subtitle = subtitle
+        self.sections = sections.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        self.accessibilityTitle = accessibilityTitle
+    }
+
+    private var excerpt: String {
+        sections.map(\.text)
+            .flatMap { $0.split(whereSeparator: \.isNewline) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .reduce(into: "") { result, line in
+                // 中文行之间直接相连，西文行之间补一个空格。
+                if let last = result.last, !Self.isWide(last), !Self.isWide(line.first!) { result += " " }
+                result += line
+            }
+    }
+
+    private var isTruncated: Bool { fullHeight > collapsedHeight + 1 }
+
+    private static func isWide(_ character: Character) -> Bool {
+        character.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x2E80...0x9FFF, 0xAC00...0xD7AF, 0xF900...0xFAFF, 0xFE30...0xFE4F, 0xFF00...0xFFEF: true
+            default: false
+            }
+        }
+    }
+
+    var body: some View {
+        if !sections.isEmpty {
+            Button { if isTruncated { isPresented = true } } label: { content }
+                .buttonStyle(.plain)
+                .allowsHitTesting(isTruncated)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityTitle)
+                .accessibilityValue(excerpt)
+                .accessibilityHint(isTruncated ? "显示完整介绍" : "")
+                .accessibilityRemoveTraits(isTruncated ? [] : .isButton)
+                .accessibilityAddTraits(isTruncated ? [] : .isStaticText)
+                .sheet(isPresented: $isPresented) {
+                    AlbumDescriptionSheet(title: title, subtitle: subtitle, sections: sections, backdrop: backdrop)
+                        .preferredColorScheme(colorScheme)
+                }
+        }
+    }
+
+    private var content: some View {
+        styled(Text(excerpt))
+            .lineLimit(Self.lineLimit)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { collapsedHeight = $0 }
+            .background {
+                styled(Text(excerpt))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .hidden()
+                    .accessibilityHidden(true)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fullHeight = $0 }
+            }
+            .mask { if isTruncated { fadeMask } else { Rectangle() } }
+            .overlay(alignment: .bottomTrailing) {
+                if isTruncated {
+                    Text("更多")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { moreSize = $0 }
+                }
+            }
+            .contentShape(.rect)
+    }
+
+    private func styled(_ text: Text) -> some View {
+        text.font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineSpacing(2)
+            .multilineTextAlignment(.leading)
+    }
+
+    private var fadeMask: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+            HStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: Self.fadeWidth)
+                Color.clear.frame(width: moreSize.width + 4)
+            }
+            .frame(height: moreSize.height)
+        }
+    }
+}
+
+private struct AlbumDescriptionSheet: View {
+    let title: String
+    let subtitle: String?
+    let sections: [AlbumDescriptionSection]
+    let backdrop: AlbumBackdrop?
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AlbumArtworkBackground(backdrop: backdrop)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 28) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(title).font(.title2.bold())
+                            if let subtitle, !subtitle.isEmpty {
+                                Text(subtitle).font(.title3).foregroundStyle(.secondary)
+                            }
+                        }
+                        ForEach(sections) { section in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(section.title).font(.headline).accessibilityAddTraits(.isHeader)
+                                Text(section.text.replacing(#/\n\s*\n\s*(\n\s*)+/#, with: "\n\n")
+                                    .trimmingCharacters(in: .whitespacesAndNewlines))
+                                    .font(.body).lineSpacing(4).textSelection(.enabled)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                }
+            }
+            .navigationTitle("介绍")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(role: .close) { dismiss() }
+                }
+            }
+        }
+        .tint(.primary)
+        .presentationBackground { AlbumArtworkBackground(backdrop: backdrop) }
     }
 }

@@ -1,10 +1,10 @@
 // Direct source port from MeloX (GPL-3.0), b8bc60f.
 // Data/settings adapters retain NeoDizzy playback and lyric sources.
+import LNPopupUI
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct NowPlayingView: View {
-    static let transitionID = "nowPlaying"
     private static let portraitHorizontalPadding: CGFloat = 32
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
@@ -24,11 +24,14 @@ struct NowPlayingView: View {
     @State private var importTrackID: String?
     @Namespace private var pageArtworkNamespace
     private var page: NowPlayingPage { pageTransition.page }
-    init(initialPage: NowPlayingPage = .artwork) {
+    private let onDismiss: (() -> Void)?
+    init(initialPage: NowPlayingPage = .artwork, onDismiss: (() -> Void)? = nil) {
+        self.onDismiss = onDismiss
         _pageTransition = State(initialValue: NowPlayingTransitionCoordinator(initialPage: initialPage))
     }
     var body: some View {
-        GeometryReader { _ in
+        GeometryReader { geometry in
+            let layout = NowPlayingLayout(contentSize: geometry.size)
             ZStack {
                 NowPlayingBackground(
                     artworkURL: player.currentTrack?.coverURL,
@@ -36,11 +39,12 @@ struct NowPlayingView: View {
                 )
                 // iPhone 只支持竖屏（见 project.yml 的 UISupportedInterfaceOrientations），不保留横屏布局。
                 if let song = player.currentTrack {
-                    portraitContent(for: song)
+                    portraitContent(for: song, layout: layout)
                 } else {
                     ContentUnavailableView("当前没有播放歌曲", systemImage: "music.note").foregroundStyle(.white)
                 }
             }
+            .environment(\.nowPlayingLayout, layout)
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
@@ -58,16 +62,20 @@ struct NowPlayingView: View {
                 pageSelection.wrappedValue = .artwork
             }
         }
-        .onChange(of: player.currentTrack == nil) { _, empty in if empty { dismiss() } }
+        .onChange(of: player.currentTrack == nil) { _, empty in if empty { closePlayer() } }
         .fileImporter(isPresented: $importingLyrics, allowedContentTypes: [.data, .plainText]) { result in
             guard let id = importTrackID, case .success(let url) = result else { return }
             Task { await lyricsModel.importFile(url, trackID: id) }
         }
     }
 
-    private func portraitContent(for song: Track) -> some View {
+    private func closePlayer() {
+        if let onDismiss { onDismiss() } else { dismiss() }
+    }
+
+    private func portraitContent(for song: Track, layout: NowPlayingLayout) -> some View {
         VStack(spacing: 0) {
-            dismissalHandle
+            dismissalHandle(layout: layout)
 
             pageContent(for: song)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -141,24 +149,24 @@ struct NowPlayingView: View {
         page == .lyrics
     }
 
-    private var dismissalHandle: some View {
+    private func dismissalHandle(layout: NowPlayingLayout) -> some View {
         ZStack(alignment: .top) {
             Capsule()
-                .fill(.white.opacity(0.52))
-                .frame(width: 60, height: 5)
-                .padding(.top, 8)
+                .fill(.white.opacity(0.58))
+                .frame(width: layout.width(60), height: 3.8)
+                .padding(.top, layout.contentY(69))
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 34)
+        .frame(height: 22)
         .contentShape(.rect)
         .onTapGesture {
-            dismiss()
+            closePlayer()
         }
         .accessibilityElement()
         .accessibilityLabel("收起播放器")
         .accessibilityHint("返回上一页")
         .accessibilityAction {
-            dismiss()
+            closePlayer()
         }
     }
 
@@ -203,6 +211,7 @@ struct NowPlayingView: View {
                         width: portraitArtworkFrame.width,
                         height: portraitArtworkFrame.height
                     )
+                    .popupTransitionTarget()
                     .position(
                         x:
                             portraitArtworkFrame.midX
@@ -221,9 +230,14 @@ struct NowPlayingView: View {
                     .allowsHitTesting(false)
                 }
             }
-            // Keep page-transition clipping vertically while allowing the
-            // expanded artwork to use the portrait layout's side margins.
-            .clipped()
+            .mask {
+                GeometryReader { geometry in
+                    // The queue cover follows the list behind its top edge.
+                    // Keep the artwork page's shadow uncut beneath the handle.
+                    Rectangle()
+                        .padding(page == .queue ? 0 : -max(geometry.size.width, geometry.size.height))
+                }
+            }
             .padding(
                 .horizontal,
                 -Self.portraitHorizontalPadding
@@ -319,7 +333,10 @@ struct NowPlayingView: View {
                 queueSongHeaderOffset = $0
             }
         )
+        // 列表通栏，超出外层水平内边距；先放宽再裁剪，再收回，裁剪范围才是整屏宽度。
+        .padding(.horizontal, Self.portraitHorizontalPadding)
         .clipped()
+        .padding(.horizontal, -Self.portraitHorizontalPadding)
         .nowPlayingQueuePagePresentation(
             visualState: visualState,
             opacityTransition: pageTransition.queueOpacityTransition,

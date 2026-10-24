@@ -5,12 +5,12 @@ struct QQMusicPlayerActions: View {
     var onImportLyrics: (() -> Void)?
     @Environment(QQMusicStore.self) private var store
     @Environment(DownloadStore.self) private var downloads
-    @State private var singers: [QQMusicArtist] = []
     @State private var showsDownloads = false
+    @State private var albumNavigation = AlbumNavigationPreparation()
     @Environment(\.openRoute) private var openRoute
 
     var body: some View {
-        NowPlayingMenuButton {
+        NowPlayingMenuButton(track: track) {
             var items: [UIMenuElement] = []
             items.append(UIAction(title: "下载歌曲", image: UIImage(systemName: "arrow.down.circle")) { _ in
                 guard store.credential != nil else { store.showsAccount = true; return }
@@ -19,14 +19,12 @@ struct QQMusicPlayerActions: View {
                     showsDownloads = true
                 }
             })
-            for artist in singers {
-                items.append(UIAction(title: "歌手 · \(artist.name)", image: UIImage(systemName: "person")) { _ in
-                    openRoute(.qqmusic(.artist(artist.id)))
-                })
-            }
             if !track.discID.isEmpty {
                 items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "square.stack")) { _ in
-                    openRoute(.qqmusic(.album(track.discID)))
+                    guard store.active else { return }
+                    if let route = albumNavigation.begin(.qqmusic(.album(track.discID)), artworkURL: QQMusicSong.cover(albumMid: track.discID)) {
+                        openRoute(route)
+                    }
                 })
             }
             if let mid = track.remoteSource?.itemID {
@@ -43,13 +41,8 @@ struct QQMusicPlayerActions: View {
             return items
         }.frame(width: 44, height: 44)
         .sheet(isPresented: $showsDownloads) { DownloadQueueSheet() }
-        .task(id: "\(store.revision)/\(track.id)") {
-            singers = []
-            let revision = store.revision
-            guard let mid = track.remoteSource?.itemID,
-                  let song = try? await store.api.song(mid: mid), !Task.isCancelled,
-                  store.active, store.revision == revision else { return }
-            singers = song.singers
-        }
+        .preparedAlbumNavigation(albumNavigation)
+        .onChange(of: track.id) { _, _ in albumNavigation.cancel() }
+        .onChange(of: store.revision) { _, _ in albumNavigation.cancel() }
     }
 }

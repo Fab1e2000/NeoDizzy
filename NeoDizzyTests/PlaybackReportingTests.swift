@@ -81,3 +81,49 @@ import Testing
         #expect(PlaybackHistoryStore(defaults: defaults).entries.first?.providerID == "custom")
     }
 }
+
+@MainActor struct SongPlaybackHistoryTests {
+    @Test func recordsSongsWithoutAlbumAndKeepsSourcesSeparate() throws {
+        let name = "SongHistory.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let store = PlaybackHistoryStore(defaults: defaults)
+        store.register("first") { _ in nil }
+        store.register("second") { _ in nil }
+        func song(_ provider: String, _ id: String) -> Track {
+            Track(discID: "", number: "1", title: id, artists: "Artist", albumTitle: "", coverURL: nil,
+                  remoteSource: .init(providerID: provider, itemID: id))
+        }
+        let first = song("first", "1"), second = song("second", "1")
+        store.record(first, at: Date(timeIntervalSince1970: 1))
+        store.record(second, at: Date(timeIntervalSince1970: 2))
+        store.record(first, at: Date(timeIntervalSince1970: 3))
+        #expect(store.songs.map(\.track) == [first, second])
+        #expect(store.songs.first?.playedAt == Date(timeIntervalSince1970: 3))
+        #expect(store.entries.isEmpty)
+        store.unregister("first")
+        store.record(song("first", "2"))
+        #expect(PlaybackHistoryStore(defaults: defaults).songs.map(\.track) == [first, second])
+    }
+
+    @Test func localSongsAreBoundedAndOldAlbumHistoryIsNotInventedAsSongs() throws {
+        let name = "SongHistory.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let old = PlaybackHistoryStore.Entry(kind: .localAlbum, itemID: "album", title: "Album", subtitle: "", playedAt: .now)
+        defaults.set(try JSONEncoder().encode([old]), forKey: "playbackHistory.v1")
+        defaults.set(Data("invalid".utf8), forKey: "playbackHistory.songs.v1")
+        let store = PlaybackHistoryStore(defaults: defaults)
+        #expect(store.songs.isEmpty)
+        #expect(store.entries == [old])
+        for index in 0...PlaybackHistoryStore.songLimit {
+            store.record(Track(discID: "", number: "\(index)", title: "Song", artists: "", albumTitle: "Album", coverURL: nil,
+                               localSource: .init(albumID: "album", trackID: "\(index)")))
+        }
+        let restored = PlaybackHistoryStore(defaults: defaults)
+        #expect(restored.songs.count == PlaybackHistoryStore.songLimit)
+        #expect(restored.songs.first?.track.localSource?.trackID == "100")
+        #expect(restored.songs.last?.track.localSource?.trackID == "1")
+        #expect(restored.entries.count == 1)
+    }
+}

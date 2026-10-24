@@ -55,6 +55,35 @@ struct NeteaseContentTests {
         #expect(model.songs.count == 1 && model.hasLoaded)
     }
 
+    @Test(arguments: ["album", "playlist"])
+    func collectionDescriptionsPreserveParagraphsAndClearWhenAbsent(kind: String) async {
+        let route: NeteaseRoute = kind == "album" ? .album(7) : .playlist(7)
+        let responseWithDescription = kind == "album"
+            ? #"{"code":200,"album":{"id":7,"name":"Album","description":"第一段\n\n第二段"},"songs":[]}"#
+            : #"{"code":200,"playlist":{"id":7,"name":"Playlist","description":"第一段\n\n第二段","trackIds":[]}}"#
+        ContentStub.handler = { _ in responseWithDescription }
+        let model = NeteasePageModel()
+        let api = makeAPI()
+        await model.load(api: api, route: route)
+        #expect(model.hasLoaded && model.error == nil)
+        #expect(model.detailDescription == "第一段\n\n第二段")
+
+        // A refresh that omits an introduction must not retain the previous one.
+        let responseWithoutDescription = kind == "album"
+            ? #"{"code":200,"album":{"id":7,"name":"Album"},"songs":[]}"#
+            : #"{"code":200,"playlist":{"id":7,"name":"Playlist","trackIds":[]}}"#
+        ContentStub.handler = { _ in responseWithoutDescription }
+        await model.load(api: api, route: route)
+        #expect(model.hasLoaded && model.error == nil)
+        #expect(model.detailDescription.isEmpty)
+
+        ContentStub.handler = { _ in responseWithDescription }
+        await model.load(api: api, route: route)
+        #expect(model.detailDescription == "第一段\n\n第二段")
+        model.reset()
+        #expect(model.detailDescription.isEmpty && !model.hasLoaded)
+    }
+
     @Test func skeletonCoversFirstFrameButNotLoadedEmptyResultsErrorsOrRetainedContent() async throws {
         let model = NeteasePageModel()
         #expect(model.showsInitialSkeleton)

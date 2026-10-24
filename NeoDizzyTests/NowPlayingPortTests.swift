@@ -5,6 +5,67 @@ import Testing
 @testable import NeoDizzy
 
 @Suite(.serialized) @MainActor struct NowPlayingPortTests {
+    @Test func slowQueueScrollKeepsViewportAndContentStableAcrossHeaderBoundary() async throws {
+        let name = "QueueScrollTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let tracks = (0..<30).map {
+            Track(discID: "", number: "\($0)", title: "队列歌曲 \($0)", artists: "测试艺术家", albumTitle: "专辑", coverURL: nil,
+                  localSource: .init(albumID: "test", trackID: "\($0)"))
+        }
+        let persistence = PlaybackPersistence(defaults: defaults)
+        persistence.save(.init(queue: tracks, currentIndex: 0, progress: 0, repeatMode: .off, isShuffled: false, shuffledOrder: []))
+        let player = PlayerStore(persistence: persistence)
+        player.restore()
+        let library = OfflineLibraryStore(defaults: defaults)
+        let favoritesDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: favoritesDirectory) }
+        let favorites = FavoritesStore(directory: favoritesDirectory)
+        let modules = try ModuleRegistry([LocalLibraryModule(library: library)])
+        let controller = UIHostingController(rootView: NowPlayingView(initialPage: .queue)
+            .environment(player).environment(library).environment(favorites).environment(modules))
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        try await Task.sleep(for: .milliseconds(500))
+
+        func collectionViews(in view: UIView) -> [UICollectionView] {
+            (view as? UICollectionView).map { [$0] } ?? view.subviews.flatMap { collectionViews(in: $0) }
+        }
+        let list = try #require(collectionViews(in: controller.view).max { $0.bounds.height < $1.bounds.height })
+        let initialViewport = list.convert(list.bounds, to: window)
+        // Inspect the visible "Continue Playing" row, not contentSize: List
+        // legitimately refines estimated heights of offscreen rows on scroll.
+        let headingIndex = IndexPath(item: 0, section: list.numberOfSections - 1)
+        let initialHeading = try #require(list.layoutAttributesForItem(at: headingIndex)).frame
+        // Cross the old 72 pt handoff in both directions, including fractional
+        // offsets. Changing container/header heights here used to move the list
+        // and its "Continue Playing" row during a slow drag.
+        let offsets: [CGFloat] = [60, 68, 71, 71.5, 72, 72.5, 73, 80, 73, 72, 71.5, 68, 60, 0]
+        for offset in offsets {
+            let target = offset - list.adjustedContentInset.top
+            list.setContentOffset(CGPoint(x: 0, y: target), animated: false)
+            try await Task.sleep(for: .milliseconds(100))
+            window.layoutIfNeeded()
+            let viewport = list.convert(list.bounds, to: window)
+            #expect(abs(viewport.minY - initialViewport.minY) < 1)
+            #expect(abs(viewport.height - initialViewport.height) < 1)
+            let heading = try #require(list.layoutAttributesForItem(at: headingIndex)).frame
+            #expect(abs(heading.minY - initialHeading.minY) < 1)
+            #expect(abs(list.contentOffset.y - target) < 1)
+        }
+        for (offset, name): (CGFloat, String) in [(36, "queue-partially-scrolled"), (110, "queue-pinned-controls")] {
+            list.setContentOffset(CGPoint(x: 0, y: offset - list.adjustedContentInset.top), animated: false)
+            try await Task.sleep(for: .milliseconds(150))
+            let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
+            if let data = image.pngData() { Attachment.record(data, named: "\(name).png") }
+        }
+    }
+
     @Test func staleLyricsEntranceCannotOverrideRapidQueueSwitch() throws {
         let motion = NowPlayingPageTransition.motion
         let now = ContinuousClock.now
@@ -63,5 +124,11 @@ import Testing
         try await Task.sleep(for: .milliseconds(450))
         #expect(controller.view.window != nil)
         #expect(player.currentTrack == track && !player.isPlaying)
+        if !landscape {
+            let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
+            if let data = image.pngData() { Attachment.record(data, named: "player-\(page)-layout.png") }
+        }
     }
 }

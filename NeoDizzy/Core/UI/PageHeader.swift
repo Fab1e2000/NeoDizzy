@@ -23,7 +23,7 @@ struct PageSearch {
     var submit: () -> Void
 }
 
-/// 根页面使用系统大标题导航栏：上滑时大标题和搜索框一起收起，变成居中的小标题。
+/// 根页面使用栏内大标题，向下浏览内容时收起整条导航栏。
 /// 右上角只有设置入口（加上页面自己的操作）；各平台的登录在设置里。
 struct RootPageChrome: ViewModifier {
     let title: String
@@ -34,7 +34,7 @@ struct RootPageChrome: ViewModifier {
     func body(content: Content) -> some View {
         let page = content
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.large)
+            .rootTabNavigationBehavior()
             .toolbar { toolbar }
         if let search {
             page
@@ -77,12 +77,19 @@ struct RootPageChrome: ViewModifier {
 }
 
 extension View {
+    /// 保持顶部安全区稳定，避免导航栏收起后原生标签回顶需要点击两次。
+    func rootTabNavigationBehavior() -> some View {
+        toolbarTitleDisplayMode(.inlineLarge)
+            .toolbarMinimizationBehavior(.onScrollDown, for: .navigationBar)
+            .toolbarMinimizationSafeAreaAdjustment(.disabled, for: .navigationBar)
+    }
+
     func rootPageChrome(title: String, action: PageHeaderAction? = nil, search: PageSearch? = nil) -> some View {
         modifier(RootPageChrome(title: title, action: action, search: search))
     }
 }
 
-/// 主页面的骨架：系统大标题 + 模块自己的搜索框，内容放在 LazyVStack 里，分页底栏滚到屏幕上时才触发加载。
+/// 主页面的骨架：栏内大标题，内容放在 LazyVStack 里，分页底栏滚到屏幕上时才触发加载。
 struct MainTabPage<Content: View>: View {
     let title: String
     var search: PageSearch? = nil

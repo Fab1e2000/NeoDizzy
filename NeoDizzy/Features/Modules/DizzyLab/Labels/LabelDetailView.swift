@@ -3,6 +3,7 @@ import SwiftUI
 /// 社团页：头像与关注、简介、pack 和全部作品，样式与网易云歌手页相同。
 struct LabelDetailView: View {
     let name: String
+    @Environment(DizzyLabContentCache.self) private var contentCache
     @State private var page: Loadable<LabelPage>
 
     init(name: String) {
@@ -43,7 +44,7 @@ struct LabelDetailView: View {
             if let latest = label.discs.first {
                 VStack(alignment: .leading, spacing: 12) {
                     ProfileSectionHeader(title: "最新作品")
-                    NavigationLink(value: AppRoute.disc(id: latest.id)) {
+                    AlbumNavigationLink(value: AppRoute.disc(id: latest.id), artworkURL: latest.coverURL) {
                         HStack(spacing: 14) {
                             ArtworkImage(url: latest.coverURL, cornerRadius: 8).frame(width: 92, height: 92)
                             VStack(alignment: .leading, spacing: 4) {
@@ -59,6 +60,7 @@ struct LabelDetailView: View {
                         .contentShape(.rect(cornerRadius: 14))
                     }
                     .buttonStyle(.plain)
+                    .onChange(of: latest, initial: true) { _, latest in contentCache.remember([latest]) }
                     .padding(.horizontal, 20)
                 }
             }
@@ -99,7 +101,7 @@ struct LabelDetailView: View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 14) {
                 ForEach(discs.prefix(20)) { disc in
-                    NavigationLink(value: AppRoute.disc(id: disc.id)) {
+                    AlbumNavigationLink(value: AppRoute.disc(id: disc.id), artworkURL: disc.coverURL) {
                         DiscCard(disc: disc, showsLabel: false, reservesTitleLines: true).frame(width: 156)
                     }
                     .buttonStyle(.plain)

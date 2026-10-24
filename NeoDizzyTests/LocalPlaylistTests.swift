@@ -3,6 +3,62 @@ import Testing
 @testable import NeoDizzy
 
 struct LocalPlaylistTests {
+    @Test @MainActor func onlineSongsPersistAlongsideLocalFilesAndKeepProviderIdentity() async throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let name = "MixedPlaylist.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let scanner = LocalLibraryScanner(cacheURL: root.appendingPathComponent(".cache"), readMetadata: { _ in AudioMetadata(title: "本地歌曲") })
+        let library = OfflineLibraryStore(defaults: defaults, scanner: scanner, libraryRoot: root)
+        await library.restore()
+        let local = try #require(library.localAlbums.first?.tracks.first)
+        func online(_ provider: String) -> Track {
+            Track(discID: "album", number: "1", title: provider, artists: "歌手", albumTitle: "专辑", coverURL: nil,
+                  remoteSource: .init(providerID: provider, itemID: "42"))
+        }
+        let first = online("provider-a"), second = online("provider-b")
+        try await library.savePlaylist(title: "混合列表", tracks: [first, local])
+        let initial = try #require(library.localPlaylists.first)
+        try await library.add(second, to: initial)
+        // A stale row snapshot must not discard another previously added song.
+        try await library.add(first, to: initial)
+        #expect(library.localPlaylists.first?.tracks.map(\.id) == [first.id, local.id, second.id])
+        let restored = OfflineLibraryStore(defaults: defaults, scanner: scanner, libraryRoot: root)
+        await restored.restore()
+        #expect(restored.localPlaylists.first?.tracks.map(\.id) == [first.id, local.id, second.id])
+        #expect(restored.localPlaylists.first?.tracks.first?.remoteSource == first.remoteSource)
+        // Failure leaves both the committed snapshot and file unchanged.
+        let before = try Data(contentsOf: initial.fileURL)
+        var invalid = first
+        invalid.remoteSource = .init(providerID: "", itemID: "42")
+        await #expect(throws: OfflineLibraryError.invalidManifest) { try await library.add(invalid, to: initial) }
+        #expect(try Data(contentsOf: initial.fileURL) == before)
+        #expect(library.localPlaylists.first?.tracks.count == 3)
+        try await library.deletePlaylist(try #require(library.localPlaylists.first))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("Album/song.mp3").path))
+    }
+
+    @Test func malformedRemoteReferencesAreSkippedAndCancelledWritesDoNotCommit() async throws {
+        let root = try folder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let track = Track(discID: "", number: "1", title: "歌曲", artists: "", albumTitle: "", coverURL: nil,
+                          remoteSource: .init(providerID: "unknown-provider", itemID: "42"))
+        try LocalPlaylistFile.write(title: "引用", entries: [(track, nil)], source: nil, existing: nil, root: root)
+        let file = root.appendingPathComponent("Playlists/引用.m3u8")
+        let before = try Data(contentsOf: file)
+        try (before + Data("#NEODIZZY-TRACK:invalid\n".utf8)).write(to: file)
+        let (playlist, issues) = try LocalPlaylistFile.read(file, root: root, tracks: [:])
+        #expect(playlist.tracks == [track] && issues.count == 1)
+        let committed = try Data(contentsOf: file)
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            try LocalPlaylistFile.write(title: "引用", entries: [], source: nil, existing: file, root: root)
+        }
+        await #expect(throws: CancellationError.self) { try await task.value }
+        #expect(try Data(contentsOf: file) == committed)
+    }
+
     private func folder() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root.appendingPathComponent("Album"), withIntermediateDirectories: true)

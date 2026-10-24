@@ -28,30 +28,32 @@ struct NeteaseHomeView: View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 12))
             : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
-        return layout {
-            DiscoveryShortcutButton(title: NeteaseRoute.radio.title) { starting in
-                FeaturedShortcutCard(title: "私人 FM", subtitle: "随心听，遇见下一首",
-                                     icon: .symbol("dot.radiowaves.left.and.right"), startsPlayback: true, isLoading: starting)
-            } start: {
-                guard store.profile != nil else { store.showsLogin = true; return }
-                let revision = store.revision
-                let radio = contentCache.page(.route(.radio), revision: revision)
-                if !radio.hasLoaded { await radio.load(api: store.api, route: .radio) }
-                try Task.checkCancellation()
-                guard store.revision == revision else { throw CancellationError() }
-                if let error = radio.error { throw NeteaseRadioStartError(message: error) }
-                let first = try await store.radio.start(with: radio.songs.map(\.track))
-                try Task.checkCancellation()
-                guard store.revision == revision else { throw CancellationError() }
-                radio.reset()
-                player.playRemoteDiscovery(first, providerID: "netease")
-                nowPlaying.isPresented = true
+        return GlassEffectContainer(spacing: 12) {
+            layout {
+                DiscoveryShortcutButton(title: NeteaseRoute.radio.title) { starting in
+                    FeaturedShortcutCard(title: "私人 FM", subtitle: "随心听，遇见下一首",
+                                         icon: .symbol("dot.radiowaves.left.and.right"), startsPlayback: true, isLoading: starting)
+                } start: {
+                    guard store.profile != nil else { store.showsLogin = true; return }
+                    let revision = store.revision
+                    let radio = contentCache.page(.route(.radio), revision: revision)
+                    if !radio.hasLoaded { await radio.load(api: store.api, route: .radio) }
+                    try Task.checkCancellation()
+                    guard store.revision == revision else { throw CancellationError() }
+                    if let error = radio.error { throw NeteaseRadioStartError(message: error) }
+                    let first = try await store.radio.start(with: radio.songs.map(\.track))
+                    try Task.checkCancellation()
+                    guard store.revision == revision else { throw CancellationError() }
+                    radio.reset()
+                    player.playRemoteDiscovery(first, providerID: "netease")
+                    nowPlaying.isPresented = true
+                }
+                NavigationLink(value: AppRoute.netease(.daily)) {
+                    FeaturedShortcutCard(title: "每日推荐", subtitle: "每天 6 点，为你更新", icon: .today)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(NeteaseRoute.daily.title)
             }
-            NavigationLink(value: AppRoute.netease(.daily)) {
-                FeaturedShortcutCard(title: "每日推荐", subtitle: "每天 6 点，为你更新", icon: .today)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(NeteaseRoute.daily.title)
         }
     }
 
@@ -67,12 +69,31 @@ struct NeteaseCollectionView: View {
     @Environment(NeteaseStore.self) private var store
     @Environment(PlayerStore.self) private var player
     @Environment(NeteaseContentCache.self) private var contentCache
+    @Environment(AccountLibraryMirror.self) private var accountLibrary
+    @Environment(SavedLibraryStore.self) private var savedLibrary
+    @Environment(PlaybackHistoryStore.self) private var playbackHistory
     private var model: NeteasePageModel { contentCache.page(.route(route), revision: store.revision) }
     private var needsLogin: Bool { route.requiresLogin && store.profile == nil }
     private var isSongCollection: Bool { route.isSongCollection }
     private var isAlbum: Bool { if case .album = route { true } else { false } }
     private var contentRevision: Int { store.library.contentRevision(for: route) }
-    private var artwork: URL? { model.artwork ?? model.songs.first?.album?.artworkURL }
+    private var artwork: URL? { model.artwork ?? libraryArtwork ?? model.songs.first?.album?.artworkURL }
+    private var libraryArtwork: URL? {
+        let kind: MirroredCollection.Kind
+        let id: Int
+        switch route {
+        case .album(let albumID): kind = .album; id = albumID
+        case .playlist(let playlistID): kind = .playlist; id = playlistID
+        default: return nil
+        }
+        return accountLibrary.collections.first {
+            $0.providerID == "netease" && $0.kind == kind && $0.itemID == String(id)
+        }?.coverURL ?? savedLibrary.items.first {
+            $0.providerID == "netease" && $0.kind.rawValue == kind.rawValue && $0.itemID == String(id)
+        }?.coverURL ?? (kind == .album ? playbackHistory.entries.first {
+            $0.providerID == "netease" && $0.itemID == String(id)
+        }?.coverURL : nil)
+    }
     private var tracks: [Track] { model.songs.map(\.track) }
     private var sourceID: Int? {
         switch route { case .playlist(let id), .album(let id): id; default: nil }
@@ -108,7 +129,11 @@ struct NeteaseCollectionView: View {
                                 player.play(tracks, startAt: shuffled ? Int.random(in: tracks.indices) : 0, sourceID: sourceID)
                                 if player.isShuffled != shuffled { player.toggleShuffle() }
                             }) {
-                                if supportsFavorite && !isOwnLikedPlaylist {
+                                if isAlbum, let collectionID {
+                                    // 专辑：先收藏，收藏后同一个位置变成下载。
+                                    NeteaseAlbumLibraryAction(album: model.album, id: collectionID, title: model.title,
+                                                              coverURL: artwork, isLoaded: model.hasLoaded)
+                                } else if supportsFavorite && !isOwnLikedPlaylist {
                                     NeteaseCollectionFavorite(playlist: model.playlist, album: model.album)
                                 }
                             }.padding(.horizontal, 20)
@@ -118,7 +143,9 @@ struct NeteaseCollectionView: View {
                                 .padding(.horizontal, 20).padding(.bottom, 12)
                         }
                         if !model.detailDescription.isEmpty {
-                            AlbumDescriptionExcerpt(text: model.detailDescription)
+                            AlbumDescriptionExcerpt(text: model.detailDescription, title: model.title,
+                                                    subtitle: collectionSubtitle,
+                                                    accessibilityTitle: isAlbum ? "专辑介绍" : "歌单介绍")
                                 .padding(.horizontal, 20).padding(.bottom, 20)
                         }
                         NeteaseSongRows(songs: model.songs, sourceID: sourceID, numbered: isAlbum)
@@ -151,13 +178,6 @@ struct NeteaseCollectionView: View {
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
-            if let collectionID, model.hasLoaded {
-                let title = model.title
-                ToolbarItem(placement: .topBarTrailing) {
-                    NeteaseDownloadButton(kind: isAlbum ? "album" : "playlist", id: collectionID,
-                                          title: title, coverURL: artwork)
-                }
-            }
             if case .newSongs = route { ToolbarItem(placement: .topBarTrailing) { regionMenu } }
             if case .newAlbums = route { ToolbarItem(placement: .topBarTrailing) { regionMenu } }
             if route == .radio && !needsLogin {
@@ -231,10 +251,10 @@ struct NeteaseResults: View {
         if !model.playlists.isEmpty || !model.albums.isEmpty {
             LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                 ForEach(model.playlists) { item in
-                    NavigationLink(value: AppRoute.netease(.playlist(item.id))) { card(item.name, url: item.artworkURL) }.buttonStyle(.plain)
+                    AlbumNavigationLink(value: AppRoute.netease(.playlist(item.id)), artworkURL: item.artworkURL) { card(item.name, url: item.artworkURL) }.buttonStyle(.plain)
                 }
                 ForEach(model.albums) { item in
-                    NavigationLink(value: AppRoute.netease(.album(item.id))) { card(item.name, url: item.artworkURL) }.buttonStyle(.plain)
+                    AlbumNavigationLink(value: AppRoute.netease(.album(item.id)), artworkURL: item.artworkURL) { card(item.name, url: item.artworkURL) }.buttonStyle(.plain)
                 }
             }
         }
@@ -260,6 +280,7 @@ struct NeteaseSongRows: View {
     var numbered = false
     @Environment(PlayerStore.self) private var player
     @Environment(NeteaseStore.self) private var store
+    @Environment(NeteaseContentCache.self) private var contentCache
     @Environment(\.openRoute) private var openRoute
     @Environment(DownloadStore.self) private var downloads
     @Environment(OfflineLibraryStore.self) private var library
@@ -267,6 +288,7 @@ struct NeteaseSongRows: View {
     @State private var downloadedKeys: Set<RemoteTrackKey> = []
     @State private var showsDownloads = false
     @State private var error: String?
+    @State private var albumNavigation = AlbumNavigationPreparation()
     var body: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
@@ -286,6 +308,9 @@ struct NeteaseSongRows: View {
             downloadedKeys = keys
         }
         .sheet(isPresented: $showsDownloads) { DownloadQueueSheet() }
+        .preparedAlbumNavigation(albumNavigation)
+        .onChange(of: songs.map(\.id)) { albumNavigation.cancel() }
+        .onChange(of: store.revision) { albumNavigation.cancel() }
         .alert("操作失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("好", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
@@ -309,7 +334,12 @@ struct NeteaseSongRows: View {
             actions.append(.init(id: "artist/\(artist.id)", title: "歌手：\(artist.name)", systemImage: "person") { openRoute(.netease(.artist(artist.id))) })
         }
         if let album = song.album, album.id > 0 {
-            actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") { openRoute(.netease(.album(album.id))) })
+            actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") {
+                let page = contentCache.page(.route(.album(album.id)), revision: store.revision)
+                if page.title.isEmpty { page.title = album.name }
+                if page.artwork == nil { page.artwork = album.artworkURL }
+                if let route = albumNavigation.begin(.netease(.album(album.id)), artworkURL: page.artwork) { openRoute(route) }
+            })
         }
         return actions
     }
@@ -353,9 +383,11 @@ struct NeteaseTrackRow: View {
     var sourceID: Int?
     @Environment(PlayerStore.self) private var player
     @Environment(NeteaseStore.self) private var store
+    @Environment(NeteaseContentCache.self) private var contentCache
     @Environment(DownloadStore.self) private var downloads
     @Environment(OfflineLibraryStore.self) private var library
     @Environment(\.openRoute) private var openRoute
+    @State private var albumNavigation = AlbumNavigationPreparation()
 
     var body: some View {
         let track = song.track
@@ -364,6 +396,9 @@ struct NeteaseTrackRow: View {
                 actions: actions(downloaded: downloaded)) {
             player.play(songs.map(\.track), startAt: songs.firstIndex(of: song) ?? 0, sourceID: sourceID)
         }
+        .preparedAlbumNavigation(albumNavigation)
+        .onChange(of: song.id) { albumNavigation.cancel() }
+        .onChange(of: store.revision) { albumNavigation.cancel() }
     }
 
     private func actions(downloaded: Bool) -> [SongRowAction] {
@@ -385,7 +420,12 @@ struct NeteaseTrackRow: View {
             })
         }
         if let album = song.album, album.id > 0 {
-            actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") { openRoute(.netease(.album(album.id))) })
+            actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") {
+                let page = contentCache.page(.route(.album(album.id)), revision: store.revision)
+                if page.title.isEmpty { page.title = album.name }
+                if page.artwork == nil { page.artwork = album.artworkURL }
+                if let route = albumNavigation.begin(.netease(.album(album.id)), artworkURL: page.artwork) { openRoute(route) }
+            })
         }
         return actions
     }
@@ -491,7 +531,7 @@ struct NeteaseSearchPage: View {
                     }
                 case 10:
                     ForEach(model.albums) { album in
-                        NavigationLink(value: AppRoute.netease(.album(album.id))) {
+                        AlbumNavigationLink(value: AppRoute.netease(.album(album.id)), artworkURL: album.artworkURL) {
                             SearchMediaRow(title: album.name, subtitle: album.artist?.name, artworkURL: album.artworkURL, showsChevron: false)
                         }
                         .songListRow()
@@ -507,7 +547,7 @@ struct NeteaseSearchPage: View {
                     }
                 default:
                     ForEach(model.playlists) { playlist in
-                        NavigationLink(value: AppRoute.netease(.playlist(playlist.id))) {
+                        AlbumNavigationLink(value: AppRoute.netease(.playlist(playlist.id)), artworkURL: playlist.artworkURL) {
                             SearchMediaRow(title: playlist.name, subtitle: playlist.trackCount.map { "\($0) 首" }, artworkURL: playlist.artworkURL, showsChevron: false)
                         }
                         .songListRow()

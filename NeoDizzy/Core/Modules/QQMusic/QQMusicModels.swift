@@ -56,6 +56,7 @@ nonisolated struct QQMusicCollection: Identifiable, Sendable {
     let title: String
     let coverURL: URL?
     var songs: [QQMusicSong] = []
+    var detailDescription = ""
 }
 
 nonisolated struct QQMusicChartGroup: Identifiable, Sendable {
@@ -146,6 +147,21 @@ nonisolated struct QQMusicBrowsePage: Sendable {
 }
 
 nonisolated enum QQMusicText {
+    static func detailDescription(_ json: [String: Any]) -> String {
+        for key in ["desc", "description", "intro"] {
+            guard let text = json[key] as? String else { continue }
+            let plain = clean(text
+                .replacingOccurrences(of: "(?i)<br\\s*/?>|</(?:p|div)\\s*>", with: "\n", options: .regularExpression)
+                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression))
+                .replacingOccurrences(of: "&nbsp;", with: " ")
+                .replacingOccurrences(of: "&#39;", with: "'")
+                .replacingOccurrences(of: "&apos;", with: "'")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !plain.isEmpty { return plain }
+        }
+        return ""
+    }
+
     static func clean(_ text: String) -> String {
         text.replacingOccurrences(of: "</?em>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "&amp;", with: "&").replacingOccurrences(of: "&quot;", with: "\"")

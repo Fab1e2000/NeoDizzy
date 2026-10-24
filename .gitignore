@@ -27,3 +27,7 @@ dist/
 
 # 本地临时工作文件、调试日志与参考源码
 /work/
+
+# Python 验证脚本缓存
+__pycache__/
+*.py[cod]

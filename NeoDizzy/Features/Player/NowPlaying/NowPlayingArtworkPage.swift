@@ -7,6 +7,7 @@ struct NowPlayingArtworkPage: View {
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(PlayerStore.self) private var player
+    @Environment(\.nowPlayingLayout) private var layout
 
     let song: Track
     let artworkNamespace: Namespace.ID
@@ -37,15 +38,7 @@ struct NowPlayingArtworkPage: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let artworkSize = max(
-                170,
-                min(
-                    proxy.size.width + 16,
-                    proxy.size.height
-                        - NowPlayingBottomControls.coreHeight
-                        - 92
-                )
-            )
+            let artworkSize = min(layout.width(354), max(170, layout.contentY(490) - layout.contentY(112) - 22))
             let displayedArtworkSize =
                 artworkSize
                 * (
@@ -54,8 +47,7 @@ struct NowPlayingArtworkPage: View {
                         : Self.pausedArtworkScale
                 )
 
-            VStack(spacing: 0) {
-                Spacer(minLength: 8)
+            ZStack(alignment: .topLeading) {
 
                 ZStack {
                     if showsArtwork {
@@ -122,28 +114,28 @@ struct NowPlayingArtworkPage: View {
                         whenPlaying: player.isPlaying
                     )
                 }
+                .position(x: proxy.size.width / 2, y: layout.pageY(112) + artworkSize / 2)
 
-                Spacer(minLength: 22)
+                Text(song.title)
+                    .font(.system(size: 20, weight: .semibold))
+                    .tracking(0)
+                    .foregroundStyle(.white.opacity(0.98))
+                    .lineLimit(1)
+                    .frame(width: layout.width(227), height: 27, alignment: .leading)
+                    .position(x: layout.x(145.5), y: layout.pageY(503.5))
 
-                HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(song.title)
-                            .font(.title3.weight(.semibold))
-                            .lineLimit(1)
+                NowPlayingArtistButton(track: song)
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white.opacity(0.64))
+                    .frame(width: layout.width(215), height: 26, alignment: .leading)
+                    .position(x: layout.x(139.5), y: layout.pageY(528.5))
 
-                        Text(song.artists)
-                            .font(.title3)
-                            .foregroundStyle(.white.opacity(0.64))
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    NowPlayingSongActions(
-                        track: song
-                    )
-                }
+                NowPlayingSongActions(track: song)
+                    .fixedSize()
+                    .frame(width: 92.25, height: 44, alignment: .trailing)
+                    .contentShape(.rect)
+                    .position(x: layout.x(329.875), y: layout.pageY(517.25))
             }
-            .padding(.bottom, NowPlayingBottomControls.coreHeight)
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
     }

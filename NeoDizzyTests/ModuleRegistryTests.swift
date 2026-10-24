@@ -57,6 +57,49 @@ struct ModuleRegistryTests {
         #expect(AppRoute.localAlbum(id: "album").moduleID == .localLibrary)
     }
 
+    @Test func zoomRoutesPreserveTheirTypedDestinationAndModuleOwner() throws {
+        let first = TestModule("first")
+        let second = TestModule("second")
+        let registry = try ModuleRegistry([first, second])
+        let route = AppRoute(moduleID: second.descriptor.id, destination: TestRoute.item(7), title: "Seven")
+        let sourceID = UUID()
+        let zoomRoute = route.zooming(from: sourceID)
+
+        #expect(route.zoomSourceID == nil)
+        #expect(zoomRoute.zoomSourceID == sourceID)
+        #expect(zoomRoute.moduleID == route.moduleID)
+        #expect(zoomRoute.destination.base as? TestRoute == .item(7))
+        #expect(zoomRoute.title == route.title)
+        _ = registry.destination(for: zoomRoute)
+        #expect(first.destinations.isEmpty)
+        #expect(second.destinations == [zoomRoute])
+    }
+
+    @Test func sameCollectionFromDifferentCardsKeepsIndependentReturnSources() throws {
+        let suite = "ModuleRegistryTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let module = TestModule("collection-provider")
+        let registry = try ModuleRegistry([module])
+        let settings = ModuleSettings(modules: registry.descriptors, defaults: defaults)
+        let host = ModuleHost(settings: settings)
+        let route = AppRoute(moduleID: module.descriptor.id, destination: TestRoute.item(7), title: "Seven")
+        let firstSourceID = UUID()
+        let firstVisit = route.zooming(from: firstSourceID)
+        let nestedVisit = route.zooming(from: UUID())
+
+        #expect(Set([firstVisit, nestedVisit]).count == 2)
+        #expect(route.zooming(from: firstSourceID) == firstVisit)
+        #expect(host.select(module.descriptor.id, path: [firstVisit]))
+        host.paths[module.descriptor.id, default: []].append(nestedVisit)
+        #expect(host.paths[module.descriptor.id] == [firstVisit, nestedVisit])
+
+        let popped = host.paths[module.descriptor.id]?.popLast()
+        #expect(popped == nestedVisit)
+        #expect(host.paths[module.descriptor.id] == [firstVisit])
+        #expect(host.paths[module.descriptor.id]?.last?.zoomSourceID == firstSourceID)
+    }
+
     @Test func hostUsesRegisteredIDsAndKeepsIndependentStacks() throws {
         let suite = "ModuleRegistryTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))

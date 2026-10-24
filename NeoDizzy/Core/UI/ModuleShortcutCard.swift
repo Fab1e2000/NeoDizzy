@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Two side-by-side entries at the top of a module's home (NetEase, QQ Music).
-/// The one that starts playback sits on the solid theme color; the other (daily picks) on the plain card color.
+/// Playback uses theme-tinted glass; daily picks keep a neutral glass surface.
 struct FeaturedShortcutCard: View {
     enum Icon { case symbol(String), today }
 
@@ -12,8 +12,9 @@ struct FeaturedShortcutCard: View {
     var isLoading = false
     @ScaledMetric(relativeTo: .title2) private var iconSize = 44.0
 
-    private var ink: Color { startsPlayback ? DizzyPalette.onAccent : DizzyPalette.text }
-    private var secondaryInk: Color { startsPlayback ? DizzyPalette.onAccent.opacity(0.85) : DizzyPalette.mutedText }
+    private var ink: Color { startsPlayback ? DizzyPalette.onAccent : .primary }
+    private var secondaryInk: Color { startsPlayback ? DizzyPalette.onAccent.opacity(0.85) : .secondary }
+    private var iconInk: Color { startsPlayback ? DizzyPalette.onAccent : DizzyPalette.accent }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -34,20 +35,20 @@ struct FeaturedShortcutCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(startsPlayback ? DizzyPalette.accentFill : DizzyPalette.surface,
-                    in: .rect(cornerRadius: 22, style: .continuous))
         .contentShape(.rect(cornerRadius: 22))
+        .glassEffect((startsPlayback ? Glass.regular.tint(DizzyPalette.accentFill) : .regular).interactive(),
+                     in: .rect(cornerRadius: 22))
     }
 
     @ViewBuilder private var iconView: some View {
         switch icon {
         case .symbol(let name):
-            Image(systemName: name).font(.title.weight(.medium)).foregroundStyle(startsPlayback ? ink : DizzyPalette.accent)
+            Image(systemName: name).font(.title.weight(.medium)).foregroundStyle(iconInk)
         case .today:
             VStack(alignment: .leading, spacing: 0) {
                 Text(Date.now, format: .dateTime.month(.abbreviated))
                     .font(.system(size: iconSize * 0.27, weight: .semibold))
-                    .foregroundStyle(startsPlayback ? ink : DizzyPalette.accent)
+                    .foregroundStyle(iconInk)
                 Text(verbatim: "\(Calendar.current.component(.day, from: .now))")
                     .font(.system(size: iconSize * 0.55, weight: .bold))
                     .monospacedDigit()
@@ -59,7 +60,7 @@ struct FeaturedShortcutCard: View {
     @ViewBuilder private var trailing: some View {
         if startsPlayback {
             ZStack {
-                Circle().fill(DizzyPalette.onAccent.opacity(0.2))
+                Circle().fill(ink.opacity(0.12))
                 if isLoading {
                     ProgressView().controlSize(.small).tint(ink)
                 } else {
@@ -75,7 +76,7 @@ struct FeaturedShortcutCard: View {
 }
 
 /// The module's most-used entry: a full-width card with an icon tile, a title and a one-line description.
-/// A card that starts playback sits on the solid theme color, like `FeaturedShortcutCard`.
+/// Uses the same glass surface as `FeaturedShortcutCard`.
 struct ModulePrimaryShortcut: View {
     enum Trailing { case play, chevron }
 
@@ -87,15 +88,18 @@ struct ModulePrimaryShortcut: View {
     var trailing: Trailing = .chevron
     var isLoading = false
     @ScaledMetric(relativeTo: .title3) private var tileSize = 44.0
+
     private var prominent: Bool { trailing == .play }
-    private var ink: Color { prominent ? DizzyPalette.onAccent : DizzyPalette.text }
+    private var ink: Color { prominent ? DizzyPalette.onAccent : .primary }
+    private var secondaryInk: Color { prominent ? DizzyPalette.onAccent.opacity(0.85) : .secondary }
+    private var iconInk: Color { prominent ? DizzyPalette.onAccent : DizzyPalette.accent }
 
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(prominent ? DizzyPalette.onAccent.opacity(0.2) : DizzyPalette.accent.opacity(0.16))
-                icon.foregroundStyle(prominent ? ink : DizzyPalette.accent)
+                    .fill(iconInk.opacity(0.12))
+                icon.foregroundStyle(iconInk)
             }
             .frame(width: tileSize, height: tileSize)
             .accessibilityHidden(true)
@@ -103,7 +107,7 @@ struct ModulePrimaryShortcut: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.headline).foregroundStyle(ink)
                 Text(subtitle).font(.footnote)
-                    .foregroundStyle(prominent ? DizzyPalette.onAccent.opacity(0.85) : DizzyPalette.mutedText).lineLimit(1)
+                    .foregroundStyle(secondaryInk).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -118,13 +122,14 @@ struct ModulePrimaryShortcut: View {
         .padding(.leading, 12)
         .padding(.trailing, 16)
         .padding(.vertical, 12)
-        .background(prominent ? DizzyPalette.accentFill : DizzyPalette.surface, in: .rect(cornerRadius: 18, style: .continuous))
         .contentShape(.rect(cornerRadius: 18))
+        .glassEffect((prominent ? Glass.regular.tint(DizzyPalette.accentFill) : .regular).interactive(),
+                     in: .rect(cornerRadius: 18))
     }
 
     @ViewBuilder private var icon: some View {
         if isLoading {
-            ProgressView().tint(prominent ? ink : DizzyPalette.accent)
+            ProgressView().tint(iconInk)
         } else if showsToday {
             VStack(spacing: 0) {
                 Text(Date.now, format: .dateTime.month(.abbreviated))
@@ -155,14 +160,14 @@ struct ModuleSecondaryShortcut: View {
             .accessibilityHidden(true)
             Text(title)
                 .font(.subheadline)
-                .foregroundStyle(DizzyPalette.text)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, minHeight: 44)
-        .background(DizzyPalette.surface, in: .rect(cornerRadius: 12, style: .continuous))
         .contentShape(.rect(cornerRadius: 12))
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
     }
 }
 
@@ -173,11 +178,13 @@ struct ModuleShortcutPanel<Primary: View, Secondary: View>: View {
     @ViewBuilder var secondary: Secondary
 
     var body: some View {
-        VStack(spacing: 8) {
-            primary
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8),
-                                     count: typeSize.isAccessibilitySize ? 1 : 3), spacing: 8) {
-                secondary
+        GlassEffectContainer(spacing: 8) {
+            VStack(spacing: 8) {
+                primary
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8),
+                                         count: typeSize.isAccessibilitySize ? 1 : 3), spacing: 8) {
+                    secondary
+                }
             }
         }
     }

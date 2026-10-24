@@ -87,6 +87,8 @@ struct NeteaseCoverShelf: View {
     var albums: [NeteaseAlbum] = []
     var artists: [NeteaseArtist] = []
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(NeteaseStore.self) private var store
+    @Environment(NeteaseContentCache.self) private var cache
     var body: some View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 14) {
@@ -100,12 +102,23 @@ struct NeteaseCoverShelf: View {
         // Extend the viewport through MainTabPage's inset while keeping resting cards aligned with its headings.
         .padding(.horizontal, -20)
     }
+    @ViewBuilder
     private func card(_ title: String, artwork: URL?, route: NeteaseRoute) -> some View {
-        NavigationLink(value: AppRoute.netease(route)) {
-            CoverCard(title: title, artworkURL: artwork, reservesTitleLines: true)
-                .frame(width: typeSize.isAccessibilitySize ? 220 : 156)
-                .fixedSize(horizontal: false, vertical: true)
-        }.buttonStyle(.plain)
+        let label = CoverCard(title: title, artworkURL: artwork, reservesTitleLines: true)
+            .frame(width: typeSize.isAccessibilitySize ? 220 : 156)
+            .fixedSize(horizontal: false, vertical: true)
+        switch route {
+        case .album, .playlist:
+            AlbumNavigationLink(value: AppRoute.netease(route), artworkURL: artwork) { label }
+                .buttonStyle(.plain)
+                .onChange(of: artwork, initial: true) { _, artwork in
+                    let page = cache.page(.route(route), revision: store.revision)
+                    if page.title.isEmpty { page.title = title }
+                    if !page.hasLoaded || page.artwork == nil { page.artwork = artwork }
+                }
+        default:
+            NavigationLink(value: AppRoute.netease(route)) { label }.buttonStyle(.plain)
+        }
     }
 }
 

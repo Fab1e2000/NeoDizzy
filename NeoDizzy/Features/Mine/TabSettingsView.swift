@@ -36,7 +36,7 @@ struct TabSettingsView: View {
     private func visibilityToggle(_ tab: ModuleID) -> some View {
         Toggle(isOn: Binding(get: { settings.isVisible(tab) }, set: { settings.setVisible($0, for: tab) })) {
             if let descriptor = modules.descriptor(for: tab) {
-                Label(descriptor.title, systemImage: descriptor.systemImage)
+                Label { Text(descriptor.title) } icon: { descriptor.icon }
             }
         }
         .disabled(!settings.canHide(tab))
@@ -53,8 +53,9 @@ struct SearchOrderSettingsView: View {
             Section {
                 ForEach(settings.searchOrder) { id in
                     if let descriptor = modules.descriptor(for: id) {
-                        Label(descriptor.title + (settings.isVisible(id) ? "" : "（已隐藏）"),
-                              systemImage: descriptor.systemImage)
+                        Label {
+                            Text(descriptor.title + (settings.isVisible(id) ? "" : "（已隐藏）"))
+                        } icon: { descriptor.icon }
                     }
                 }
                 .onMove { offsets, destination in

@@ -1,7 +1,10 @@
 import SwiftUI
 
 final class NeteaseModule: AppModule {
-    static var metadata: ModuleDescriptor { .init(id: .netease, title: "网易云音乐", systemImage: "music.note", accent: accent) }
+    static var metadata: ModuleDescriptor {
+        .init(id: .netease, title: "网易云音乐", systemImage: "music.note",
+              accent: accent, imageAsset: "NeteaseTabIcon")
+    }
     /// 网易云音乐的品牌红；实底在两种外观下都配白字。
     static let accent = AccentPalette(light: 0xE60026, dark: 0xFF4D5E, lightFill: 0xE60026, darkFill: 0xE60026)
     var descriptor: ModuleDescriptor { Self.metadata }
@@ -23,9 +26,20 @@ final class NeteaseModule: AppModule {
         return AnyView(NeteasePlayerActions(track: track, onImportLyrics: onImportLyrics))
     }
     func loginView() -> AnyView? { AnyView(NeteaseLoginView(store: store)) }
+    func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] {
+        guard track.remoteSource?.providerID == descriptor.id.rawValue,
+              let id = (track.remoteSource?.itemID).flatMap(Int.init) else { return [] }
+        let revision = store.revision
+        let song = try await store.api.songs([id]).first
+        try Task.checkCancellation()
+        guard revision == store.revision else { throw CancellationError() }
+        return (song?.artists ?? []).filter { $0.id > 0 }.map {
+            PlayerArtistDestination(name: $0.name, route: .netease(.artist($0.id)))
+        }
+    }
     func playlistPicker(for track: Track) -> AnyView? {
         guard let id = (track.remoteSource?.itemID).flatMap(Int.init) else { return nil }
-        return store.profile == nil ? loginView() : AnyView(NeteasePlaylistPicker(songID: id).environment(store))
+        return AnyView(NeteasePlaylistPicker(songID: id).environment(store))
     }
     func collectionRoute(kind: String, itemID: String) -> AppRoute? {
         guard let id = Int(itemID) else { return nil }
@@ -47,6 +61,8 @@ final class NeteaseModule: AppModule {
         case "playlist": try await store.library.unsubscribePlaylist(id: id)
         default: throw ModuleCapabilityError.unavailable
         }
+        // Publish the confirmed change before returning, even without a mounted scope view.
+        onLibraryChange()
     }
     func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction] {
         [.init(id: "download", title: "转为下载", systemImage: "arrow.down.circle") {

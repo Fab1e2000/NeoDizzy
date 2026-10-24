@@ -5,6 +5,115 @@ import Testing
 
 @Suite(.serialized) @MainActor
 struct QQMusicPageModelTests {
+    @Test func cachedAlbumArtworkIsAvailableBeforeAndDuringItsFirstDetailRequest() async throws {
+        QQPageStub.state.withLock { $0 = .init(holdRequests: [2], replies: [
+            .data(response(["albums": [["mid": "album", "name": "Listed album", "pic": "https://example.invalid/list-size.jpg"]], "total": 1])),
+            .data(response(["basicInfo": ["name": "Loaded album"]])),
+            .data(response(["songList": [], "totalNum": 0]))
+        ]) }
+        let store = makeStore(), cache = QQMusicContentCache()
+        await cache.page(.newAlbums(1), revision: store.revision).load(store: store, route: .newAlbums(1))
+        let detail = cache.page(.album("album"), revision: store.revision)
+        let artwork = QQMusicSong.cover(albumMid: "album")
+        #expect(detail.title == "Listed album" && detail.artwork == artwork)
+        #expect(!detail.hasLoaded && detail.songs.isEmpty)
+        #expect(QQPageStub.state.withLock { $0.started } == 1)
+
+        let loading = Task { await detail.load(store: store, route: .album("album")) }
+        let pending = try await heldRequest()
+        #expect(detail.loading && detail.artwork == artwork && detail.title == "Listed album")
+        pending.finish(data: response(["basicInfo": ["name": "Loaded album"]]))
+        await loading.value
+        #expect(detail.hasLoaded && detail.title == "Loaded album" && detail.artwork == artwork)
+        #expect(detail.error == nil)
+    }
+
+    @Test func cachedPlaylistArtworkSurvivesItsFirstRequestFailureAndUpdatesOnRetry() async throws {
+        QQPageStub.state.withLock { $0 = .init(holdRequests: [2], replies: [
+            .data(recommended(["1"], next: 0, more: false)), .failure,
+            .data(response(["dirinfo": ["title": "Updated playlist", "picurl": "https://example.invalid/updated.jpg"],
+                            "songlist": [], "total_song_num": 0, "hasmore": 0]))
+        ]) }
+        let store = makeStore(), cache = QQMusicContentCache()
+        await cache.page(.recommended, revision: store.revision).load(store: store, route: .recommended)
+        let detail = cache.page(.playlist("1"), revision: store.revision)
+        let artwork = URL(string: "https://example.invalid/1.jpg")
+        #expect(detail.title == "Playlist 1" && detail.artwork == artwork && !detail.hasLoaded)
+        let loading = Task { await detail.load(store: store, route: .playlist("1")) }
+        let pending = try await heldRequest()
+        #expect(detail.loading && detail.artwork == artwork)
+        pending.fail()
+        await loading.value
+        #expect(detail.error != nil && detail.artwork == artwork && !detail.hasLoaded)
+        await detail.load(store: store, route: .playlist("1"))
+        #expect(detail.hasLoaded && detail.error == nil && detail.title == "Updated playlist")
+        #expect(detail.artwork == URL(string: "https://example.invalid/updated.jpg"))
+    }
+
+    @Test func cachedPresentationIsClearedByResetAccountRevisionAndStop() async throws {
+        QQPageStub.state.withLock { $0 = .init(replies: [
+            .data(recommended(["1"], next: 0, more: false)), .failure
+        ]) }
+        let store = makeStore(), cache = QQMusicContentCache()
+        await cache.page(.recommended, revision: store.revision).load(store: store, route: .recommended)
+        let detail = cache.page(.playlist("1"), revision: store.revision)
+        #expect(detail.artwork != nil)
+        detail.reset()
+        #expect(detail.artwork == nil && detail.title.isEmpty)
+        await detail.load(store: store, route: .playlist("1"))
+        #expect(detail.artwork == nil && detail.title.isEmpty && detail.error != nil)
+
+        let seededAlbum = cache.page(.album("album"), revision: store.revision)
+        #expect(seededAlbum.artwork != nil)
+        let oldRevision = store.revision
+        await store.signOut()
+        let newAccount = cache.page(.playlist("1"), revision: store.revision)
+        #expect(newAccount !== detail && newAccount.artwork == nil && newAccount.title.isEmpty)
+        #expect(seededAlbum.artwork == nil && seededAlbum.title.isEmpty)
+        #expect(cache.page(.album("album"), revision: oldRevision).artwork == nil)
+        #expect(cache.page(.playlist("1"), revision: store.revision) === newAccount)
+
+        let newAlbum = cache.page(.album("album"), revision: store.revision)
+        #expect(newAlbum.artwork != nil)
+        cache.stop()
+        #expect(newAlbum.artwork == nil && newAlbum.title.isEmpty)
+        #expect(cache.page(.album("album"), revision: store.revision).artwork == nil)
+    }
+
+    @Test func initialPresentationDoesNotSurviveLoadingADifferentRouteOrAccount() async throws {
+        QQPageStub.state.withLock { $0 = .init(replies: [.failure, .failure]) }
+        let store = makeStore(), cache = QQMusicContentCache()
+        let differentRoute = cache.page(.album("album"), revision: store.revision)
+        #expect(differentRoute.artwork != nil)
+        await differentRoute.load(store: store, route: .playlist("1"))
+        #expect(differentRoute.artwork == nil && differentRoute.title.isEmpty && differentRoute.error != nil)
+
+        let oldAccount = cache.page(.album("otherAlbum"), revision: store.revision)
+        #expect(oldAccount.artwork != nil)
+        await store.signOut()
+        await oldAccount.load(store: store, route: .album("otherAlbum"))
+        #expect(oldAccount.artwork == nil && oldAccount.title.isEmpty && oldAccount.error != nil)
+    }
+
+    @Test func descriptionRefreshFailureKeepsContentAndRouteSwitchClearsIt() async {
+        QQPageStub.state.withLock { $0 = .init(replies: [
+            .data(response(["basicInfo": ["name": "Album", "desc": "专辑介绍"]])),
+            .data(response(["songList": [], "totalNum": 0])),
+            .failure,
+            .data(response(["dirinfo": ["title": "Playlist", "desc": "歌单介绍"], "songlist": [], "total_song_num": 0, "hasmore": 0])),
+            .data(response(["dirinfo": ["title": "Other Playlist"], "songlist": [], "total_song_num": 0, "hasmore": 0]))
+        ]) }
+        let store = makeStore(), model = QQMusicPageModel()
+        await model.load(store: store, route: .album("album"))
+        #expect(model.detailDescription == "专辑介绍" && model.hasLoaded)
+        await model.load(store: store, route: .album("album"))
+        #expect(model.detailDescription == "专辑介绍" && model.error != nil)
+        await model.load(store: store, route: .playlist("1"))
+        #expect(model.detailDescription == "歌单介绍" && model.error == nil)
+        await model.load(store: store, route: .playlist("2"))
+        #expect(model.detailDescription.isEmpty && model.hasLoaded)
+    }
+
     @Test func shortSearchPageCanLoadMoreButRepeatedPageStopsWithoutDuplicates() async {
         QQPageStub.state.withLock { $0 = .init() }
         let store = makeStore(), model = QQMusicPageModel()

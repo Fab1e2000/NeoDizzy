@@ -2,10 +2,11 @@ import SwiftUI
 
 final class DizzyLabModule: AppModule {
     static var metadata: ModuleDescriptor {
-        ModuleDescriptor(id: .dizzyLab, title: "DizzyLab", systemImage: "opticaldisc.fill", accent: accent)
+        ModuleDescriptor(id: .dizzyLab, title: "DizzyLab", systemImage: "opticaldisc.fill",
+                         accent: accent, imageAsset: "DizzyLabTabIcon")
     }
     /// DizzyLab 官网的金色；金底太亮，实底上配深棕字。
-    static let accent = AccentPalette(light: 0x9A6510, dark: 0xF0AD4E, lightFill: 0xF0AD4E, darkFill: 0xF0AD4E,
+    static let accent = AccentPalette(light: 0xF0AD4E, dark: 0xF0AD4E, lightFill: 0xF0AD4E, darkFill: 0xF0AD4E,
                                       lightInk: 0x3D2600, darkInk: 0x3D2600)
     var descriptor: ModuleDescriptor { Self.metadata }
     var libraryOrigin: LibraryOrigin { .dizzylab }
@@ -40,6 +41,13 @@ final class DizzyLabModule: AppModule {
     }
     func collectionRoute(kind: String, itemID: String) -> AppRoute? {
         kind == "album" ? .disc(id: itemID) : nil
+    }
+    func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] {
+        guard track.playbackProviderID == descriptor.id.rawValue else { return [] }
+        let label = try await DizzyAPI.shared.discDetail(id: track.discID).summary.labelName
+        try Task.checkCancellation()
+        // This source exposes label pages, not individual performer pages.
+        return label.map { [PlayerArtistDestination(name: $0, route: .label(name: $0))] } ?? []
     }
     func deactivate() { contentCache.stop() }
     func rootView() -> AnyView { AnyView(DiscoverView()) }

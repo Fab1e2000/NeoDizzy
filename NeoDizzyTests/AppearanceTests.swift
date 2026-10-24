@@ -10,9 +10,9 @@ struct AppearanceTests {
         return defaults
     }
 
-    @Test func defaultsToSystemAppearanceAndNeutralAccent() {
+    @Test func defaultsToLightAppearanceAndNeutralAccent() {
         let settings = AppearanceSettings(defaults: makeDefaults())
-        #expect(settings.mode == .system)
+        #expect(settings.mode == .light)
         #expect(settings.accent == .neutral)
     }
 
@@ -24,12 +24,23 @@ struct AppearanceTests {
         #expect(restored.mode == .light)
     }
 
-    /// 改坏的存档回到跟随系统。
-    @Test func unknownStoredModeFallsBackToSystem() {
+    /// 改坏的存档统一回到浅色。
+    @Test func unknownStoredModeFallsBackToLight() {
         let defaults = makeDefaults()
         defaults.set("sepia", forKey: AppearanceSettings.modeKey)
         let settings = AppearanceSettings(defaults: defaults)
-        #expect(settings.mode == .system)
+        #expect(settings.mode == .light)
+    }
+
+    @Test(arguments: [AppAppearance.dark, .system])
+    func legacyAndRestoredModesCannotEnableDarkAppearance(mode: AppAppearance) {
+        let defaults = makeDefaults()
+        defaults.set(mode.rawValue, forKey: AppearanceSettings.modeKey)
+        let settings = AppearanceSettings(defaults: defaults)
+        #expect(settings.mode == .light)
+        settings.mode = mode
+        #expect(settings.mode == .light)
+        #expect(defaults.string(forKey: AppearanceSettings.modeKey) == "light")
     }
 
     /// 没有登记品牌色的模块用中性色。

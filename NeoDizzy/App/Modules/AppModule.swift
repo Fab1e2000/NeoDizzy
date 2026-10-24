@@ -6,6 +6,16 @@ struct ModuleDescriptor: Identifiable, Equatable {
     let systemImage: String
     /// 这个标签页及其推入页面使用的主题色；没有自己品牌色的模块用中性的黑色。
     var accent: AccentPalette = .neutral
+    /// 可选的模块自有模板图资源；不提供时使用系统图标。
+    var imageAsset: String? = nil
+
+    var icon: Image {
+        if let imageAsset {
+            Image(imageAsset).renderingMode(.template)
+        } else {
+            Image(systemName: systemImage)
+        }
+    }
 }
 
 /// Optional account capability; modules with accounts get a row in the global settings.
@@ -13,6 +23,13 @@ struct ModuleAccountEntry {
     let title: String
     let avatarURL: URL?
     var isSignedIn = false
+}
+
+/// Provider-owned artist identity and destination, usable by the shared player.
+struct PlayerArtistDestination: Identifiable {
+    let name: String
+    let route: AppRoute
+    var id: AppRoute { route }
 }
 
 /// A compiled-in feature plugs into these slots; the host never switches on provider IDs.
@@ -29,10 +46,12 @@ protocol AppModule {
     func destination(for route: AppRoute) -> AnyView?
     func install(in content: AnyView) -> AnyView
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView?
+    func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination]
     func handleURL(_ url: URL, host: ModuleHost) -> Bool
     /// 统一搜索里这个模块的一组结果（含标题和「查看全部」）；没有搜索能力的模块返回 nil。
     func searchSection(query: String) -> AnyView?
     func loginView() -> AnyView?
+    /// Platform-owned sections embedded in the shared playlist sheet; nil means unsupported.
     func playlistPicker(for track: Track) -> AnyView?
     func collectionRoute(kind: String, itemID: String) -> AppRoute?
     func collectionRemoval(for item: MirroredCollection) -> LibraryRemoval?
@@ -45,6 +64,7 @@ extension AppModule {
     var libraryOrigin: LibraryOrigin { LibraryOrigin(rawValue: descriptor.id.rawValue, label: descriptor.title, systemImage: descriptor.systemImage) }
     var accountEntry: ModuleAccountEntry? { nil }
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? { nil }
+    func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] { [] }
     func openAccount() {}
     func dismissAccount() {}
     func deactivate() {}
@@ -70,6 +90,7 @@ final class ModuleRegistry {
     enum RegistrationError: Error { case empty, duplicateID(ModuleID) }
     private(set) var descriptors: [ModuleDescriptor]
     private var modules: [any AppModule]
+    private var registrationRevision = 0
 
     init(_ modules: [any AppModule]) throws {
         guard !modules.isEmpty else { throw RegistrationError.empty }
@@ -86,9 +107,11 @@ final class ModuleRegistry {
     func register(_ module: any AppModule) throws {
         guard self.module(for: module.descriptor.id) == nil else { throw RegistrationError.duplicateID(module.descriptor.id) }
         modules.append(module)
+        registrationRevision += 1
         descriptors = modules.map(\.descriptor)
     }
     func remove(_ id: ModuleID) {
+        registrationRevision += 1
         module(for: id)?.dismissAccount()
         module(for: id)?.deactivate()
         modules.removeAll { $0.descriptor.id == id }
@@ -126,6 +149,21 @@ final class ModuleRegistry {
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
         guard let providerID = track.playbackProviderID else { return nil }
         return module(providerID: providerID)?.songActions(for: track, onImportLyrics: onImportLyrics)
+    }
+    func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] {
+        if track.localSource != nil {
+            return LibraryArtistNames.split(track.artists).map {
+                PlayerArtistDestination(name: $0, route: .libraryArtist($0, filter: .all))
+            }
+        }
+        guard let provider = track.playbackProviderID, let owner = module(providerID: provider) else {
+            throw ModuleCapabilityError.unavailable
+        }
+        let revision = registrationRevision
+        let destinations = try await owner.artistDestinations(for: track)
+        try Task.checkCancellation()
+        guard revision == registrationRevision else { throw CancellationError() }
+        return destinations
     }
     func descriptor(for id: ModuleID) -> ModuleDescriptor? { descriptors.first { $0.id == id } }
     /// 统一搜索的各组结果：按传入的搜索板块顺序显示；只包含 `ids` 里的模块。

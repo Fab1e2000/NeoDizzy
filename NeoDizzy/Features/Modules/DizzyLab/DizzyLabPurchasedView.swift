@@ -44,7 +44,7 @@ struct PurchasedLibraryView: View {
             PagedContent(list: purchases, emptyMessage: "还没有购买过专辑。") { items in
                 LazyVGrid(columns: DizzyGrid.columns, alignment: .leading, spacing: 22) {
                     ForEach(items) { item in
-                        NavigationLink(value: AppRoute.disc(id: item.disc.id)) {
+                        AlbumNavigationLink(value: AppRoute.disc(id: item.disc.id), artworkURL: item.disc.coverURL) {
                             DiscCard(
                                 disc: item.disc,
                                 caption: item.purchaseDate.map { "购买于 \($0)" }
