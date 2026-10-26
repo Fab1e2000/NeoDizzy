@@ -28,43 +28,56 @@ import UIKit
         defer { AppearanceSettings.shared.accent = previousAccent }
         let controller = UIHostingController(rootView: RootView(services: services, modules: services.modules, settings: settings))
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-        let previousKeyWindow = scene.windows.first(where: \.isKeyWindow)
         let window = UIWindow(windowScene: scene)
         window.overrideUserInterfaceStyle = .dark
         window.rootViewController = controller
         window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
-        try await wait { state.host != nil && state.nowPlaying != nil && self.tabController(in: controller) != nil }
+        defer { window.isHidden = true; window.rootViewController = nil }
+        try await wait { state.host != nil && self.tabController(in: controller) != nil }
         let tab = try #require(tabController(in: controller))
-        try await wait { tab.bottomAccessory != nil && tab.tabBar.traitCollection.userInterfaceStyle == .light }
-        let tabInsets = tab.view.safeAreaInsets
-        let additionalInsets = tab.additionalSafeAreaInsets
+        try await wait { tab.popupPresentationState == .barPresented && tab.tabBar.traitCollection.userInterfaceStyle == .light }
+        #expect(tab.popupBar.traitCollection.userInterfaceStyle == .light)
         expectColor(tab.tabBar.tintColor.resolvedColor(with: tab.tabBar.traitCollection), rgb: (170.0 / 255, 0.2, 0))
         try await Task.sleep(for: .milliseconds(450))
         expectColor((tab.tabBar.selectedItem?.standardAppearance ?? tab.tabBar.standardAppearance).stackedLayoutAppearance.selected.iconColor ?? .clear,
                     rgb: (170.0 / 255, 0.2, 0))
         record(window, name: "shell-fixed-light-warm.png")
-        state.nowPlaying?.isPresented = true
-        try await wait { self.presentedPlayer(in: controller)?.popupPresentationState == .open }
-        let presented = try #require(presentedPlayer(in: controller))
-        #expect(presented.view.traitCollection.userInterfaceStyle == .dark)
-        #expect(presented.popupBar.externalTransitionSource != nil)
-        #expect(tab.popupPresentationState == .barHidden)
-        #expect(tab.additionalSafeAreaInsets == additionalInsets)
-        #expect(tab.bottomAccessory != nil)
-        #expect(tab.view.safeAreaInsets == tabInsets)
-        state.nowPlaying?.isPresented = false
+        // Check the actual app shell: the title pan must not cover artwork.
+        let pan = try #require(titlePan(in: tab.popupBar))
+        let titleView = try #require(pan.view)
+        let titleFrame = titleView.convert(titleView.bounds, to: window)
+        let cover = tab.popupBar.imageView
+        #expect(titleFrame.width > 0)
+        #expect(titleFrame.minX >= cover.convert(cover.bounds, to: window).maxX)
+        let hit = window.hitTest(titleView.convert(CGPoint(x: titleView.bounds.midX, y: titleView.bounds.midY), to: window), with: nil)
+        var diagnostic = "Title: \(titleView)\nFrame: \(titleFrame)\nHit: \(String(describing: hit))\n"
+        var node = hit
+        while let view = node { diagnostic += "Hit ancestor: \(view)\n"; node = view.superview }
+        node = titleView
+        while let view = node { diagnostic += "Title ancestor: \(view), interaction=\(view.isUserInteractionEnabled), alpha=\(view.alpha)\n"; node = view.superview }
+        Attachment.record(Data(diagnostic.utf8), named: "title-hit-path.txt")
+        #expect(hit === titleView || hit?.isDescendant(of: titleView) == true)
+        var ancestor = titleView.superview
+        while let view = ancestor, view !== tab.popupBar {
+            #expect(view.isUserInteractionEnabled)
+            #expect(view.bounds.height > 0)
+            if let scroll = view as? UIScrollView { #expect(!scroll.isScrollEnabled) }
+            ancestor = view.superview
+        }
+        tab.openPopup(animated: false)
+        try await wait { tab.popupPresentationState == .open }
+        #expect(tab.popupContentView.traitCollection.userInterfaceStyle == .dark)
+        tab.closePopup(animated: true)
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while presentedPlayer(in: controller) != nil, ContinuousClock.now < deadline {
+        while tab.popupPresentationState != .barPresented, ContinuousClock.now < deadline {
+            #expect(tab.popupBar.traitCollection.userInterfaceStyle == .light)
             #expect(tab.tabBar.traitCollection.userInterfaceStyle == .light)
             try await Task.sleep(for: .milliseconds(16))
         }
-        try await wait { self.presentedPlayer(in: controller) == nil }
-        #expect(tab.bottomAccessory != nil)
-        #expect(tab.view.safeAreaInsets == tabInsets)
+        try await wait { tab.popupPresentationState == .barPresented }
 
         state.host?.selection = second.descriptor.id
-        try await wait { tab.selectedIndex == 1 && tab.tabBar.traitCollection.userInterfaceStyle == .light && tab.bottomAccessory != nil }
+        try await wait { tab.selectedIndex == 1 && tab.tabBar.traitCollection.userInterfaceStyle == .light && tab.popupBar.traitCollection.userInterfaceStyle == .light }
         try await Task.sleep(for: .milliseconds(450))
         expectColor(tab.tabBar.tintColor.resolvedColor(with: tab.tabBar.traitCollection), rgb: (0, 136.0 / 255, 0.2))
         #expect(tab.selectedIndex == 1)
@@ -73,13 +86,14 @@ import UIKit
         record(window, name: "shell-light-green.png")
     }
 
+    private func titlePan(in view: UIView) -> UIGestureRecognizer? {
+        if let pan = view.gestureRecognizers?.first(where: { $0.name == "NeoDizzy.NowPlayingTrackSwipe" }) { return pan }
+        return view.subviews.lazy.compactMap { titlePan(in: $0) }.first
+    }
+
     private func tabController(in controller: UIViewController) -> UITabBarController? {
         if let tab = controller as? UITabBarController { return tab }
         return controller.children.lazy.compactMap { tabController(in: $0) }.first
-    }
-    private func presentedPlayer(in controller: UIViewController) -> NativePlayerContentController? {
-        if let presented = controller.presentedViewController as? NativePlayerContentController { return presented }
-        return controller.children.lazy.compactMap { presentedPlayer(in: $0) }.first
     }
     private func expectColor(_ color: UIColor, rgb: (CGFloat, CGFloat, CGFloat)) {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
@@ -97,10 +111,7 @@ import UIKit
     }
 }
 
-@MainActor private final class ChromeFixtureState {
-    var host: ModuleHost?
-    var nowPlaying: NowPlayingPresentation?
-}
+@MainActor private final class ChromeFixtureState { var host: ModuleHost? }
 
 @MainActor private struct ChromeFixtureModule: AppModule {
     let descriptor: ModuleDescriptor
@@ -118,9 +129,8 @@ private struct ChromeFixturePage: View {
     let scheme: ColorScheme
     let state: ChromeFixtureState
     @Environment(ModuleHost.self) private var host
-    @Environment(NowPlayingPresentation.self) private var nowPlaying
     var body: some View {
         (scheme == .dark ? Color.black : Color.white).ignoresSafeArea()
-            .onAppear { state.host = host; state.nowPlaying = nowPlaying }
+            .onAppear { state.host = host }
     }
 }

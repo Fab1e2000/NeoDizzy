@@ -36,7 +36,7 @@
 
 - (CGRect)targetFrame
 {
-	return self.barArtworkFrameInWindow;
+	return [self.popupBar.imageView.window convertRect:self.popupBar.imageView.bounds fromView:self.popupBar.imageView];
 }
 
 - (CGFloat)sourceImageAlpha
@@ -51,13 +51,13 @@
 
 - (CGFloat)scaledBarImageViewCornerRadius
 {
-	return MAX(self.barArtworkCornerRadius * self.sourceFrame.size.width / MAX(self.barArtworkView.bounds.size.width, 1.0), self.barArtworkCornerRadius * self.sourceFrame.size.height / MAX(self.barArtworkView.bounds.size.height, 1.0));
+	return MAX(self.popupBar.imageView.cornerRadius * self.sourceFrame.size.width / self.popupBar.imageView.bounds.size.width, self.popupBar.imageView.cornerRadius * self.sourceFrame.size.height / self.popupBar.imageView.bounds.size.height);
 }
 
 - (NSShadow *)scaledBarImageViewShadow
 {
-	NSShadow* scaled = self.barArtworkShadow.copy;
-	scaled.shadowBlurRadius = scaled.shadowBlurRadius * self.sourceFrame.size.width / MAX(self.barArtworkView.bounds.size.width, 1.0);
+	NSShadow* scaled = self.popupBar.imageView.shadow.copy;
+	scaled.shadowBlurRadius = scaled.shadowBlurRadius * self.sourceFrame.size.width / self.popupBar.imageView.bounds.size.width;
 	return scaled;
 }
 
@@ -83,7 +83,7 @@
 
 - (CGRect)targetContentFrame
 {
-	return self.barContentFrame;
+	return [self.popupContentView.superview convertRect:self.popupBar.contentView.bounds fromView:self.popupBar.contentView];
 }
 
 - (LNPopupViewCorners)sourceContentCornerRadius
@@ -93,7 +93,7 @@
 
 - (LNPopupViewCorners)targetContentCornerRadius
 {
-	return self.barContentCorners;
+	return self.popupBar.contentView.effectView.corners;
 }
 
 - (CGFloat)sourceContentAlpha
@@ -121,7 +121,7 @@
 	[super performAdditionalAnimations];
 	
 	[self.transitionView setTargetFrameUpdatingTransform:self.targetFrame];
-	self.crossfadeView.cornerRadius = self.barArtworkCornerRadius;
+	self.crossfadeView.cornerRadius = self.popupBar.imageView.cornerRadius;
 	
 	if(self.popupContentView._currentEffect.ln_isGlass)
 	{
@@ -135,13 +135,6 @@
 	
 	self.popupBarTransitionView.alpha = 1.0;
 	self.contentViewTransitionView.alpha = 0.0;
-	if(self.accessoryTransitionEffectView != nil)
-	{
-		// Each material retains its own traits. Animate the effects rather than
-		// changing the full player's style before its first closing frame.
-		self.contentTransitionEffectView.effect = nil;
-		self.accessoryTransitionEffectView.effect = self.popupBarEffect;
-	}
 }
 
 - (void)performAdditional04Delayed015Animations
@@ -172,19 +165,6 @@
 				self.currentContentController.view.alpha = 0.0;
 			}
 		}
-	}
-}
-
-- (void)performAdditional025Delayed060Animations
-{
-	[super performAdditional025Delayed060Animations];
-
-	if(self.popupBar.externalTransitionSource != nil && self.wantsContentTransition)
-	{
-		// The system accessory's glass remains visible beneath this temporary
-		// surface. Finish its fade before landing to avoid stacking two materials.
-		// The miniature content portal is a sibling; artwork is in the window.
-		self.accessoryTransitionEffectView.effect = nil;
 	}
 }
 

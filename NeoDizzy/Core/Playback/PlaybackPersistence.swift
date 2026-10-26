@@ -12,6 +12,8 @@ nonisolated struct PlaybackSnapshot: Codable, Sendable {
     let shuffledOrder: [Int]
     var isDiscovery: Bool? = nil
     var sourceID: Int? = nil
+    var automaticContinuation: Bool? = nil
+    var crossfadeEnabled: Bool? = nil
     /// Associates lightweight progress checkpoints with this exact queue snapshot.
     /// Older snapshots omit the field and retain their original progress until upgraded.
     var persistenceGeneration: UUID? = nil

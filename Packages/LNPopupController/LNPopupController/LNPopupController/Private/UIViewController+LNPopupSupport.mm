@@ -178,19 +178,6 @@ const double LNSnapPercentDefault = 0.32;
 	return self._ln_popupController_nocreate.popupControllerPublicState;
 }
 
-- (BOOL)popupTransitionInProgress
-{
-	LNPopupController* controller = self._ln_popupController_nocreate;
-	return controller != nil &&
-		(controller.popupControllerInternalState == _LNPopupPresentationStateTransitioning ||
-		 controller.popupControllerTargetState != controller.popupControllerPublicState);
-}
-
-- (BOOL)popupInteractionCanBegin
-{
-	return self._ln_popupController_nocreate.popupInteractionCanBegin;
-}
-
 - (id<LNPopupPresentationDelegate>)popupPresentationDelegate
 {
 	return self._ln_popupController.userPopupPresentationDelegate;

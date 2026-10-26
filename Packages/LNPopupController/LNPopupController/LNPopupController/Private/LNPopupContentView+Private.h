@@ -30,11 +30,6 @@
 
 + (LNPopupViewCorners)cornersForContentView:(LNPopupContentView*)contentView;
 
-// Preserve the visible portal's four corners before an opening/return animation
-// is handed to a drag. Clear only after the next transition has finished.
-- (void)captureExternalTransitionCorners;
-- (void)clearExternalTransitionCorners;
-
 - (instancetype)initWithFrame:(CGRect)frame;
 
 @property (nonatomic, strong, readwrite) LNPopupInteractionPanGestureRecognizer* popupInteractionGestureRecognizer;

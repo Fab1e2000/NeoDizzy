@@ -44,13 +44,13 @@ extension View {
 struct NowPlayingSongHeader: View {
     static let referenceHeight: CGFloat = 72
     /// 竖屏共用头部离页面顶部（收起把手下方）的留白，参照系统音乐。
-    static let topInset: CGFloat = 17
+    static let topInset: CGFloat = 11.25
     /// 「继续播放」页里头部下沿到模式按钮之间多留的距离。
-    static let bottomSpacing: CGFloat = 8
+    static let bottomSpacing: CGFloat = 11.75
     static let height = referenceHeight
 
     /// 头部往上滚时的透明度：一开始滚就变淡，滚 30pt 淡完，几乎不会盖到顶部的收起把手。
-    /// 只用透明度，不用渐隐遮罩或裁剪：这两种都会让头部单独合成，作者名的叠加提亮就失效了。
+    /// 滚出页面时整组淡出；静止位置的歌名保持完全不透明。
     static func scrollFadeOpacity(scrolled: CGFloat) -> Double {
         1 - min(1, max(0, scrolled / 30))
     }
@@ -90,13 +90,14 @@ struct NowPlayingSongHeader: View {
                     NowPlayingMarqueeText(text: track.title, isActive: interactive)
                         .font(
                             usesReferenceLayout
-                                ? .title3.weight(.semibold)
+                                ? .headline
                                 : .headline
                         )
+                        .foregroundStyle(Color.white)
                         .lineLimit(1)
 
-                    NowPlayingArtistButton(track: track, interactive: interactive)
-                        .font(usesReferenceLayout ? .title3 : .subheadline)
+                    NowPlayingArtistButton(track: track, interactive: interactive, lineHeight: usesReferenceLayout ? 18 : 26, fontSize: 15)
+                        .font(.subheadline)
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -107,6 +108,7 @@ struct NowPlayingSongHeader: View {
             NowPlayingSongActions(
                 track: song, onImportLyrics: onImportLyrics
             )
+            .offset(x: usesReferenceLayout ? 6 : 0)
         }
     }
 

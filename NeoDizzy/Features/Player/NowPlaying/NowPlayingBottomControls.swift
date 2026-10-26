@@ -26,12 +26,12 @@ struct NowPlayingBottomControls: View {
                 interfaceLayer(.progress) {
                     NowPlayingProgressControl(song: song)
                 }
-                .position(x: proxy.size.width / 2, y: layout.controlsY(587))
+                .position(x: proxy.size.width / 2, y: layout.controlsY(page == .queue ? 587.5 : 587))
 
                 interfaceLayer(.transport) {
                     NowPlayingTransportControls()
                 }
-                .position(x: proxy.size.width / 2, y: layout.controlsY(664))
+                .position(x: proxy.size.width / 2, y: layout.controlsY(page == .queue ? 667 : 664))
 
                 interfaceLayer(.volume) {
                     NowPlayingVolumeControl()
@@ -41,7 +41,7 @@ struct NowPlayingBottomControls: View {
                 interfaceLayer(.pageSelector) {
                     NowPlayingPageSelector(page: $page, hasLyrics: hasLyrics)
                 }
-                .position(x: proxy.size.width / 2, y: layout.controlsY(811.23))
+                .position(x: proxy.size.width / 2, y: layout.controlsY(page == .queue ? 808 : 811.23))
             }
         }
         .frame(height: Self.overlayHeight)

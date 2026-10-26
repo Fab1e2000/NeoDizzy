@@ -433,10 +433,14 @@ BOOL _LNEnableBarTitleLayoutDebug(void)
 		[self layoutTitlesRemovingLabels:_needsTitleRemove];
 	}
 	
-	CGFloat titlesHeight = self.heightFittingTitleLabel + self.heightFittingSubtitleLabel + (self.numberOfLabels > 1 ? 1 : 0) * self.spacing;
+	CGRect targetFrame = _wrapperView.bounds;
+	// Custom titles replace the UILabels, so their measured height is zero.
+	// Give the hosting view the available title slot; SwiftUI centers its text
+	// inside it, and UIKit can hit-test the full ancestor chain.
+	CGFloat titlesHeight = self.hasSwiftUITitles ? targetFrame.size.height :
+		self.heightFittingTitleLabel + self.heightFittingSubtitleLabel + (self.numberOfLabels > 1 ? 1 : 0) * self.spacing;
 	
 	__block CGRect currentFrame = self.titlesView.frame;
-	CGRect targetFrame = _wrapperView.bounds;
 	CGFloat dy = targetFrame.size.height - titlesHeight;
 	
 	[UIView performWithoutAnimation:^{

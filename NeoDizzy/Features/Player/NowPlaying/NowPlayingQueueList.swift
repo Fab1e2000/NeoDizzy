@@ -16,7 +16,10 @@ nonisolated struct UpcomingQueueEntry: Identifiable, Hashable, Sendable {
 /// 被拖行只能上下移动，拖起时整行（通栏）换成半透明高亮底色，和系统音乐一致。
 /// 行内容仍由 SwiftUI 渲染。SwiftUI 的 `List` 走的是拖放，没有这两项的公开接口。
 struct NowPlayingQueueList: UIViewRepresentable {
+    @Environment(\.nowPlayingBackdropImage) private var backdropImage
+    @Environment(\.nowPlayingBackdropFrame) private var backdropFrame
     let entries: [UpcomingQueueEntry]
+    var subtitle: String = "接下来播放的歌曲"
     /// 顶部给歌曲头部和模式按钮预留的高度，头部叠在上层，随列表滚动。
     let headerHeight: CGFloat
     /// 行内容离屏幕两侧的距离；列表本身通栏，高亮才能铺满宽度。
@@ -153,8 +156,11 @@ struct NowPlayingQueueList: UIViewRepresentable {
                 previous[entry.id].map { $0.song != entry.song } == true ? .track(entry.id) : nil
             }
             if let previousList,
-               previousList.headerHeight != list.headerHeight
-                || previousList.horizontalInset != list.horizontalInset {
+               previousList.subtitle != list.subtitle
+                || previousList.headerHeight != list.headerHeight
+                || previousList.horizontalInset != list.horizontalInset
+                || previousList.backdropImage !== list.backdropImage
+                || previousList.backdropFrame != list.backdropFrame {
                 reconfigured += [.spacer, .title, .empty] + list.entries.map { .track($0.id) }
             }
             let existing = Set(snapshot.itemIdentifiers)
@@ -185,7 +191,7 @@ struct NowPlayingQueueList: UIViewRepresentable {
 
             switch item {
             case .spacer:
-                let height = latest.headerHeight + 60
+                let height = latest.headerHeight + 44
                 cell.contentConfiguration = UIHostingConfiguration {
                     Color.clear.frame(height: height)
                 }
@@ -194,14 +200,20 @@ struct NowPlayingQueueList: UIViewRepresentable {
 
             case .title:
                 cell.contentConfiguration = UIHostingConfiguration {
-                    Text("继续播放")
-                        .font(.title2.bold())
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("继续播放")
+                            .font(.headline.bold())
+                            .foregroundStyle(Color.white)
+                        NowPlayingVibrantLabel(text: latest.subtitle, fontSize: 13)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .environment(\.nowPlayingBackdropImage, latest.backdropImage)
+                    .environment(\.nowPlayingBackdropFrame, latest.backdropFrame)
                 }
                 .margins(.horizontal, inset)
                 .margins(.top, 14)
-                .margins(.bottom, 10)
+                .margins(.bottom, 12)
                 .minSize(height: 0)
 
             case .empty:
@@ -224,6 +236,8 @@ struct NowPlayingQueueList: UIViewRepresentable {
                         guard let self, let index = self.entriesByID[id]?.queueIndex else { return }
                         self.latest?.onPlay(index)
                     }
+                    .environment(\.nowPlayingBackdropImage, latest.backdropImage)
+                    .environment(\.nowPlayingBackdropFrame, latest.backdropFrame)
                 }
                 .margins(.leading, inset)
                 .margins(.trailing, 0)

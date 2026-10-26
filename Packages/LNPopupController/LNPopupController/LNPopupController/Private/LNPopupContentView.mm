@@ -51,8 +51,6 @@
 	NSLayoutConstraint* _popupCloseButtonCenterConstraint;
 	NSLayoutConstraint* _popupCloseButtonLeadingConstraint;
 	NSLayoutConstraint* _popupCloseButtonTrailingConstraint;
-	BOOL _hasExternalTransitionCorners;
-	LNPopupViewCorners _externalTransitionCorners;
 	
 #if !TARGET_OS_MACCATALYST
 	UIBarButtonItem* _leadingBarItem;
@@ -62,10 +60,6 @@
 
 + (LNPopupViewCorners)cornersForContentView:(LNPopupContentView*)contentView
 {
-	if(contentView->_hasExternalTransitionCorners)
-	{
-		return contentView->_externalTransitionCorners;
-	}
 	if(contentView.window != nil)
 	{
 		CGRect frameInWindow = [contentView.window convertRect:contentView.bounds fromView:contentView];
@@ -95,19 +89,6 @@
 		CGSize topRightCorner = CGSizeMake(topRight, topRight);
 		CGSize bottomLeftCorner = CGSizeMake(bottomLeft, bottomLeft);
 		CGSize bottomRightCorner = CGSizeMake(bottomRight, bottomRight);
-
-		LNPopupController* popupController = contentView.currentPopupContentViewController.popupPresentationContainerViewController._ln_popupController_nocreate;
-		if(popupController.popupBar.externalTransitionSource != nil)
-		{
-			// An external popup is an independent surface. An interrupted opening
-			// can retain the accessory's horizontal inset, so its corner ownership
-			// must not depend on touching the window's left and right edges.
-			corners.leftTop = topLeftCorner;
-			corners.rightTop = topRightCorner;
-			corners.leftBottom = bottomLeftCorner;
-			corners.rightBottom = bottomRightCorner;
-			return corners;
-		}
 		
 		if(frameInWindow.origin.x == 0)
 		{
@@ -137,42 +118,6 @@
 	}
 	
 	return {};
-}
-
-- (void)captureExternalTransitionCorners
-{
-	UIView* visibleSurface = self;
-	UIView* portalEffect = self.transitionView.subviews.firstObject;
-	if([portalEffect isKindOfClass:UIVisualEffectView.class])
-	{
-		// LN's content portal clips on its effect view, not its outer wrapper.
-		visibleSurface = portalEffect;
-	}
-	CALayer* visibleLayer = visibleSurface.layer.presentationLayer ?: visibleSurface.layer;
-	NSValue* cornerValue = [visibleLayer valueForKey:LNPopupHiddenString("cornerRadii")];
-	LNPopupViewCorners sampledCorners = {};
-	[cornerValue getValue:&sampledCorners size:sizeof(sampledCorners)];
-	BOOL hasVisibleCorner = sampledCorners.leftTop.width > 0 || sampledCorners.leftTop.height > 0 ||
-		sampledCorners.rightTop.width > 0 || sampledCorners.rightTop.height > 0 ||
-		sampledCorners.leftBottom.width > 0 || sampledCorners.leftBottom.height > 0 ||
-		sampledCorners.rightBottom.width > 0 || sampledCorners.rightBottom.height > 0;
-	if(!hasVisibleCorner)
-	{
-		// A fully open surface may deliberately have no layer mask, because the
-		// physical screen clips it. Its next independent drag uses window corners.
-		_hasExternalTransitionCorners = NO;
-		sampledCorners = [LNPopupContentView cornersForContentView:self];
-	}
-	_externalTransitionCorners = sampledCorners;
-	_hasExternalTransitionCorners = YES;
-	[self setNeedsLayout];
-}
-
-- (void)clearExternalTransitionCorners
-{
-	_hasExternalTransitionCorners = NO;
-	_externalTransitionCorners = {};
-	[self setNeedsLayout];
 }
 
 + (void)load
@@ -243,10 +188,7 @@
 			self.traitOverrides.userInterfaceLevel = UIUserInterfaceLevelElevated;
 		}
 		
-#if !TARGET_OS_MACCATALYST && !defined(LNPOPUP_EXTERNAL_ACCESSORY_ONLY)
-		// This hidden navigation controller measures LN's own close-button
-		// placement. The external-accessory host supplies its own controls and
-		// viewport; keeping it here would relayout a navigation bar on each drag.
+#if !TARGET_OS_MACCATALYST
 		if(LNPopupEnvironmentHasGlass())
 		{
 			auto vc = [_LNPopupContentViewLayoutEmptyController new];
@@ -280,7 +222,7 @@
 - (void)_updateLayoutAxisBehaviorFromContentController
 {
 #if !TARGET_OS_MACCATALYST
-	if(_currentPopupContentViewController == nil || _layoutController == nil)
+	if(_currentPopupContentViewController == nil)
 	{
 		return;
 	}
@@ -334,15 +276,12 @@
 	
 	[super layoutSubviews];
 	
-	if(!CGRectEqualToRect(_effectView.frame, self.bounds)) { _effectView.frame = self.bounds; }
+	_effectView.frame = self.bounds;
 	
 #if !TARGET_OS_MACCATALYST
-	if(LNPopupEnvironmentHasGlass() && _layoutController != nil)
+	if(LNPopupEnvironmentHasGlass())
 	{
-		if(!CGRectEqualToRect(_layoutController.view.frame, _contentView.frame))
-		{
-			_layoutController.view.frame = _contentView.frame;
-		}
+		_layoutController.view.frame = _contentView.frame;
 		[_layoutController.view _ln_removeInteractionsFromSubviewTree];
 	}
 #endif
@@ -481,7 +420,7 @@
 	
 #if defined(__IPHONE_27_1) && !TARGET_OS_MACCATALYST
 	if(@available(iOS 27.1, *))
-	if(_layoutController != nil && _layoutController.topViewController.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified)
+	if(_layoutController.topViewController.traitCollection.verticalBarEdge != UIVerticalBarEdgeUnspecified)
 	{
 		hasVerticalEdge = YES;
 	}
@@ -530,7 +469,7 @@
 	leadingConstant = metrics.leadingConstant;
 	trailingConstant = metrics.trailingConstant;
 #else
-	if(LNPopupEnvironmentHasGlass() && _layoutController != nil)
+	if(LNPopupEnvironmentHasGlass())
 	{
 		if(@available(iOS 26.0, *))
 		{

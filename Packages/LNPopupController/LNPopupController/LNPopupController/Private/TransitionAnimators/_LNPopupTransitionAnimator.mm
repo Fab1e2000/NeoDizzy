@@ -12,30 +12,12 @@
 #import <objc/runtime.h>
 #import "LNPopupContentView+Private.h"
 #import "LNPopupControllerImpl.h"
-#import <LNPopupController/LNPopupExternalTransitionSource.h>
 
 static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransitionViewKey;
-
-@interface _LNPopupTransitionAnimator ()
-- (void)_captureExternalGeometry;
-- (CGRect)_externalMiniatureFrameForWrapperBounds:(CGRect)bounds;
-- (void)_positionExternalContent;
-@end
 
 @implementation _LNPopupTransitionAnimator
 {
 	CGFloat _alphaBefore;
-	LNPopupExternalTransitionSource* _externalSource;
-	UIView* _externalContentView;
-	UIView* _externalContainerView;
-	UIView* _externalArtworkView;
-	CGFloat _externalArtworkCornerRadiusBeforeAnimation;
-	BOOL _hasCapturedExternalGeometry;
-	CGRect _externalContainerFrame;
-	CGRect _externalMiniatureContentFrame;
-	CGRect _externalArtworkFrameInWindow;
-	CGFloat _externalContainerCornerRadius;
-	CGFloat _externalArtworkCornerRadius;
 }
 
 - (instancetype)initWithTransitionView:(_LNPopupTransitionView *)transitionView userView:(UIView *)view popupBar:(LNPopupBar *)popupBar popupContentView:(LNPopupContentView *)popupContentView effectiveInteractionStyle:(LNPopupInteractionStyle)interactionStyle allowContentTransition:(BOOL)allowContentTransition
@@ -44,14 +26,7 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 	
 	if(self)
 	{
-		_externalSource = popupBar.externalTransitionSource;
-		_externalContentView = _externalSource.contentView;
-		_externalContainerView = _externalSource.containerView ?: _externalContentView;
-		_externalArtworkView = _externalSource.artworkView;
-		BOOL hasExternalArtwork = _externalArtworkView.window != nil &&
-			_externalArtworkView.bounds.size.width > 0 && _externalArtworkView.bounds.size.height > 0;
-		if((_externalSource != nil && !hasExternalArtwork) ||
-		   (_externalSource == nil && (popupBar.customBarViewController != nil || popupBar.imageView.isHidden)))
+		if(popupBar.customBarViewController != nil || popupBar.imageView.isHidden)
 		{
 			transitionView = nil;
 			view = nil;
@@ -64,21 +39,13 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 		
 		if(@available(iOS 26.0, *))
 		{
-			BOOL hasContentSource = _externalSource == nil || (_externalContentView.window != nil &&
-				_externalContentView.bounds.size.width > 0 && _externalContentView.bounds.size.height > 0);
-			_wantsContentTransition = allowContentTransition && hasContentSource && LNPopupEnvironmentHasGlass() && popupContentView.allowsContentTransition;
+			_wantsContentTransition = allowContentTransition && LNPopupEnvironmentHasGlass() && popupContentView.allowsContentTransition;
 			
 			if(_wantsContentTransition)
 			{
 				_contentViewTransitionView = [_LNPopupTransitionView transitionViewWithSourceView:popupContentView.contentView];
 				_contentViewTransitionView.matchesAlpha = NO;
 				_contentViewTransitionView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
-				if(_externalSource != nil)
-				{
-					// Clip a fixed viewport; never resize the live full-screen portal
-					// to the accessory width while its source remains full-screen.
-					_contentViewTransitionView.autoresizingMask = UIViewAutoresizingNone;
-				}
 				
 				_contentTransitionEffectView = [UIVisualEffectView new];
 				_contentTransitionEffectView.frame = popupContentView.frame;
@@ -87,42 +54,18 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 				_contentTransitionEffectView.clipsToBounds = YES;
 				_contentTransitionEffectView.layer.cornerCurve = kCACornerCurveCircular;
 				
-				// The system miniature keeps its labels and controls in place.
-				// Only its artwork participates in the shared-element flight;
-				// do not carry a second copy of the text along the closing card.
-				if(_externalSource == nil)
-				{
-					_popupBarTransitionView = [_LNPopupTransitionView transitionViewWithSourceView:self.barContentView];
-				}
+				_popupBarTransitionView = [_LNPopupTransitionView transitionViewWithSourceView:popupBar.contentView];
 				_popupBarTransitionView.matchesAlpha = NO;
 				_popupBarTransitionView.allowsEffects = YES;
 				_popupBarTransitionView.matchesPosition = NO;
-				_popupBarTransitionView.frame = _externalSource != nil
-					? (CGRect){CGPointZero, self.barContentView.bounds.size} : popupBar.contentView.frame;
-				_popupBarTransitionView.autoresizingMask = _externalSource != nil ? UIViewAutoresizingNone : UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleBottomMargin;
+				_popupBarTransitionView.frame = popupBar.contentView.frame;
+				_popupBarTransitionView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleBottomMargin;
 				
 				_contentTransitionWrapperView = [[UIView alloc] initWithFrame:popupContentView.frame];
 				_contentTransitionEffectView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 				[_contentTransitionWrapperView addSubview:_contentTransitionEffectView];
 				_contentTransitionEffectView.frame = _contentTransitionWrapperView.bounds;
-				if(_externalSource != nil)
-				{
-					_accessoryTransitionEffectView = [UIVisualEffectView new];
-					_accessoryTransitionEffectView.frame = _contentTransitionWrapperView.bounds;
-					_accessoryTransitionEffectView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-					_accessoryTransitionEffectView.clipsToBounds = YES;
-					_accessoryTransitionEffectView.layer.cornerCurve = kCACornerCurveCircular;
-					[_contentTransitionWrapperView insertSubview:_accessoryTransitionEffectView belowSubview:_contentTransitionEffectView];
-					_contentTransitionEffectView.overrideUserInterfaceStyle = popupContentView.traitCollection.userInterfaceStyle;
-					_accessoryTransitionEffectView.overrideUserInterfaceStyle = self.barContentView.traitCollection.userInterfaceStyle;
-					_contentTransitionEffectView.accessibilityIdentifier = @"player.transition.fullscreen";
-					_accessoryTransitionEffectView.accessibilityIdentifier = @"player.transition.accessory";
-					_contentViewTransitionView.accessibilityIdentifier = @"player.transition.content";
-				}
-				if(_popupBarTransitionView != nil)
-				{
-					[_contentTransitionWrapperView addSubview:_popupBarTransitionView];
-				}
+				[_contentTransitionWrapperView addSubview:_popupBarTransitionView];
 				
 				self.popupContentView.transitionView = _contentTransitionWrapperView;
 			}
@@ -140,17 +83,9 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 	
 	[UIView performWithoutAnimation:^{
 		[self.popupContentView layoutIfNeeded];
-		[self _captureExternalGeometry];
 		if(self.transitionView == nil && self.view != nil)
 		{
 			_transitionView = [[_LNPopupTransitionView alloc] initWithSourceView:self.view];
-		}
-		if(_externalSource != nil)
-		{
-			// These surfaces only render the transition. Let the real content's
-			// pan recognizer receive touches while opening or settling back.
-			_transitionView.userInteractionEnabled = NO;
-			_contentTransitionWrapperView.userInteractionEnabled = NO;
 		}
 		
 		if(_wantsContentTransition)
@@ -160,13 +95,8 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 			_alphaBefore = self.view.alpha;
 			self.view.alpha = 0.0;
 			
-			_popupBarEffect = _externalSource.backgroundEffect ?: self.popupBar.contentView.effect;
-			if(_externalSource != nil)
-			{
-				// The system owns the real accessory's glass. Only the independent
-				// LN transition surface receives an effect; never alter that shell.
-			}
-			else if(@available(iOS 26.0, *))
+			_popupBarEffect = self.popupBar.contentView.effect;
+			if(@available(iOS 26.0, *))
 			{
 				//We don't really want another glass here, but to have vibrancy in the labels and buttons, we need a visual effect view with a "clear" effect that still provides a vibrancy environment. So we strip a glass effect from all of its elements.
 				self.popupBar.contentView.effectOverride = _LNPopupGlassWrapperEffect.vibrancyOnlyEffect;
@@ -175,51 +105,34 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 			}
 		}
 		
-		_popupBarImageAlphaBeforeAnimation = self.barArtworkView.alpha;
+		_popupBarImageAlphaBeforeAnimation = self.popupBar.imageView.alpha;
 		
 		if(_transitionView != nil)
 		{
-			self.barArtworkView.alpha = 0.0;
-
-			if(_externalSource != nil)
+			self.popupBar.imageView.alpha = 0.0;
+			
+			UIImage* image;
+			if(self.popupBar.swiftuiImageController != nil)
 			{
-				// Keep the original live-view handoff for the accessory as well as
-				// the full player. This is not an image snapshot approximation.
-				_LNPopupTransitionView* artworkPortal = [_LNPopupTransitionView transitionViewWithSourceView:self.barArtworkView];
-				artworkPortal.matchesAlpha = NO;
-				artworkPortal.matchesPosition = NO;
-				artworkPortal.matchesTransform = NO;
-				artworkPortal.scalesSourceToBounds = YES;
-				// The portal's animated clipping owns the corner treatment. Keeping
-				// the miniature's original mask would scale that radius twice.
-				_externalArtworkCornerRadiusBeforeAnimation = self.barArtworkView.layer.cornerRadius;
-				self.barArtworkView.layer.cornerRadius = 0.0;
-				_crossfadeView = artworkPortal;
-			}
-			else
-			{
-				UIImage* image;
-				if(self.popupBar.swiftuiImageController != nil)
+				id contents = self.popupBar.swiftuiImageController.view.subviews.firstObject.layer.contents;
+				if(contents != nil && CFGetTypeID((__bridge CFTypeRef)contents) == CGImageGetTypeID())
 				{
-					id contents = self.popupBar.swiftuiImageController.view.subviews.firstObject.layer.contents;
-					if(contents != nil && CFGetTypeID((__bridge CFTypeRef)contents) == CGImageGetTypeID())
-					{
-						image = [[UIImage alloc] initWithCGImage:(__bridge CGImageRef)contents];
-					}
-					else
-					{
-						image = [[[UIGraphicsImageRenderer alloc] initWithSize:self.popupBar.imageView.bounds.size] imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {
-							[self.popupBar.imageView drawViewHierarchyInRect:self.popupBar.imageView.bounds afterScreenUpdates:NO];
-						}];
-					}
+					image = [[UIImage alloc] initWithCGImage:(__bridge CGImageRef)contents];
 				}
 				else
 				{
-					image = self.popupBar.imageView.image;
+					image = [[[UIGraphicsImageRenderer alloc] initWithSize:self.popupBar.imageView.bounds.size] imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {
+						[self.popupBar.imageView drawViewHierarchyInRect:self.popupBar.imageView.bounds afterScreenUpdates:NO];
+					}];
 				}
-				_crossfadeView = [[LNPopupImageView alloc] initWithImage:image];
-				_crossfadeView.contentMode = self.popupBar.imageView.contentMode;
 			}
+			else
+			{
+				image = self.popupBar.imageView.image;
+			}
+			
+			_crossfadeView = [[LNPopupImageView alloc] initWithImage:image];
+			_crossfadeView.contentMode = self.popupBar.imageView.contentMode;
 			_crossfadeView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 			_crossfadeView.frame = _transitionView.bounds;
 			[_transitionView addSubview:_crossfadeView];
@@ -231,28 +144,11 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 		if(_wantsContentTransition)
 		{
 			self.popupContentView.effectView.alpha = 0.0;
-			// The external path configures its two independent materials below.
-			// Do not create an accessory glass here only to replace it immediately.
-			if(_externalSource == nil)
-			{
-				_contentTransitionEffectView.effect = self.sourceContentTransitionEffect;
-			}
+			_contentTransitionEffectView.effect = self.sourceContentTransitionEffect;
 			_contentTransitionWrapperView.frame = self.sourceContentFrame;
-			if(_externalSource != nil)
-			{
-				_popupBarTransitionView.frame = [self _externalMiniatureFrameForWrapperBounds:_contentTransitionWrapperView.bounds];
-				[self _positionExternalContent];
-			}
 			_contentTransitionEffectView.corners = self.sourceContentCornerRadius;
 			_contentViewTransitionView.alpha = self.sourceContentAlpha;
-			if(_externalSource != nil)
-			{
-				BOOL opening = self.targetState == LNPopupPresentationStateOpen;
-				_contentTransitionEffectView.effect = opening ? nil : self.popupContentView._currentEffect;
-				_accessoryTransitionEffectView.effect = opening ? _popupBarEffect : nil;
-				_accessoryTransitionEffectView.corners = self.sourceContentCornerRadius;
-			}
-			else { _contentTransitionEffectView.effect = self.targetContentTransitionEffect; }
+			_contentTransitionEffectView.effect = self.targetContentTransitionEffect;
 		}
 		
 		[self beforeAnyAnimation];
@@ -279,12 +175,6 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 		if(_wantsContentTransition)
 		{
 			_contentTransitionWrapperView.frame = self.targetContentFrame;
-			if(_externalSource != nil)
-			{
-				_popupBarTransitionView.frame = [self _externalMiniatureFrameForWrapperBounds:_contentTransitionWrapperView.bounds];
-				[self _positionExternalContent];
-				_accessoryTransitionEffectView.corners = self.targetContentCornerRadius;
-			}
 			_contentTransitionEffectView.corners = self.targetContentCornerRadius;
 		}
 		
@@ -363,95 +253,6 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 		
 		[self completeTransition];
 	}];
-}
-
-- (UIView*)barContentView
-{
-	return _externalSource != nil ? _externalContentView : self.popupBar.contentView;
-}
-
-- (void)_positionExternalContent
-{
-	CGSize size = self.popupContentView.currentPopupContentViewController.view.bounds.size;
-	_contentViewTransitionView.frame = CGRectMake(
-		(_contentTransitionWrapperView.bounds.size.width - size.width) * 0.5, 0, size.width, size.height);
-}
-
-- (void)_captureExternalGeometry
-{
-	if(_externalSource == nil) { return; }
-	[_externalContentView layoutIfNeeded];
-	UIView* container = _externalSource.containerView;
-	if(container.window == nil || container.window != _externalContentView.window || CGRectIsEmpty(container.bounds))
-	{
-		container = _externalContentView;
-	}
-	_externalContainerView = container;
-	_externalContainerFrame = [self.popupContentView.superview convertRect:container.bounds fromView:container];
-	CGRect contentFrame = [container convertRect:_externalContentView.bounds fromView:_externalContentView];
-	contentFrame.origin.x -= container.bounds.origin.x;
-	contentFrame.origin.y -= container.bounds.origin.y;
-	_externalMiniatureContentFrame = contentFrame;
-	_externalArtworkFrameInWindow = [self.popupContentView.window convertRect:_externalArtworkView.bounds fromView:_externalArtworkView];
-	_externalContainerCornerRadius = _externalSource.cornerRadius > 0 ? _externalSource.cornerRadius : container.bounds.size.height * 0.5;
-	_externalArtworkCornerRadius = _externalSource.artworkCornerRadius;
-	_hasCapturedExternalGeometry = YES;
-}
-
-- (CGRect)_externalMiniatureFrameForWrapperBounds:(CGRect)bounds
-{
-	// Preserve the app content's offset inside the public accessory container.
-	// Explicit endpoints avoid flexible margins drifting when those offsets differ.
-	CGRect frame = _externalMiniatureContentFrame;
-	frame.origin.x += bounds.origin.x + (bounds.size.width - _externalContainerFrame.size.width) * 0.5;
-	frame.origin.y += bounds.origin.y;
-	return frame;
-}
-
-- (UIView*)barArtworkView
-{
-	return _externalSource != nil ? _externalArtworkView : self.popupBar.imageView;
-}
-
-- (CGRect)barArtworkFrameInWindow
-{
-	if(_hasCapturedExternalGeometry) { return _externalArtworkFrameInWindow; }
-	UIView* artwork = self.barArtworkView;
-	return [self.popupContentView.window convertRect:artwork.bounds fromView:artwork];
-}
-
-- (CGRect)barContentFrame
-{
-	if(_hasCapturedExternalGeometry) { return _externalContainerFrame; }
-	UIView* content = _externalSource != nil ? _externalContainerView : self.barContentView;
-	return [self.popupContentView.superview convertRect:content.bounds fromView:content];
-}
-
-- (CGFloat)barArtworkCornerRadius
-{
-	if(_hasCapturedExternalGeometry) { return _externalArtworkCornerRadius; }
-	return _externalSource != nil ? _externalSource.artworkCornerRadius : self.popupBar.imageView.cornerRadius;
-}
-
-- (NSShadow*)barArtworkShadow
-{
-	if(_externalSource == nil) { return self.popupBar.imageView.shadow; }
-	NSShadow* shadow = [NSShadow new];
-	shadow.shadowOffset = self.barArtworkView.layer.shadowOffset;
-	shadow.shadowBlurRadius = self.barArtworkView.layer.shadowRadius;
-	CGColorRef color = self.barArtworkView.layer.shadowColor;
-	shadow.shadowColor = color != nil
-		? [[UIColor colorWithCGColor:color] colorWithAlphaComponent:self.barArtworkView.layer.shadowOpacity]
-		: UIColor.clearColor;
-	return shadow;
-}
-
-- (LNPopupViewCorners)barContentCorners
-{
-	if(_externalSource == nil) { return self.popupBar.contentView.effectView.corners; }
-	CGFloat radius = _hasCapturedExternalGeometry ? _externalContainerCornerRadius : (_externalSource.cornerRadius > 0 ? _externalSource.cornerRadius : _externalContainerView.bounds.size.height * 0.5);
-	CGSize corner = CGSizeMake(radius, radius);
-	return (LNPopupViewCorners){corner, corner, corner, corner};
 }
 
 - (CGRect)sourceFrame
@@ -543,18 +344,14 @@ static const void* _LNPopupOpenCloseTransitionViewKey = &_LNPopupOpenCloseTransi
 		{
 			self.view.alpha = _alphaBefore;
 			self.popupContentView.effectView.alpha = 1.0;
-			if(_externalSource == nil) { self.popupBar.contentView.effectOverride = nil; }
+			self.popupBar.contentView.effectOverride = nil;
 			[_contentTransitionWrapperView removeFromSuperview];
 			self.popupContentView.transitionView = nil;
 		}
 		UIView* transitionView = objc_getAssociatedObject(self.transitionView.sourceLayer, _LNPopupOpenCloseTransitionViewKey);
 		[transitionView removeFromSuperview];
 		objc_setAssociatedObject(self.transitionView.sourceLayer, _LNPopupOpenCloseTransitionViewKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-		self.barArtworkView.alpha = _popupBarImageAlphaBeforeAnimation;
-		if(_externalSource != nil && _transitionView != nil)
-		{
-			self.barArtworkView.layer.cornerRadius = _externalArtworkCornerRadiusBeforeAnimation;
-		}
+		self.popupBar.imageView.alpha = _popupBarImageAlphaBeforeAnimation;
 		[self performAdditionalCompletion];
 	}];
 }

@@ -70,7 +70,6 @@ static id __accessibilityBundleLoadObserver;
 __attribute__((constructor))
 static void __accessibilityBundleLoadHandler(void)
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	__accessibilityBundleLoadObserver = [[NSNotificationCenter defaultCenter] addObserverForName:NSBundleDidLoadNotification object:nil queue:nil usingBlock:^(NSNotification * _Nonnull note) {
 		NSBundle* bundle = note.object;
 		if([bundle.bundleURL.lastPathComponent isEqualToString:@"UIKit.axbundle"] == NO)
@@ -103,7 +102,6 @@ static void __accessibilityBundleLoadHandler(void)
 		[[NSNotificationCenter defaultCenter] removeObserver:__accessibilityBundleLoadObserver];
 		__accessibilityBundleLoadObserver = nil;
 	}];
-#endif
 }
 
 @implementation NSObject (SwiftUISupport)
@@ -137,7 +135,6 @@ UIRectEdge __ln_hideBarEdge = UIRectEdgeNone;
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		static dispatch_once_t onceToken;
@@ -229,7 +226,6 @@ UIRectEdge __ln_hideBarEdge = UIRectEdgeNone;
 							@selector(_ln_sPVC:));
 		});
 	}
-#endif
 }
 
 - (void)_ln_updateSafeAreaInsets
@@ -301,14 +297,8 @@ LNAlwaysInline
 void _LNUpdateUserSafeAreaInsets(__kindof UIViewController* self, UIEdgeInsets userEdgeInsets, UIEdgeInsets popupUserEdgeInsets)
 {
 	UIEdgeInsets final = __LNEdgeInsetsSum(userEdgeInsets, popupUserEdgeInsets);
-
-#if LNPOPUP_EXTERNAL_ACCESSORY_ONLY
-	// The process-wide setter swizzle is disabled in this build. Calling its
-	// alias here would recurse instead of reaching UIViewController's setter.
-	self.additionalSafeAreaInsets = final;
-#else
+	
 	[self _ln_setAdditionalSafeAreaInsets:final];
-#endif
 }
 
 LNAlwaysInline
@@ -927,12 +917,6 @@ void __LNViewControllerCopySystemSafeAreaGeometry(UIViewController* source, UIVi
 
 - (void)_layoutPopupBarOrderForTransition
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	[self._ln_popupController_nocreate.popupBar.superview insertSubview:self._ln_popupController_nocreate.popupBar aboveSubview:self.bottomDockingViewForPopup_internalOrDeveloper];
 	[self._ln_popupController_nocreate.popupBar.superview insertSubview:self._ln_bottomBarExtension_nocreate belowSubview:self.bottomDockingViewForPopup_internalOrDeveloper];
 	
@@ -943,12 +927,6 @@ void __LNViewControllerCopySystemSafeAreaGeometry(UIViewController* source, UIVi
 
 - (void)_layoutPopupBarOrderForUse
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	if(self._ln_popupController_nocreate.stateAllowsLayout == NO)
 	{
 		return;
@@ -1105,12 +1083,6 @@ void __LNViewControllerCopySystemSafeAreaGeometry(UIViewController* source, UIVi
 
 - (void)_ln_layoutPopupBarAndContent
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	dispatch_block_t work = ^ {
 		if(__ln_alreadyInHideShowBar)
 		{
@@ -1320,12 +1292,6 @@ void __LNPopupUpdateChildInsets(__kindof UIViewController* controller)
 
 void _LNPopupSupportSetPopupInsetsForViewController(__kindof UIViewController* controller, LNPopupBar* popupBar, BOOL wantsLayout, UIEdgeInsets popupEdgeInsets)
 {
-	if(popupBar.externalTransitionSource != nil)
-	{
-		// UIKit's system accessory already supplies the host's bottom inset.
-		return;
-	}
-
 	BOOL shouldLayout = NO;
 	
 	//Container classes with bottom bars have bugs if additional safe areas are applied directly to them.
@@ -1448,12 +1414,6 @@ static void* LNTabBarControllerWantsForcedAnimatedPopupBarLayout = &LNTabBarCont
 
 - (void)_layoutPopupBarOrderForTransition
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	if(self.bottomDockingViewForPopupBar != nil)
 	{
 		//Custom bottom docking view, ignore.
@@ -1475,12 +1435,6 @@ static void* LNTabBarControllerWantsForcedAnimatedPopupBarLayout = &LNTabBarCont
 
 - (void)_layoutPopupBarOrderForUse
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	if(self._ln_popupController_nocreate.stateAllowsLayout == NO)
 	{
 		return;
@@ -1709,7 +1663,6 @@ static void* LNTabBarControllerWantsForcedAnimatedPopupBarLayout = &LNTabBarCont
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	static dispatch_once_t onceToken;
 	dispatch_once(&onceToken, ^{
 		LNSwizzleMethod(self,
@@ -1779,7 +1732,6 @@ static void* LNTabBarControllerWantsForcedAnimatedPopupBarLayout = &LNTabBarCont
 						NSSelectorFromString(selName),
 						@selector(_sSVCAN:));
 	});
-#endif
 }
 
 - (UIView*)_ln_extractTabBarContainer
@@ -2531,12 +2483,6 @@ static void* LNTabBarControllerWantsForcedAnimatedPopupBarLayout = &LNTabBarCont
 
 - (void)_layoutPopupBarOrderForTransition
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	if(self.bottomDockingViewForPopupBar != nil)
 	{
 		//Custom bottom docking view, ignore.
@@ -2557,12 +2503,6 @@ static void* LNTabBarControllerWantsForcedAnimatedPopupBarLayout = &LNTabBarCont
 
 - (void)_layoutPopupBarOrderForUse
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	if(self._ln_popupController_nocreate.stateAllowsLayout == NO)
 	{
 		return;
@@ -2848,7 +2788,6 @@ static void* LNTabBarControllerWantsForcedAnimatedPopupBarLayout = &LNTabBarCont
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	static dispatch_once_t onceToken;
 	dispatch_once(&onceToken, ^{
 		LNSwizzleMethod(self,
@@ -2896,7 +2835,6 @@ static void* LNTabBarControllerWantsForcedAnimatedPopupBarLayout = &LNTabBarCont
 						NSSelectorFromString(selName),
 						@selector(_uLFSBAIO));
 	});
-#endif
 }
 
 - (void)_ln_popup_viewDidLayoutSubviews_nvc
@@ -3235,7 +3173,6 @@ static void* wrapperDelegateKey = &wrapperDelegateKey;
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	static dispatch_once_t onceToken;
 	dispatch_once(&onceToken, ^{
 		LNSwizzleMethod(self,
@@ -3255,7 +3192,6 @@ static void* wrapperDelegateKey = &wrapperDelegateKey;
 							@selector(_ln_popup_setDelegate:));
 		}
 	});
-#endif
 }
 
 - (BOOL)popupBarAvoidsPrimaryColumn
@@ -3289,12 +3225,6 @@ static void* wrapperDelegateKey = &wrapperDelegateKey;
 
 - (void)_layoutPopupBarOrderForUse
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	[super _layoutPopupBarOrderForUse];
 
 	if(self._ln_popupController_nocreate.stateAllowsLayout == NO)
@@ -3310,12 +3240,6 @@ static void* wrapperDelegateKey = &wrapperDelegateKey;
 
 - (void)_layoutPopupBarOrderForTransition
 {
-	if(self._ln_popupController_nocreate.popupBar.externalTransitionSource != nil)
-	{
-		// The dedicated external-source container owns layout and ordering.
-		return;
-	}
-
 	[super _layoutPopupBarOrderForTransition];
 	
 	if(self._ln_popupController_nocreate.popupControllerTargetState == LNPopupPresentationStateBarHidden)

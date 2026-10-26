@@ -174,15 +174,15 @@ struct NowPlayingVolumeControl: View {
             ZStack {
                 Image(systemName: "speaker.fill")
                     .resizable().scaledToFit()
-                    .frame(width: 13.5, height: 19.5)
+                    .frame(width: 8, height: 13)
                     .position(x: layout.x(39.5), y: 21)
                 SystemVolumeSlider()
-                    .frame(width: layout.width(288.5), height: 44)
+                    .frame(width: layout.width(279), height: 44)
                     .position(x: proxy.size.width / 2, y: 21)
                     .accessibilityLabel("系统音量")
                 Image(systemName: "speaker.wave.3.fill")
                     .resizable().scaledToFit()
-                    .frame(width: 25.5, height: 21)
+                    .frame(width: 18, height: 14)
                     .position(x: layout.x(362.5), y: 21)
             }
         }
@@ -340,6 +340,7 @@ struct NowPlayingPageSelector: View {
                         .white.opacity(isSelected ? 0.68 : 0),
                         in: .circle
                     )
+                    .scaleEffect(isSelected && destination == .queue ? 38.0 / 44.0 : 1)
 
                 if let badgeSystemImage {
                     Image(systemName: badgeSystemImage)

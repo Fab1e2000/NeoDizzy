@@ -18,12 +18,6 @@ NS_SWIFT_UI_ACTOR
 /// Enables or disables indirect pointer (e.g. mouse pointer) interactions with the popup content view.
 @property (nonatomic, assign) BOOL allowsIndirectPointerInteraction;
 
-/// The view under the first touch, retained weakly until this gesture resets.
-@property (nonatomic, weak, readonly, nullable) UIView* initialTouchView;
-/// External-source gestures wait for accumulated downward intent before moving
-/// the popup. Once confirmed, intent remains set through the end of the gesture.
-@property (nonatomic, readonly) BOOL externalVerticalIntentConfirmed;
-
 @end
 
 NS_SWIFT_UI_ACTOR

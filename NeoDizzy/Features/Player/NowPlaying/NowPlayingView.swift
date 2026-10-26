@@ -17,6 +17,7 @@ struct NowPlayingView: View {
     @State private var isQueueSongHeaderHidden = false
     @State private var queueSongHeaderOffset: CGFloat = 0
     @State private var geometryState: NowPlayingGeometry
+    @State private var backdropImage: UIImage?
     @State private var artworkPageFrame = CGRect.zero
     @State private var preparedLyricsSongID: Track.ID?
     @State private var lyricsModel = NowPlayingLyricsModel()
@@ -38,9 +39,11 @@ struct NowPlayingView: View {
             let layout = NowPlayingLayout(contentSize: geometry.size)
             ZStack {
                 // 背景自己在铺满安全区之后上报位置，背景副本才能和它完全重合。
-                NowPlayingArtworkBackdrop(artworkURL: player.currentTrack?.coverURL) {
-                    geometryState.backdropFrame = $0
-                }
+                NowPlayingArtworkBackdrop(
+                    artworkURL: player.currentTrack?.coverURL,
+                    onFrameChange: { geometryState.backdropFrame = $0 },
+                    onImageChange: { backdropImage = $0 }
+                )
                 // iPhone 只支持竖屏（见 project.yml 的 UISupportedInterfaceOrientations），不保留横屏布局。
                 if let song = player.currentTrack {
                     portraitContent(for: song, layout: layout)
@@ -50,6 +53,7 @@ struct NowPlayingView: View {
             }
             .environment(\.nowPlayingLayout, layout)
             .environment(\.nowPlayingBackdropFrame, geometryState.backdropFrame)
+            .environment(\.nowPlayingBackdropImage, backdropImage)
         }
         .coordinateSpace(.named(NowPlayingContentCoordinateSpace.name))
         .foregroundStyle(.white)
@@ -163,7 +167,7 @@ struct NowPlayingView: View {
                 .padding(.top, layout.contentY(69))
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 22)
+        .frame(height: 22, alignment: .top)
         .contentShape(.rect)
         .onTapGesture {
             closePlayer()

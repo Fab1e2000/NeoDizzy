@@ -144,6 +144,16 @@ nonisolated struct PlaybackQueue: Sendable {
         return tracks.indices.contains(position + offset) || wraps
     }
 
+    /// Append a recommendation without discarding shuffled playback history.
+    mutating func appendAndSelect(_ track: Track) {
+        tracks.append(track)
+        currentIndex = tracks.count - 1
+        if isShuffled {
+            shuffledOrder.append(currentIndex)
+            shuffledPosition = shuffledOrder.count - 1
+        }
+    }
+
     mutating func toggleShuffle() {
         isShuffled.toggle()
         if isShuffled {

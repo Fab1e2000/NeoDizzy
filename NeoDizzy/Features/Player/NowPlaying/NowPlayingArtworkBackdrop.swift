@@ -3,8 +3,9 @@ import SwiftUI
 import UIKit
 
 extension EnvironmentValues {
-    /// 播放页背景在内容坐标系里的位置；整个播放器移动时保持不变。
+    /// 播放页背景在全局坐标系里的位置，供独立的列表 hosting 视图对齐。
     @Entry var nowPlayingBackdropFrame: CGRect = .zero
+    @Entry var nowPlayingBackdropImage: UIImage? = nil
 }
 
 extension View {
@@ -24,7 +25,7 @@ private struct NowPlayingBackdropUnderlay: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let frame = proxy.frame(in: .named(NowPlayingContentCoordinateSpace.name))
+            let frame = proxy.frame(in: .global)
             NowPlayingArtworkBackdrop(artworkURL: artworkURL, ignoresSafeArea: false, isUnderlay: true)
                 .frame(width: backdropFrame.width, height: backdropFrame.height)
                 .offset(x: backdropFrame.minX - frame.minX, y: backdropFrame.minY - frame.minY)
@@ -33,7 +34,7 @@ private struct NowPlayingBackdropUnderlay: View {
     }
 }
 
-/// 播放页背景：放大、模糊的封面。换歌时新旧封面交叉淡入，不闪黑。
+/// 从封面颜色生成静态背景；只在换歌时交叉淡入。
 struct NowPlayingArtworkBackdrop: View {
     let artworkURL: URL?
     var ignoresSafeArea = true
@@ -41,6 +42,7 @@ struct NowPlayingArtworkBackdrop: View {
     var isUnderlay = false
     /// 背景实际铺开的范围（含安全区），给背景副本对齐用。
     var onFrameChange: ((CGRect) -> Void)? = nil
+    var onImageChange: ((UIImage?) -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @State private var image: UIImage?
@@ -49,16 +51,18 @@ struct NowPlayingArtworkBackdrop: View {
         artworkURL: URL?,
         ignoresSafeArea: Bool = true,
         isUnderlay: Bool = false,
-        onFrameChange: ((CGRect) -> Void)? = nil
+        onFrameChange: ((CGRect) -> Void)? = nil,
+        onImageChange: ((UIImage?) -> Void)? = nil
     ) {
         self.artworkURL = artworkURL
         self.ignoresSafeArea = ignoresSafeArea
         self.isUnderlay = isUnderlay
         self.onFrameChange = onFrameChange
+        self.onImageChange = onImageChange
         // 已经缓存的封面直接拿来用，第一次出现就有图，不会先黑一下再淡入。
         _image = State(initialValue: Self.request(for: artworkURL).flatMap {
             ImagePipeline.shared.cache.cachedImage(for: $0)?.image
-        })
+        }.flatMap(NowPlayingBackdropRenderer.render))
     }
 
     private static func request(for url: URL?) -> ImageRequest? {
@@ -70,8 +74,6 @@ struct NowPlayingArtworkBackdrop: View {
 
     /// 只用来模糊，解码一张小图就够了。
     private static let decodeSize = CGSize(width: 240, height: 240)
-    /// 按系统音乐截图校准：偏亮的封面压暗后，背景亮度约 110～125。
-    private static let dimming = 0.22
 
     var body: some View {
         GeometryReader { proxy in
@@ -83,45 +85,144 @@ struct NowPlayingArtworkBackdrop: View {
                 if let image {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFill()
                         .frame(width: proxy.size.width, height: proxy.size.height)
-                        // 放大后边缘的颜色不会在模糊时被拉进来，四周也不会露出黑边。
-                        .scaleEffect(1.4)
-                        .blur(radius: 60, opaque: true)
                         .id(image)
                         .transition(.opacity)
                 }
 
-                // 和系统音乐一样压暗背景：作者名的叠加提亮是“背景 + 约 117”，
-                // 背景太亮会直接加成纯白，和标题分不出层次；文字整体对比度也更好。
-                if !isUnderlay || image != nil {
-                    Color.black.opacity(Self.dimming)
-                }
+
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .clipped()
             // 在铺满安全区之后的里层量：外层量到的是不含安全区的框，副本会按错的大小画，
             // 和真背景错开，列表顶部的渐隐带里就会显出一道印子。
             .onGeometryChange(for: CGRect.self) {
-                $0.frame(in: .named(NowPlayingContentCoordinateSpace.name))
+                $0.frame(in: .global)
             } action: {
                 onFrameChange?($0)
             }
         }
         .ignoresSafeArea(edges: ignoresSafeArea ? .all : [])
         .accessibilityHidden(true)
+        .onChange(of: image, initial: true) { _, value in onImageChange?(value) }
         .task(id: artworkURL) {
             guard let request = Self.request(for: artworkURL) else {
                 image = nil
                 return
             }
             guard let loaded = try? await ImagePipeline.shared.image(for: request),
-                  !Task.isCancelled, loaded !== image else { return }
+                  !Task.isCancelled,
+                  let rendered = NowPlayingBackdropRenderer.render(loaded),
+                  rendered !== image else { return }
             // 只有换歌（已经有旧封面）时才交叉淡入；第一次出现直接显示。
             let animates = image != nil && !accessibilityReduceMotion
             withAnimation(animates ? .easeInOut(duration: 0.6) : nil) {
-                image = loaded
+                image = rendered
             }
         }
     }
+}
+
+
+/// Three cover-derived color anchors, calibrated against eight AM screenshots.
+/// No track IDs, bundled reference images, or per-cover palette overrides.
+/// All sampling and interpolation use encoded sRGB; UIKit handles display gamut.
+@MainActor
+private enum NowPlayingBackdropRenderer {
+    private static let cache: NSCache<UIImage, UIImage> = {
+        let value = NSCache<UIImage, UIImage>()
+        value.countLimit = 32
+        return value
+    }()
+
+    private struct Tuning {
+        let lightPower: Double
+        let darkPower: Double
+        let chromaWeight: Double
+        let warmth: Double
+        let luminanceGain: Double
+        let luminanceBias: Double
+        let saturation: Double
+    }
+
+    // Top, middle (42% of height), bottom. Shared constants for every cover.
+    private static let tuning: [Tuning] = [
+        .init(lightPower: -0.287, darkPower: 0.150, chromaWeight: 0, warmth: 1.917,
+              luminanceGain: 0.637, luminanceBias: 0.040, saturation: 0.845),
+        .init(lightPower: 0.889, darkPower: 0.459, chromaWeight: 0, warmth: -0.563,
+              luminanceGain: 0.632, luminanceBias: 0.065, saturation: 0.959),
+        .init(lightPower: -0.627, darkPower: -0.627, chromaWeight: 6, warmth: -0.775,
+              luminanceGain: 0.357, luminanceBias: 0.056, saturation: 0.546)
+    ]
+
+    static func render(_ image: UIImage) -> UIImage? {
+        if let existing = cache.object(forKey: image) { return existing }
+        guard let source = image.cgImage,
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let side = 32
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let sampled = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: side, height: side,
+                bitsPerComponent: 8, bytesPerRow: side * 4, space: space,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.interpolationQuality = .high
+            context.draw(source, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        guard sampled else { return nil }
+        var sums = [SIMD3<Double>](repeating: .zero, count: 3)
+        var totals = [Double](repeating: 0, count: 3)
+        var meanLight = 0.0
+        var meanChroma = 0.0
+        for offset in stride(from: 0, to: pixels.count, by: 4) {
+            // Transparent source pixels are composited on black by the sampling context.
+            let color = SIMD3(Double(pixels[offset]), Double(pixels[offset + 1]), Double(pixels[offset + 2])) / 255
+            let light = luminance(color)
+            let chroma = max(color.x, color.y, color.z) - min(color.x, color.y, color.z)
+            meanLight += light
+            meanChroma += chroma
+            for (i, setting) in tuning.enumerated() {
+                let weight = pow(max(light, 0.005), setting.lightPower)
+                    * pow(max(1 - light, 0.005), setting.darkPower)
+                    * (1 + setting.chromaWeight * chroma)
+                    * exp(setting.warmth * (color.x - color.z))
+                sums[i] += color * weight
+                totals[i] += weight
+            }
+        }
+        meanLight /= Double(side * side)
+        meanChroma /= Double(side * side)
+        // Keep light, colorful covers luminous without lifting neutral white covers.
+        let pastelLift = min(0.12, max(0, meanLight - 0.45) * max(0, meanChroma - 0.12) * 4)
+        let anchors = tuning.enumerated().map { i, setting in
+            let average = sums[i] / max(totals[i], 0.001)
+            let light = luminance(average)
+            let color = (average - SIMD3(repeating: light)) * setting.saturation
+                + SIMD3(repeating: light * setting.luminanceGain + setting.luminanceBias + (i < 2 ? pastelLift : 0))
+            return SIMD3(clamp(color.x), clamp(color.y), clamp(color.z))
+        }
+        // Rasterize once so SwiftUI does not change the calibrated interpolation space.
+        let height = 256
+        var gradient = [UInt8](repeating: 255, count: height * 4)
+        for row in 0..<height {
+            let y = Double(row) / Double(height - 1)
+            let section = y <= 0.42 ? 0 : 1
+            let fraction = section == 0 ? y / 0.42 : (y - 0.42) / 0.58
+            let color = anchors[section] * (1 - fraction) + anchors[section + 1] * fraction
+            for channel in 0..<3 { gradient[row * 4 + channel] = UInt8((clamp(color[channel]) * 255).rounded()) }
+        }
+        guard let provider = CGDataProvider(data: Data(gradient) as CFData),
+              let rendered = CGImage(width: 1, height: height, bitsPerComponent: 8,
+                bitsPerPixel: 32, bytesPerRow: 4, space: space,
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
+        let result = UIImage(cgImage: rendered)
+        cache.setObject(result, forKey: image)
+        return result
+    }
+
+    private static func luminance(_ c: SIMD3<Double>) -> Double {
+        c.x * 0.2126 + c.y * 0.7152 + c.z * 0.0722
+    }
+    private static func clamp(_ value: Double) -> Double { min(1, max(0, value)) }
 }

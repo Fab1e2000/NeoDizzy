@@ -103,8 +103,15 @@ import Testing
         let name = "QueueScrollTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
+        let coverURL = FileManager.default.temporaryDirectory.appendingPathComponent("title-contrast-\(UUID()).png")
+        let cover = UIGraphicsImageRenderer(size: CGSize(width: 48, height: 48)).image { context in
+            UIColor(red: 0.9, green: 0.96, blue: 1, alpha: 1).setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 48, height: 48))
+        }
+        try #require(cover.pngData()).write(to: coverURL)
+        defer { try? FileManager.default.removeItem(at: coverURL) }
         let tracks = (0..<30).map {
-            Track(discID: "", number: "\($0)", title: "队列歌曲 \($0)", artists: "测试艺术家", albumTitle: "专辑", coverURL: nil,
+            Track(discID: "", number: "\($0)", title: "很长的歌曲名称用于验证实色文字 \($0)", artists: "测试艺术家", albumTitle: "专辑", coverURL: coverURL,
                   localSource: .init(albumID: "test", trackID: "\($0)"))
         }
         let persistence = PlaybackPersistence(defaults: defaults)
@@ -150,7 +157,7 @@ import Testing
             #expect(abs(heading.minY - initialHeading.minY) < 1)
             #expect(abs(list.contentOffset.y - target) < 1)
         }
-        for (offset, name): (CGFloat, String) in [(36, "queue-partially-scrolled"), (110, "queue-pinned-controls")] {
+        for (offset, name): (CGFloat, String) in [(0, "queue-reference-rest"), (36, "queue-partially-scrolled"), (110, "queue-pinned-controls")] {
             list.setContentOffset(CGPoint(x: 0, y: offset - list.adjustedContentInset.top), animated: false)
             try await Task.sleep(for: .milliseconds(150))
             let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in

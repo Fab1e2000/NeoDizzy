@@ -26,16 +26,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, readonly) LNPopupBar* popupBar;
 @property (nonatomic, strong, readonly) LNPopupContentView* popupContentView;
 
-/// Resolved source views: the external system accessory when supplied, otherwise
-/// the original LN popup bar. Subclasses use these without owning bar layout.
-@property (nonatomic, strong, readonly, nullable) UIView* barContentView;
-@property (nonatomic, strong, readonly, nullable) UIView* barArtworkView;
-@property (nonatomic, readonly) CGRect barArtworkFrameInWindow;
-@property (nonatomic, readonly) CGRect barContentFrame;
-@property (nonatomic, readonly) CGFloat barArtworkCornerRadius;
-@property (nonatomic, strong, readonly, nullable) NSShadow* barArtworkShadow;
-@property (nonatomic, readonly) LNPopupViewCorners barContentCorners;
-
 @property (nonatomic, strong, readonly, nullable) _LNPopupTransitionView* transitionView;
 @property (nonatomic, strong, readonly, nullable) UIView<LNPopupTransitionView>* crossfadeView;
 @property (nonatomic, readonly) CGFloat popupBarImageAlphaBeforeAnimation;
@@ -49,7 +39,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, readonly) UIView* contentTransitionWrapperView;
 @property (nonatomic, strong, readonly) _LNPopupTransitionView* contentViewTransitionView;
 @property (nonatomic, strong, readonly) UIVisualEffectView* contentTransitionEffectView;
-@property (nonatomic, strong, readonly, nullable) UIVisualEffectView* accessoryTransitionEffectView;
 @property (nonatomic, strong, readonly) UIVisualEffect* popupBarEffect;
 @property (nonatomic, strong, readonly) UIVisualEffect* sourceContentTransitionEffect;
 @property (nonatomic, strong, readonly) UIVisualEffect* targetContentTransitionEffect;

@@ -17,7 +17,7 @@
 {
 	[super beforeAnyAnimation];
 	
-	self.transitionView.shadow = self.barArtworkShadow.copy;
+	self.transitionView.shadow = self.popupBar.imageView.shadow.copy;
 	self.transitionView.cornerRadius = self.scaledBarImageViewCornerRadius;
 	
 	_targetShadow = [self.transitionView.shadow copy];

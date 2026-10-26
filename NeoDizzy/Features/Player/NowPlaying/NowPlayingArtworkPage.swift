@@ -122,7 +122,7 @@ struct NowPlayingArtworkPage: View {
                         // 放不下时滚动显示（相邻曲目的预览不滚）。
                         NowPlayingMarqueeText(text: track.title, isActive: interactive)
                             .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.98))
+                            .foregroundStyle(Color.white)
                             .lineLimit(1)
                             .frame(width: layout.width(227), height: 27, alignment: .leading)
                             .contentShape(.rect)

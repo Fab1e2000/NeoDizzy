@@ -33,10 +33,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL matchesPosition;
 @property (nonatomic, assign) BOOL allowsEffects;
 
-/// For a small external artwork source, resize the live source with the wrapper.
-/// Other LN portals retain their existing explicit transform behavior.
-@property (nonatomic, assign) BOOL scalesSourceToBounds;
-
 @property (nonatomic, assign) CGAffineTransform sourceViewTransform;
 
 @end

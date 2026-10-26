@@ -48,6 +48,8 @@
 	_pagingEnabled = pagingEnabled;
 	
 	self.dataSource = pagingEnabled ? self : nil;
+	_scrollView.scrollEnabled = pagingEnabled;
+	_scrollView.userInteractionEnabled = YES;
 }
 
 - (void)viewDidLayoutSubviews
@@ -57,6 +59,9 @@
 	_scrollView = [self valueForKey:@"scrollView"];
 	
 	_scrollView.decelerationRate = UIScrollViewDecelerationRateFast;
+	// Custom title gestures must not compete with inactive item paging.
+	_scrollView.scrollEnabled = _pagingEnabled;
+	_scrollView.userInteractionEnabled = YES;
 	if(@available(iOS 26.0, *))
 	{
 		_scrollView.topEdgeEffect.hidden = YES;
@@ -73,7 +78,9 @@
 
 - (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate
 {
-	scrollView.userInteractionEnabled = NO;
+	if(!_pagingEnabled) { return; }
+	// No deceleration callback follows a cancelled/short drag.
+	scrollView.userInteractionEnabled = !decelerate;
 
 	if(decelerate == NO)
 	{

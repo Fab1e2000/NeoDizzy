@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 
 /// 播放器：AVQueuePlayer 提前排入下一首；发现页另保留一个静音预缓冲播放器。迷你播放器、播放页和系统媒体控制共用这一份状态。
-/// 结构参考 MeloX 的 PlayerStore，去掉了歌词、AutoMix、音质选择等 M1 用不到的部分。
+/// 结构参考 MeloX 的 PlayerStore，使用双播放器实现可选的三秒交叉淡化；不做节拍或调性匹配。
 @Observable
 final class PlayerStore {
     private(set) var currentTrack: Track?
@@ -36,6 +36,7 @@ final class PlayerStore {
 
     func holdsFile(_ url: URL) -> Bool {
         let path = LocalLibraryScanner.canonical(url)
+        if let fadingURL, LocalLibraryScanner.canonical(fadingURL) == path { return true }
         if let next = queuedNext, next.url.isFileURL, LocalLibraryScanner.canonical(next.url) == path { return true }
         if let loadedFileURL, LocalLibraryScanner.canonical(loadedFileURL) == path { return true }
         return isResolving && currentTrack.flatMap { resolver.localURL(for: $0) }.map { LocalLibraryScanner.canonical($0) == path } == true
@@ -78,6 +79,128 @@ final class PlayerStore {
             updateNowPlaying()
         }
         saveState()
+    }
+
+    private(set) var isAutomaticContinuationEnabled = false
+    private(set) var isCrossfadeEnabled = false
+    var canAutomaticallyContinue: Bool {
+        guard let source = currentTrack?.playbackProviderID else { return false }
+        return remoteDiscoverySources[source] != nil || discoverySelections[source] != nil
+    }
+    var automaticContinuationDescription: String {
+        if isDiscovery { return "正在播放推荐音乐" }
+        return isAutomaticContinuationEnabled && canAutomaticallyContinue
+            ? "队列结束后自动续播推荐音乐" : "接下来播放的歌曲"
+    }
+    func toggleAutomaticContinuation() {
+        guard canAutomaticallyContinue, !isDiscovery else { return }
+        isAutomaticContinuationEnabled.toggle()
+        prepareQueuedNext()
+        saveState()
+    }
+    func toggleCrossfade() {
+        isCrossfadeEnabled.toggle()
+        if !isCrossfadeEnabled { finishCrossfade() }
+        stageCrossfadeCandidate()
+        saveState()
+    }
+
+    @ObservationIgnored private var crossfadeCandidate: AVPlayerItem?
+    @ObservationIgnored private var crossfadeTask: Task<Void, Never>?
+    @ObservationIgnored private var fadingAccess: OfflineFolderAccess?
+    @ObservationIgnored private var fadingURL: URL?
+    @ObservationIgnored private var fadingProviderID: String?
+    @ObservationIgnored private var fadingCacheJob: UUID?
+    @ObservationIgnored private var fadingDuration: TimeInterval = 0
+    @ObservationIgnored private var fadingListened: TimeInterval = 0
+    private(set) var isCrossfading = false
+
+    private func stageCrossfadeCandidate() {
+        guard !isCrossfading, !isDiscovery else { return }
+        crossfadeCandidate = nil
+        standbyPlayer.pause()
+        standbyPlayer.cancelPendingPrerolls()
+        standbyPlayer.replaceCurrentItem(with: nil)
+        guard isCrossfadeEnabled, let next = queuedNext else { return }
+        // An AVPlayerItem cannot move between players, even after remove().
+        // Share the asset (and its resource loader), but own a separate item.
+        let item = AVPlayerItem(asset: next.item.asset)
+        item.preferredForwardBufferDuration = 5
+        crossfadeCandidate = item
+        standbyPlayer.isMuted = true
+        standbyPlayer.replaceCurrentItem(with: item)
+    }
+
+    private func finishCrossfade() {
+        crossfadeTask?.cancel()
+        crossfadeTask = nil
+        guard isCrossfading else { return }
+        standbyPlayer.pause()
+        standbyPlayer.replaceCurrentItem(with: nil)
+        standbyPlayer.volume = 1
+        player.volume = 1
+        AudioPlaybackCache.shared.leave(fadingCacheJob, listened: fadingListened, duration: fadingDuration)
+        fadingCacheJob = nil
+        fadingAccess = nil
+        fadingURL = nil
+        fadingProviderID = nil
+        isCrossfading = false
+        stageCrossfadeCandidate()
+    }
+
+    private func beginCrossfadeIfReady() {
+        guard isCrossfadeEnabled, !isCrossfading, !isDiscovery, !isPreview,
+              isPlaying, !isSeeking, player.timeControlStatus == .playing,
+              duration > 6, duration - progress > 0, duration - progress <= 3,
+              let next = queuedNext, next.track.id != currentTrack?.id,
+              let incoming = crossfadeCandidate, incoming.status == .readyToPlay,
+              next.item.status == .readyToPlay, resolver.isFresh(next.url, for: next.track),
+              !resolver.isPreview(for: next.track, url: next.url) else { return }
+        let fadeDuration = duration - progress
+        // Retain the outgoing security scope and cache while its tail is audible.
+        fadingAccess = activeLocalAccess ?? currentTrack.flatMap { resolver.independentLocalAccess(for: $0) }
+        fadingURL = loadedFileURL
+        fadingProviderID = currentTrack?.playbackProviderID
+        fadingCacheJob = audioCacheJob
+        fadingDuration = duration
+        fadingListened = reporting.listenedSeconds
+        audioCacheJob = nil
+        player.remove(next.item)
+        player.actionAtItemEnd = .pause
+        standbyPlayer.cancelPendingPrerolls()
+        queuedNext = QueuedNext(track: next.track, index: next.index, url: next.url,
+                                item: incoming, cacheJob: next.cacheJob, access: next.access)
+        crossfadeCandidate = nil
+        standbyPlayer.isMuted = false
+        standbyPlayer.volume = 0
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        timeObserver = nil
+        timeControlObservation = nil
+        currentItemObservation = nil
+        let outgoing = player
+        player = standbyPlayer
+        standbyPlayer = outgoing
+        isCrossfading = true
+        installPlayerObservers()
+        promoteQueuedItem()
+        player.play()
+        crossfadeTask = Task { [weak self] in
+            // Advance the envelope with the incoming media clock: buffering must
+            // not fade the old song into silence before the new one can play.
+            while !Task.isCancelled {
+                guard let self, self.isCrossfading else { return }
+                if self.player.currentItem?.status == .failed {
+                    self.finishCrossfade()
+                    return
+                }
+                let seconds = self.player.currentTime().seconds
+                let fraction = seconds.isFinite ? min(1, max(0, seconds / fadeDuration)) : 0
+                self.player.volume = Float(fraction)
+                self.standbyPlayer.volume = Float(1 - fraction)
+                if fraction >= 1 { self.finishCrossfade(); return }
+                do { try await Task.sleep(for: .milliseconds(25)) } catch { return }
+            }
+        }
     }
 
     private(set) var isDiscovery = false
@@ -231,8 +354,9 @@ final class PlayerStore {
             AudioPlaybackCache.shared.leave(next.cacheJob, listened: 0, duration: 0)
         }
         queuedNext = nil
+        stageCrossfadeCandidate()
         player.actionAtItemEnd = .pause
-        AudioPlaybackCache.shared.protect(loadedFileURL)
+        AudioPlaybackCache.shared.protectFiles([loadedFileURL, fadingURL].compactMap { $0 })
     }
 
     private func prepareQueuedNext() {
@@ -248,16 +372,24 @@ final class PlayerStore {
         if isDiscovery { index = nil }
         else if repeatMode == .one { index = queue.currentIndex }
         else {
-            guard nextQueue.move(by: 1, wraps: repeatMode == .all) else { return }
-            index = nextQueue.currentIndex
+            if nextQueue.move(by: 1, wraps: repeatMode == .all) { index = nextQueue.currentIndex }
+            else if isAutomaticContinuationEnabled && canAutomaticallyContinue { index = nil }
+            else { return }
         }
         let candidate = index.map { queue.tracks[$0] }
+        let source = currentTrack?.playbackProviderID
+        let continuation = source.flatMap { remoteDiscoverySources[$0] }
+        let selection = source.flatMap { discoverySelections[$0] }
         nextPreparation = Task { [weak self, resolver] in
             do {
                 let track: Track
                 if let candidate { track = candidate }
                 else if let remoteTask { track = try await remoteTask.value }
+                else if let continuation { track = try await continuation() }
+                else if let selection { track = try await selection().track }
                 else { return }
+                // Recommendations must remain owned by the source that supplied them.
+                guard candidate != nil || track.playbackProviderID == source else { return }
                 try Task.checkCancellation()
                 let access = resolver.independentLocalAccess(for: track)
                 let url = try await resolver.stream(for: track, retainAccess: false)
@@ -276,9 +408,10 @@ final class PlayerStore {
                     return
                 }
                 self.queuedNext = QueuedNext(track: track, index: index, url: url, item: item, cacheJob: job, access: access)
-                AudioPlaybackCache.shared.protectFiles([self.loadedFileURL, url.isFileURL ? url : nil].compactMap { $0 })
+                AudioPlaybackCache.shared.protectFiles([self.loadedFileURL, self.fadingURL, url.isFileURL ? url : nil].compactMap { $0 })
                 self.player.insert(item, after: self.activeItem)
                 self.player.actionAtItemEnd = .advance
+                self.stageCrossfadeCandidate()
             } catch { /* Current playback is unaffected; the end handler can retry resolution. */ }
         }
     }
@@ -294,6 +427,7 @@ final class PlayerStore {
                                         duration: duration > 0 ? duration : currentTrack?.duration ?? 0)
         reporting.finish()
         if let index = next.index { _ = queue.select(index: index) }
+        else if !isDiscovery { queue.appendAndSelect(next.track) }
         else {
             var history = Array(queue.tracks.prefix(queue.currentIndex + 1))
             history.append(next.track)
@@ -306,7 +440,7 @@ final class PlayerStore {
         resolver.releaseLocalAccess()
         loadedFileURL = next.url.isFileURL ? next.url : nil
         loadedLocalFile = next.url.isFileURL
-        AudioPlaybackCache.shared.protect(loadedFileURL)
+        AudioPlaybackCache.shared.protectFiles([loadedFileURL, fadingURL].compactMap { $0 })
         cacheListenedAtEnd = 0
         retriedTrackID = nil; bypassCacheForRetry = false
         loadGeneration += 1
@@ -581,6 +715,7 @@ final class PlayerStore {
     }
 
     func pause() {
+        finishCrossfade()
         sessionActivation.cancel()
         #if os(iOS)
         resumeAfterInterruption = false
@@ -628,6 +763,7 @@ final class PlayerStore {
 
     /// Restoring progress and replaying an item do not represent a new user command.
     private func performSeek(to seconds: TimeInterval) {
+        finishCrossfade()
         promoteQueuedItem()
         let target = max(0, duration > 0 ? min(seconds, duration) : seconds)
         progress = target
@@ -679,6 +815,7 @@ final class PlayerStore {
     }
 
     func remoteAccountDidChange(providerID: String) {
+        if fadingProviderID == providerID || currentTrack?.playbackProviderID == providerID { finishCrossfade() }
         resolver.invalidateRemote(providerID)
         prepareQueuedNext()
         if currentTrack?.playbackProviderID == providerID {
@@ -703,6 +840,7 @@ final class PlayerStore {
 
     /// Revokes online capabilities without interrupting another source or a downloaded copy.
     func disableProvider(providerID: String) async {
+        if fadingProviderID == providerID || currentTrack?.playbackProviderID == providerID { finishCrossfade() }
         reporting.unregister(providerID)
         cancelQueuedNext()
         resolver.unregister(providerID)
@@ -739,6 +877,8 @@ final class PlayerStore {
             isShuffled: snapshot.isShuffled,
             shuffledOrder: snapshot.shuffledOrder
         )
+        isAutomaticContinuationEnabled = snapshot.automaticContinuation == true
+        isCrossfadeEnabled = snapshot.crossfadeEnabled == true
         isDiscovery = snapshot.isDiscovery == true
         remoteDiscoveryID = isDiscovery ? queue.currentTrack?.remoteSource?.providerID : nil
         queueSourceID = snapshot.sourceID
@@ -763,13 +903,16 @@ final class PlayerStore {
             isShuffled: queue.isShuffled,
             shuffledOrder: queue.persistedShuffleOrder,
             isDiscovery: isDiscovery,
-            sourceID: queueSourceID
+            sourceID: queueSourceID,
+            automaticContinuation: isAutomaticContinuationEnabled,
+            crossfadeEnabled: isCrossfadeEnabled
         ))
     }
 
     // MARK: - 加载
 
     private func load(autoplay: Bool, startAt position: TimeInterval = 0, preferLocal: Bool = true, prepared: PreparedDiscovery? = nil, continuing: Bool = false) {
+        finishCrossfade()
         cancelQueuedNext()
         activeItem = nil
         activeLocalAccess = nil
@@ -889,6 +1032,7 @@ final class PlayerStore {
 
     private func fail(with message: String, generation: Int) {
         guard generation == loadGeneration else { return }
+        finishCrossfade()
         reporting.setPlaying(false)
         debugLog("播放失败：\(message)")
         isResolving = false
@@ -998,6 +1142,7 @@ final class PlayerStore {
         guard currentSeconds.isFinite else { return }
         progress = max(currentSeconds, 0)
         progressUpdatedAt = .now
+        beginCrossfadeIfReady()
         updateNowPlaying()
         if abs(progress - lastSavedProgress) >= 10 {
             switch persistence.saveProgress(progress) {
@@ -1111,6 +1256,7 @@ final class PlayerStore {
     }
 
     func sessionWasInterrupted(routeDisconnected: Bool) {
+        finishCrossfade()
         sessionActivation.cancel()
         playbackIntentRevision &+= 1
         // 耳机断开后不自动恢复；来电等中断结束后按系统建议接着播。

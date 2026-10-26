@@ -1,34 +1,100 @@
 import SwiftUI
 import UIKit
 
-/// 作者名：文字由 SwiftUI 画，上面盖一个透明的原生按钮负责点击和菜单。字体、行数跟随外部环境。
-///
-/// 和系统音乐一样做叠加提亮：文字亮度直接加在背景上，保留背景色调。强度按系统音乐截图校准
-/// （背景约 +117）。系统的 Vibrancy 在这个页面触发不了（中间隔着多层单独合成的视图）。
-/// 叠加只在外层没有遮罩、裁剪且透明度为 1 时生效，所以头部只用透明度淡出。
+/// 作者名字形显示提亮后的背景，透明按钮保留原有点击和菜单。
 struct NowPlayingArtistButton: View {
     let track: Track
     /// 为 false 时只显示文字（左右滑动切歌时相邻曲目的预览），大小和按钮一样。
     var interactive = true
+    var lineHeight: CGFloat = 26
+    var fontSize: CGFloat = 20
 
     var body: some View {
         if interactive {
-            NowPlayingArtistMenuButton(track: track)
+            NowPlayingArtistMenuButton(track: track, lineHeight: lineHeight)
                 .background(alignment: .leading) {
                     label.accessibilityHidden(true)
                 }
         } else {
-            label.frame(height: 26)
+            label.frame(height: lineHeight)
         }
     }
 
     private var label: some View {
-        Text(track.artists)
-            .foregroundStyle(.white.opacity(0.46))
-            .blendMode(.plusLighter)
-            .truncationMode(.tail)
+        NowPlayingVibrantLabel(text: track.artists, fontSize: fontSize)
             .frame(maxWidth: .infinity, alignment: .leading)
             .allowsHitTesting(false)
+    }
+}
+
+/// Shares the page's rendered image: no extra artwork requests or palette calculation.
+/// The brighter copy is confined to glyphs; the page background is untouched.
+struct NowPlayingVibrantLabel: View {
+    let text: String
+    let fontSize: CGFloat
+    @Environment(\.nowPlayingBackdropImage) private var image
+    @Environment(\.nowPlayingBackdropFrame) private var backdropFrame
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var glyphs: some View {
+        NowPlayingGlyphMask(text: text, fontSize: fontSize)
+    }
+
+    var body: some View {
+        glyphs.hidden()
+            .overlay {
+                GeometryReader { proxy in
+                    let frame = proxy.frame(in: .global)
+                    ZStack(alignment: .topLeading) {
+                        Color(white: 0.88)
+                        if let image, backdropFrame.width > 0, backdropFrame.height > 0 {
+                            Image(uiImage: image)
+                                .resizable()
+                                .frame(width: backdropFrame.width, height: backdropFrame.height)
+                                .brightness(0.45)
+                                .offset(x: backdropFrame.minX - frame.minX,
+                                        y: backdropFrame.minY - frame.minY)
+                                .id(image)
+                                .transition(.opacity)
+                        }
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                    .clipped()
+                }
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: image)
+                .mask { glyphs }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(text)
+            .allowsHitTesting(false)
+    }
+}
+
+/// Retain the existing UIKit font metrics and truncation for the glyph mask.
+private struct NowPlayingGlyphMask: UIViewRepresentable {
+    let text: String
+    let fontSize: CGFloat
+
+    func makeUIView(context: Context) -> UILabel {
+        let label = UILabel()
+        label.textColor = .white
+        label.numberOfLines = 1
+        label.lineBreakMode = .byTruncatingTail
+        label.isAccessibilityElement = false
+        return label
+    }
+
+    func updateUIView(_ label: UILabel, context: Context) {
+        label.text = text
+        let baseFont = UIFont.systemFont(ofSize: fontSize)
+        label.font = fontSize == 20 ? baseFont : UIFontMetrics(
+            forTextStyle: fontSize == 13 ? .footnote : .subheadline
+        ).scaledFont(for: baseFont, compatibleWith: label.traitCollection)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width,
+               height: uiView.font.lineHeight)
     }
 }
 
@@ -36,6 +102,7 @@ struct NowPlayingArtistButton: View {
 /// presenting a confirmation sheet. Merely rendering it starts no requests.
 private struct NowPlayingArtistMenuButton: UIViewRepresentable {
     let track: Track
+    let lineHeight: CGFloat
     @Environment(ModuleRegistry.self) private var modules: ModuleRegistry?
     @Environment(\.openRoute) private var openRoute
 
@@ -46,7 +113,7 @@ private struct NowPlayingArtistMenuButton: UIViewRepresentable {
         button.contentHorizontalAlignment = .leading
         button.titleLabel?.font = .systemFont(ofSize: 20)
         button.titleLabel?.lineBreakMode = .byTruncatingTail
-        // 文字由外层 SwiftUI 画（见 NowPlayingArtistButton），这里只保留点击区域和菜单。
+        // 原生 Vibrancy 负责文字，这里只保留点击区域和菜单。
         button.setTitleColor(.clear, for: .normal)
         button.accessibilityHint = String(localized: "前往艺术家")
         configure(button, coordinator: context.coordinator)
@@ -79,7 +146,7 @@ private struct NowPlayingArtistMenuButton: UIViewRepresentable {
     private static let openActionID = UIAction.Identifier("neodizzy.player.artist.open")
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIButton, context: Context) -> CGSize? {
-        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width, height: 26)
+        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width, height: lineHeight)
     }
 
     static func dismantleUIView(_ uiView: UIButton, coordinator: PlayerArtistMenuController) {

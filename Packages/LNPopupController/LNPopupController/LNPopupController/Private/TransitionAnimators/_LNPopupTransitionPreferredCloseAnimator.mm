@@ -48,14 +48,14 @@
 	[super performAdditionalAnimations];
 	
 	self.view.cornerRadius = self.scaledBarImageViewCornerRadius;
-	self.crossfadeView.cornerRadius = self.barArtworkCornerRadius;
+	self.crossfadeView.cornerRadius = self.popupBar.imageView.cornerRadius;
 	if(_supportsShadow)
 	{
 		self.view.shadow = self.scaledBarImageViewShadow;
 	}
 	else
 	{
-		self.transitionView.shadow = self.barArtworkShadow.copy;
+		self.transitionView.shadow = self.popupBar.imageView.shadow.copy;
 	}
 }
 

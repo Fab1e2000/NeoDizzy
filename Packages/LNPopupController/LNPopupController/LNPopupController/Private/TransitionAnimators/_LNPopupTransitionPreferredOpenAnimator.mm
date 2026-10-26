@@ -47,7 +47,7 @@
 	}
 	else
 	{
-		self.transitionView.shadow = self.barArtworkShadow.copy;
+		self.transitionView.shadow = self.popupBar.imageView.shadow.copy;
 	}
 }
 
@@ -68,21 +68,6 @@
 	}
 	
 	self.crossfadeView.cornerRadius = self.view.cornerRadius;
-}
-
-- (void)performAdditionalCompletion
-{
-	self.view.cornerRadius = _originalCornerRadius;
-	if(_supportsShadow)
-	{
-		self.view.shadow = _originalShadow;
-	}
-	else
-	{
-		self.transitionView.shadow = _originalShadow;
-	}
-
-	[super performAdditionalCompletion];
 }
 
 @end

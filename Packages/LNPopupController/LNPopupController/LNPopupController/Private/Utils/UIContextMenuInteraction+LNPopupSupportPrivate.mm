@@ -17,7 +17,6 @@
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		NSString* selName = LNPopupHiddenString("_delegate_previewForHighlightingForConfiguration:");
@@ -40,7 +39,6 @@
 						NSSelectorFromString(selName),
 						@selector(_ln_d_cMIWDFC:));
 	}
-#endif
 }
 
 //_delegate_previewForDismissingForConfiguration:clientReturnedPreview:

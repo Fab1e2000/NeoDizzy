@@ -44,14 +44,13 @@ struct NowPlayingQueuePage: View {
         VStack(spacing: 0) {
             NowPlayingQueueList(
                 entries: upcomingEntries,
+                subtitle: player.automaticContinuationDescription,
                 headerHeight: songHeaderHeight,
                 horizontalInset: Self.contentHorizontalInset,
                 onPlay: { player.playFromQueue(at: $0) },
                 onMove: moveQueueItems,
                 onScroll: updateSongHeaderState
             )
-            // 列表外面有渐隐遮罩，行里作者名的叠加提亮要和遮罩里的背景副本叠加。
-            .nowPlayingBackdropUnderlay(artworkURL: player.currentTrack?.coverURL)
             // 页面外层有 32pt 的水平内边距；列表自己向两侧多出同样的宽度，行内容再缩进回来。
             .mask {
                 // Fade the last row into the live player backdrop without
@@ -72,12 +71,12 @@ struct NowPlayingQueuePage: View {
                     .frame(height: 80)
                 }
                     .padding(.horizontal, -Self.contentHorizontalInset)
-                    .padding(.top, modeControlsOffset + 60)
+                    .padding(.top, modeControlsOffset + 44)
             }
             .overlay(alignment: .top) {
                 NowPlayingQueueModeControls()
-                    .padding(.vertical, 8)
-                    .frame(height: 60)
+                    .padding(.vertical, 3)
+                    .frame(height: 44)
                     .offset(y: modeControlsOffset)
             }
             .overlay(alignment: .top) {
@@ -136,7 +135,7 @@ struct NowPlayingQueuePage: View {
         // Leave a small gap above the progress track, halfway between the
         // original fixed inset and the track-aligned version.
         presentation == .portrait
-            ? max(0, layout.contentSize.height - 3 - layout.contentY(567.25))
+            ? max(0, layout.contentSize.height - 3 - layout.contentY(573))
             : 12
     }
 
@@ -198,7 +197,7 @@ private struct NowPlayingQueueModeControls: View {
     @Environment(PlayerStore.self) private var player
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 13) {
             modeButton(
                 systemImage: "shuffle",
                 isSelected: player.isShuffled,
@@ -208,6 +207,7 @@ private struct NowPlayingQueueModeControls: View {
                         : "随机播放",
                 action: toggleShuffle
             )
+            .disabled(player.isDiscovery)
 
             modeButton(
                 systemImage: player.repeatMode.systemImage,
@@ -216,9 +216,25 @@ private struct NowPlayingQueueModeControls: View {
                     player.repeatMode.accessibilityTitle,
                 action: cycleRepeatMode
             )
+            .disabled(player.isDiscovery)
+
+            modeButton(
+                systemImage: "infinity",
+                isSelected: (player.isAutomaticContinuationEnabled && player.canAutomaticallyContinue) || player.isDiscovery,
+                accessibilityLabel: "自动续播推荐音乐",
+                action: player.toggleAutomaticContinuation
+            )
+            .disabled(!player.canAutomaticallyContinue || player.isDiscovery)
+
+            modeButton(
+                systemImage: "circle.lefthalf.filled.righthalf.striped.horizontal",
+                isSelected: player.isCrossfadeEnabled,
+                accessibilityLabel: "三秒交叉淡化",
+                action: player.toggleCrossfade
+            )
+            .disabled(player.isDiscovery || player.isPreview)
 
         }
-        .disabled(player.isDiscovery)
     }
 
     private func modeButton(
@@ -228,13 +244,22 @@ private struct NowPlayingQueueModeControls: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
+            Group {
+                if systemImage == "circle.lefthalf.filled.righthalf.striped.horizontal" {
+                    HStack(spacing: -7) {
+                        Circle().stroke(lineWidth: 2.5)
+                        Circle().fill()
+                    }.frame(width: 22, height: 13)
+                } else {
+                    Image(systemName: systemImage)
+                }
+            }
                 .contentTransition(
                     .symbolEffect(.replace.downUp.wholeSymbol)
                 )
                 .font(.title3.weight(.semibold))
                 .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                .frame(height: 38)
                 .foregroundStyle(
                     isSelected
                         ? .black.opacity(0.62)
@@ -284,12 +309,8 @@ struct NowPlayingQueueRow: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
-                    // 和头部作者名一样做叠加提亮（见 NowPlayingArtistButton）。
-                    Text(entry.song.artists)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.46))
-                        .blendMode(.plusLighter)
-                        .lineLimit(1)
+                    // 与头部共用原生 Vibrancy。
+                    NowPlayingVibrantLabel(text: entry.song.artists, fontSize: 13)
                 }
 
                 Spacer(minLength: 4)

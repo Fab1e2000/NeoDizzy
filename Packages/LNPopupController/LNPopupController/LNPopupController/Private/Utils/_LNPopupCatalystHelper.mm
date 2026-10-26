@@ -56,8 +56,7 @@ static NSString* const toolbarToolbarViewWindow = LNPopupHiddenString("toolbar.t
 	{
 		updateTitleVisibilityBehavior = NSSelectorFromString(LNPopupHiddenString("_updateTitleVisibilityBehavior"));
 		updateFromNavigationBarProxy = NSSelectorFromString(LNPopupHiddenString("_updateFromNavigationBarProxy"));
-
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
+		
 		Class cls = NSClassFromString(@"UITitlebar");
 		Method m = LNSwizzleClassGetInstanceMethod(cls, updateFromNavigationBarProxy);
 		void (*orig)(id, SEL) = reinterpret_cast<decltype(orig)>(method_getImplementation(m));
@@ -82,7 +81,6 @@ static NSString* const toolbarToolbarViewWindow = LNPopupHiddenString("toolbar.t
 			}
 			orig(self, updateFromNavigationBarProxy);
 		}));
-#endif
 	}
 }
 

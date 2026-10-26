@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import NeoDizzy
@@ -16,6 +17,7 @@ import Testing
     }
     private struct Rig {
         let player: PlayerStore
+        let engine: AVQueuePlayer
         let source: Source
         let persistence: PlaybackPersistence
         let defaults: UserDefaults
@@ -40,9 +42,10 @@ import Testing
         try data.write(to: file)
         let resolver = StreamResolver(localFile: { _ in file })
         resolver.register("dizzylab", provider: PlaybackProvider(stream: { _ in throw PlaybackError.unavailable }))
-        let player = PlayerStore(resolver: resolver, persistence: persistence)
+        let engine = AVQueuePlayer()
+        let player = PlayerStore(resolver: resolver, persistence: persistence, playbackPlayer: engine)
         player.registerDiscoverySelection("dizzylab") { try await source.fetch() }
-        return Rig(player: player, source: source, persistence: persistence, defaults: defaults, suite: suite, file: file)
+        return Rig(player: player, engine: engine, source: source, persistence: persistence, defaults: defaults, suite: suite, file: file)
     }
     private func waitFor(_ condition: () -> Bool) async throws {
         for _ in 0..<200 {
@@ -51,6 +54,101 @@ import Testing
         }
         Issue.record("Timed out waiting for player state")
     }
+    @Test func automaticContinuationUsesOnlyRegisteredSourceAndPersists() async throws {
+        let r = try rig(); defer { r.clean() }
+        r.player.play([r.selection(1).track], startAt: 0)
+        try await waitFor { r.player.duration > 0 }
+        #expect(r.player.canAutomaticallyContinue)
+        r.player.toggleAutomaticContinuation()
+        try await waitFor { r.source.calls == 1 }
+        r.source.finish(r.selection(2))
+        try await waitFor { r.player.queuedNextTrack?.number == "2" }
+        #expect(r.persistence.load()?.automaticContinuation == true)
+        r.player.seek(to: r.player.duration - 0.15)
+        try await waitFor { r.player.currentTrack?.number == "2" }
+        #expect(r.player.isPlaying && !r.player.isDiscovery)
+        #expect(r.persistence.load()?.queue.map(\.number) == ["1", "2"])
+    }
+
+    @Test func disablingContinuationRejectsLateRecommendation() async throws {
+        let r = try rig(); defer { r.clean() }
+        r.player.play([r.selection(1).track], startAt: 0)
+        try await waitFor { r.player.duration > 0 }
+        r.player.toggleAutomaticContinuation()
+        try await waitFor { r.source.calls == 1 }
+        r.player.toggleAutomaticContinuation()
+        r.source.finish(r.selection(2))
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(r.player.queuedNextTrack == nil)
+        #expect(r.player.currentTrack?.number == "1")
+    }
+
+    @Test func continuationFailureKeepsCurrentTrackAndUnsupportedSourceStaysOff() async throws {
+        let r = try rig(); defer { r.clean() }
+        r.player.play([r.selection(1).track], startAt: 0)
+        try await waitFor { r.player.duration > 0 }
+        r.player.toggleAutomaticContinuation()
+        try await waitFor { r.source.calls == 1 }
+        r.source.fail()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(r.player.currentTrack?.number == "1" && r.player.isPlaying)
+        #expect(r.player.queuedNextTrack == nil)
+        await r.player.disableProvider(providerID: "dizzylab")
+        #expect(!r.player.canAutomaticallyContinue)
+        r.player.toggleAutomaticContinuation()
+        #expect(r.source.calls == 1)
+    }
+
+    @Test func crossfadePromotesPreparedAudioAndFinishes() async throws {
+        let r = try rig(); defer { r.clean() }
+        r.player.play([r.selection(1).track, r.selection(2).track], startAt: 0)
+        r.player.toggleCrossfade()
+        try await waitFor { r.player.queuedNextTrack != nil && r.player.duration > 0 && !r.player.isLoading }
+        r.player.seek(to: r.player.duration - 1.5)
+        try await waitFor { r.player.isCrossfading }
+        #expect(r.player.currentTrack?.number == "2" && r.player.isPlaying)
+        try await waitFor { r.engine.volume < 0.95 }
+        #expect(r.engine.rate > 0)
+        try await waitFor { !r.player.isCrossfading }
+        #expect(r.engine.rate == 0)
+        #expect(r.player.progress > 0 && r.player.issue == nil)
+        #expect(r.persistence.load()?.crossfadeEnabled == true)
+    }
+
+    @Test(arguments: ["pause", "seek", "disable", "toggle", "interruption"])
+    func crossfadeCancellationStopsOutgoingAudio(command: String) async throws {
+        let r = try rig(); defer { r.clean() }
+        r.player.play([r.selection(1).track, r.selection(2).track], startAt: 0)
+        r.player.toggleCrossfade()
+        try await waitFor { r.player.queuedNextTrack != nil && r.player.duration > 0 && !r.player.isLoading }
+        r.player.seek(to: r.player.duration - 2.5)
+        try await waitFor { r.player.isCrossfading }
+        switch command {
+        case "pause": r.player.pause()
+        case "seek": r.player.seek(to: 5)
+        case "disable": await r.player.disableProvider(providerID: "dizzylab")
+        case "interruption": r.player.sessionWasInterrupted(routeDisconnected: true)
+        default: r.player.toggleCrossfade()
+        }
+        #expect(!r.player.isCrossfading)
+        #expect(r.engine.rate == 0)
+        if command == "pause" { #expect(!r.player.isPlaying) }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!r.player.isCrossfading)
+    }
+
+    @Test func titleSkipPreservesPauseAndMovesBackInsteadOfRestarting() async throws {
+        let r = try rig(); defer { r.clean() }
+        r.player.play([r.selection(1).track, r.selection(2).track], startAt: 1)
+        try await waitFor { r.player.duration > 0 }
+        r.player.pause()
+        r.player.seek(to: 8)
+        r.player.skip(toQueueIndex: 0)
+        #expect(r.player.currentTrack?.number == "1" && !r.player.isPlaying)
+        r.player.skip(toQueueIndex: 999)
+        #expect(r.player.currentTrack?.number == "1" && !r.player.isPlaying)
+    }
+
     @Test func ordinaryQueueNaturallyAdvancesWithoutLoadingAgain() async throws {
         let r = try rig(); defer { r.clean() }
         var starts: [String] = []

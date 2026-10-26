@@ -9,6 +9,8 @@ struct NowPlayingTrackSwipe<Content: View>: View {
     let song: Track
     /// 相邻歌名离当前歌名的距离；不传时用这一块自己的宽度再留一点间隔。
     var pageDistance: CGFloat? = nil
+    /// LN hosts title content in a separate controller; give that slot an explicit touch surface.
+    var usesUIKitTouchSurface = false
     /// `interactive` 为 false 时是相邻曲目的预览，只显示文字，不响应点击。
     @ViewBuilder let content: (_ track: Track, _ interactive: Bool) -> Content
 
@@ -37,8 +39,9 @@ struct NowPlayingTrackSwipe<Content: View>: View {
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measuredWidth = $0 }
-        .gesture(
-            NowPlayingHorizontalPan(
+        .modifier(TrackSwipeGestureModifier(
+            usesUIKitTouchSurface: usesUIKitTouchSurface,
+            pan: NowPlayingHorizontalPan(
                 onChange: { translation in
                     guard !isCommitting else { return }
                     let hasNeighbor = translation < 0 ? next != nil : previous != nil
@@ -55,7 +58,7 @@ struct NowPlayingTrackSwipe<Content: View>: View {
                     withTransaction(transaction) { offset = 0 }
                 }
             )
-        )
+        ))
     }
 
     private func neighbor(_ track: Track, at x: CGFloat, distance: CGFloat) -> some View {
@@ -135,6 +138,10 @@ private struct NowPlayingHorizontalPan: UIGestureRecognizerRepresentable {
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        handle(recognizer)
+    }
+
+    func handle(_ recognizer: UIPanGestureRecognizer) {
         let translation = recognizer.translation(in: recognizer.view).x
         switch recognizer.state {
         case .began, .changed:
@@ -160,5 +167,45 @@ private struct NowPlayingHorizontalPan: UIGestureRecognizerRepresentable {
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
             other.name == "LNPopupExternalDismissPan"
         }
+    }
+}
+
+private struct TrackSwipeGestureModifier: ViewModifier {
+    let usesUIKitTouchSurface: Bool
+    let pan: NowPlayingHorizontalPan
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if usesUIKitTouchSurface {
+            content.overlay { TrackSwipeTouchSurface(pan: pan) }
+        } else {
+            content.gesture(pan)
+        }
+    }
+}
+
+/// Only the miniature title slot gets this clear view. Its ancestor LN tap/pan
+/// recognizers still receive taps and vertical drags; artwork is a sibling.
+private struct TrackSwipeTouchSurface: UIViewRepresentable {
+    let pan: NowPlayingHorizontalPan
+
+    func makeCoordinator() -> Coordinator { Coordinator(pan: pan) }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        let gesture = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handle(_:)))
+        gesture.name = "NeoDizzy.NowPlayingTrackSwipe"
+        gesture.delegate = context.coordinator.directionDelegate
+        view.addGestureRecognizer(gesture)
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) { context.coordinator.pan = pan }
+
+    final class Coordinator: NSObject {
+        var pan: NowPlayingHorizontalPan
+        let directionDelegate = NowPlayingHorizontalPan.Coordinator()
+        init(pan: NowPlayingHorizontalPan) { self.pan = pan }
+        @objc func handle(_ gesture: UIPanGestureRecognizer) { pan.handle(gesture) }
     }
 }

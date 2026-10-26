@@ -158,7 +158,6 @@ static const void* LNPopupBarBackgroundViewForceAnimatedKey = &LNPopupBarBackgro
 			}), method_getTypeEncoding(m));
 		}
 		
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 		SEL updateBackgroundGroupNameSEL = NSSelectorFromString(LNPopupHiddenString("updateBackgroundGroupName"));
 		
 		id (^trampoline)(void (*)(id, SEL)) = ^ id (void (*orig)(id, SEL)){
@@ -205,16 +204,12 @@ static const void* LNPopupBarBackgroundViewForceAnimatedKey = &LNPopupBarBackgro
 			void (*orig)(id, SEL) = reinterpret_cast<decltype(orig)>(method_getImplementation(m));
 			method_setImplementation(m, imp_implementationWithBlock(trampoline(orig)));
 		}
-#endif
-
-		// This adds an LN-only selector without replacing UIKit behavior. LN's
-		// own content/bar views still use it for their local geometry.
+		
 		{
 			Method m = LNSwizzleClassGetInstanceMethod(self, NSSelectorFromString(LNPopupHiddenString("setSafeAreaInsets:")));
 			class_addMethod(self, @selector(_ln_updateSafeAreaInsets:), method_getImplementation(m), method_getTypeEncoding(m));
 		}
-
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
+		
 		NSString* sel = LNPopupHiddenString("_didMoveFromWindow:toWindow:");
 		LNSwizzleMethod(self,
 						NSSelectorFromString(sel),
@@ -242,7 +237,6 @@ static const void* LNPopupBarBackgroundViewForceAnimatedKey = &LNPopupBarBackgro
 				return orig(self, sel, gr);
 			}));
 		}
-#endif
 	}
 }
 
@@ -489,7 +483,6 @@ static NSString* cornersName = LNPopupHiddenString("cornerRadii");
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		NSString* selName = LNPopupHiddenString("_registeredScrollToTopViews");
@@ -497,7 +490,6 @@ static NSString* cornersName = LNPopupHiddenString("cornerRadii");
 						NSSelectorFromString(selName),
 						@selector(_ln_rSTTV));
 	}
-#endif
 }
 
 //_registeredScrollToTopViews
@@ -558,14 +550,12 @@ static NSString* cornersName = LNPopupHiddenString("cornerRadii");
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		LNSwizzleMethod(self,
 						@selector(hitTest:withEvent:),
 						@selector(_ln_hitTest:withEvent:));
 	}
-#endif
 }
 
 static const void* LNPopupInteractionOnlyKey = &LNPopupInteractionOnlyKey;
@@ -699,7 +689,6 @@ static BOOL __ln_scrollEdgeAppearanceRequiresFadeForPopupBar(id bottomBar, LNPop
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		if(@available(iOS 15.0, *))
@@ -718,7 +707,6 @@ static BOOL __ln_scrollEdgeAppearanceRequiresFadeForPopupBar(id bottomBar, LNPop
 			}
 		}
 	}
-#endif
 }
 
 //+_visualProviderForToolbar:
@@ -825,7 +813,6 @@ static BOOL __ln_scrollEdgeAppearanceRequiresFadeForPopupBar(id bottomBar, LNPop
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		if(!LNPopupEnvironmentHasGlass())
@@ -838,7 +825,6 @@ static BOOL __ln_scrollEdgeAppearanceRequiresFadeForPopupBar(id bottomBar, LNPop
 			}
 		}
 	}
-#endif
 }
 
 - (void)_ln_triggerBarAppearanceRefreshIfNeededTriggeringLayout:(BOOL)layout
@@ -907,7 +893,6 @@ static const void* LNPopupIgnoringLayoutDuringTransition = &LNPopupIgnoringLayou
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		LNSwizzleMethod(self, @selector(setFrame:), @selector(_ln_setFrame:));
@@ -940,7 +925,6 @@ static const void* LNPopupIgnoringLayoutDuringTransition = &LNPopupIgnoringLayou
 			}));
 		}
 	}
-#endif
 }
 
 - (void)_ln_setFrame:(CGRect)frame
@@ -1140,7 +1124,6 @@ NSDirectionalEdgeInsets _LNDirectionalEdgeInsetsFromEdgeInsets(UIView* view, UIE
 
 + (void)load
 {
-#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		if(@available(iOS 17.0, *))
@@ -1151,7 +1134,6 @@ NSDirectionalEdgeInsets _LNDirectionalEdgeInsetsFromEdgeInsets(UIView* view, UIE
 							@selector(_ln_sGN:));
 		}
 	}
-#endif
 }
 
 //_setGroupName:
