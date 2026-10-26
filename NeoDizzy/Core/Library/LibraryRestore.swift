@@ -164,7 +164,7 @@ struct LibraryRestoreReport: Equatable {
             }
         }
         if accountFavorites + accountCollections > 0 {
-            lines.append("\(accountFavorites) 首平台喜欢和 \(accountCollections) 个平台歌单、专辑随账号保存，启用对应模块并登录后自动同步。")
+            lines.append("\(accountFavorites) 首平台喜欢和 \(accountCollections) 个平台播放列表、专辑随账号保存，启用对应模块并登录后自动同步。")
         }
         if unmatchedLocal > 0 {
             lines.append("\(unmatchedLocal) 首本地歌曲的喜欢暂未恢复：音乐库里找不到同名文件。它们会继续记在备份里，把音乐放回「文件 › 我的 iPhone › NeoDizzy」后再导入一次即可。")

@@ -16,7 +16,7 @@ struct DownloadQueueSection: View {
             }
             if jobs.isEmpty {
                 ContentUnavailableView("没有下载任务", systemImage: "arrow.down.circle",
-                                       description: Text("下载的专辑和歌单会显示在这里，完成后自动加入资料库。"))
+                                       description: Text("下载的专辑和播放列表会显示在这里，完成后自动加入资料库。"))
             }
             if !active.isEmpty { DownloadQueueSummary(jobs: active) }
             group("进行中", jobs: active)

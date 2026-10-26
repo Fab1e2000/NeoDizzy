@@ -1,54 +1,6 @@
 import SwiftUI
 import UIKit
 
-struct NeteasePlayerActions: View {
-    @Environment(PlayerStore.self) private var player
-    let track: Track
-    var onImportLyrics: (() -> Void)?
-    @Environment(NeteaseStore.self) private var store
-    @Environment(NeteaseContentCache.self) private var contentCache
-    @Environment(DownloadStore.self) private var downloads
-    @Environment(OfflineLibraryStore.self) private var library
-    @Environment(\.openRoute) private var openRoute
-    @State private var showsPicker = false
-    @State private var albumNavigation = AlbumNavigationPreparation()
-    var body: some View {
-        HStack(spacing: 4.25) {
-            if (track.remoteSource?.itemID).flatMap(Int.init) != nil {
-                FavoriteButton(track: track, playerStyle: true)
-                NowPlayingMenuButton(track: track) {
-                    var items: [UIMenuElement] = [
-                        UIAction(title: "加入歌单", image: UIImage(systemName: "text.badge.plus")) { _ in
-                            showsPicker = true
-                        }
-                    ]
-                    if let albumID = Int(track.discID), albumID > 0 {
-                        items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "square.stack")) { _ in
-                            let page = contentCache.page(.route(.album(albumID)), revision: store.revision)
-                            if page.title.isEmpty { page.title = track.albumTitle }
-                            if page.artwork == nil { page.artwork = track.coverURL }
-                            if let route = albumNavigation.begin(.netease(.album(albumID)), artworkURL: page.artwork) { openRoute(route) }
-                        })
-                    }
-                    // 听完缓存好的歌可以直接存成下载，不再联网。
-                    if library.localFile(for: track) == nil, player.cachedQuality(for: track) != nil {
-                        let quality = store.playbackSettings.quality
-                        items.append(UIAction(title: "转为下载", image: UIImage(systemName: "arrow.down.circle")) { [downloads, track] _ in
-                            Task { await downloads.enqueueNeteaseSong(track, quality: quality) }
-                        })
-                    }
-                    if let onImportLyrics { items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() }) }
-                    return items
-                }.frame(width: 44, height: 44)
-            }
-        }
-        .songPlaylistSheet(isPresented: $showsPicker, track: track)
-        .preparedAlbumNavigation(albumNavigation)
-        .onChange(of: track.id) { albumNavigation.cancel() }
-        .onChange(of: store.revision) { albumNavigation.cancel() }
-    }
-}
-
 struct NeteasePlaylistPicker: View {
     let songID: Int
     @Environment(NeteaseStore.self) private var store
@@ -68,7 +20,7 @@ struct NeteasePlaylistPicker: View {
                         HStack(spacing: 12) {
                             RoundedRectangle(cornerRadius: 6).fill(.gray.opacity(0.18))
                                 .frame(width: 48, height: 48)
-                            Text("我的歌单名称").redacted(reason: .placeholder)
+                            Text("我的播放列表名称").redacted(reason: .placeholder)
                             Spacer()
                         }
                         .accessibilityHidden(true)
@@ -76,7 +28,7 @@ struct NeteasePlaylistPicker: View {
                     }
                 }
                 else if !loading && error == nil && store.library.writablePlaylists.isEmpty {
-                    ContentUnavailableView("暂无可添加的歌单", systemImage: "music.note.list", description: Text("请先在网易云音乐中创建歌单。"))
+                    ContentUnavailableView("暂无可添加的播放列表", systemImage: "music.note.list", description: Text("请先在网易云音乐中创建播放列表。"))
                 }
                 ForEach(store.library.writablePlaylists) { playlist in
                     Button {
@@ -147,13 +99,13 @@ struct NeteaseCollectionFavorite: View {
             CollectionLibraryActionLabel(isAdded: owned || selected, isWorking: working)
         }
         .disabled(working || owned || !isReady)
-        .accessibilityLabel(owned ? "我的歌单" : selected ? "从资料库移除" : "加入资料库")
+        .accessibilityLabel(owned ? "我的播放列表" : selected ? "从资料库移除" : "加入资料库")
         .accessibilityHint(selected && !owned ? "同时在网易云取消收藏" : "同时收藏到网易云音乐账号")
         .confirmationDialog("从资料库移除「\(playlist?.name ?? album?.name ?? "")」？", isPresented: $confirmsRemoval, titleVisibility: .visible) {
             Button("从资料库移除", role: .destructive) { toggle() }
             Button("取消", role: .cancel) { }
         } message: {
-            Text(playlist != nil ? "网易云账号也会取消收藏这个歌单。" : "网易云账号也会取消收藏这张专辑。")
+            Text(playlist != nil ? "网易云账号也会取消收藏这个播放列表。" : "网易云账号也会取消收藏这张专辑。")
         }
         .task(id: statusRequestID) { await loadSubscription() }
         .alert("操作失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {

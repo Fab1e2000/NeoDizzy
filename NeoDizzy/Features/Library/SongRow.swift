@@ -34,7 +34,7 @@ struct SongRow: View {
     var editTags: (() -> Void)?
     var actions: [SongRowAction] = []
     let play: () -> Void
-    @State private var songActions = SongActionPresentation()
+    @Environment(OfflineLibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
 
     private var isCurrent: Bool { player.currentTrack?.id == track.id }
@@ -45,47 +45,49 @@ struct SongRow: View {
     }
 
     var body: some View {
-        HStack(spacing: isNumbered ? 4 : 8) {
-            Button(action: primaryAction) {
-                HStack(spacing: 8) {
-                    HStack(spacing: 12) {
-                        leading.frame(width: isNumbered ? 40 : 44)
-                        titles.frame(maxWidth: .infinity, alignment: .leading)
+        SongMenuHost(track: track, play: play, extras: menuExtras) { configuration in
+            HStack(spacing: isNumbered ? 4 : 8) {
+                Button(action: primaryAction) {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 12) {
+                            leading.frame(width: isNumbered ? 40 : 44)
+                            titles.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        badges
                     }
-                    badges
-                }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(track.title)，\(track.artists)")
-            .accessibilityValue(isCurrent ? "当前播放" : "")
-
-            Menu { menuItems } label: {
-                Image(systemName: "ellipsis")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(DizzyPalette.text)
-                    .frame(width: isNumbered ? 42 : 36, height: 44)
                     .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(track.title)，\(track.artists)")
+                .accessibilityValue(isCurrent ? "当前播放" : "")
+
+                Menu { SongMenuContents(configuration: configuration) } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DizzyPalette.text)
+                        .frame(width: isNumbered ? 42 : 36, height: 44)
+                        .contentShape(.rect)
+                }
+                .accessibilityLabel("\(track.title)的更多操作")
             }
-            .accessibilityLabel("\(track.title)的更多操作")
-        }
-        // 序号式与 MeloX 相同：44pt 的更多按钮上下各留 11pt，按钮离屏幕右缘 8pt。
-        .padding(.vertical, isNumbered ? 11 : 8)
-        .padding(.trailing, isNumbered ? -12 : 0)
-        .frame(minHeight: isNumbered ? 66 : 60)
-        .background {
-            // 当前播放的浅灰底铺满整个屏幕宽度。
-            if isNumbered && isCurrent {
-                Color.primary.opacity(0.10).padding(.horizontal, -20)
+            // 序号式与 MeloX 相同：44pt 的更多按钮上下各留 11pt，按钮离屏幕右缘 8pt。
+            .padding(.vertical, isNumbered ? 11 : 8)
+            .padding(.trailing, isNumbered ? -12 : 0)
+            .frame(minHeight: isNumbered ? 66 : 60)
+            .background {
+                // 当前播放的浅灰底铺满整个屏幕宽度。
+                if isNumbered && isCurrent {
+                    Color.primary.opacity(0.10).padding(.horizontal, -20)
+                }
             }
+            .contentShape(.rect)
+            .contextMenu { SongMenuContents(configuration: configuration) }
         }
-        .contentShape(.rect)
-        .contextMenu { menuItems }
-        .modifier(SongActionPresentationModifier(track: track, presentation: songActions))
     }
 
     /// 已下载优先：正常情况下下载完成会删掉缓存，两者不会同时出现。
-    private var cachedQuality: String? { isDownloaded ? nil : player.cachedQuality(for: track) }
+    private var downloaded: Bool { isDownloaded || library.localFile(for: track) != nil }
+    private var cachedQuality: String? { downloaded ? nil : player.cachedQuality(for: track) }
 
     @ViewBuilder private var badges: some View {
         if isNumbered {
@@ -100,11 +102,11 @@ struct SongRow: View {
                 .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(Color(uiColor: .separator), lineWidth: 1) }
         }
         // 实心是已下载，空心是已缓存（可能被系统清掉），未下载不显示。
-        if isDownloaded || cachedQuality != nil {
-            Image(systemName: isDownloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+        if downloaded || cachedQuality != nil {
+            Image(systemName: downloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
                 .font(isNumbered ? .caption : .footnote)
                 .foregroundStyle(DizzyPalette.mutedText)
-                .accessibilityLabel(isDownloaded ? "已下载" : "已缓存")
+                .accessibilityLabel(downloaded ? "已下载" : "已缓存")
         }
     }
 
@@ -187,17 +189,10 @@ struct SongRow: View {
         [track.artists, track.albumTitle].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
-    @ViewBuilder private var menuItems: some View {
-        let pauses = isCurrent && player.isPlaying
-        Button(pauses ? "暂停" : "播放", systemImage: pauses ? "pause.fill" : "play.fill", action: primaryAction)
-        SongLibraryActions(track: track, presentation: songActions)
-        if let editTags {
-            Button("编辑音乐标签", systemImage: "pencil", action: editTags)
-        }
-        ForEach(actions) { action in
-            Button(action.title, systemImage: action.systemImage, role: action.role, action: action.perform)
-                .disabled(action.disabled)
-        }
+    private var menuExtras: [SongRowAction] {
+        var result = actions
+        if let editTags { result.append(.init(id: "edit", title: "编辑音乐标签", systemImage: "pencil", perform: editTags)) }
+        return result
     }
 
     private func primaryAction() {

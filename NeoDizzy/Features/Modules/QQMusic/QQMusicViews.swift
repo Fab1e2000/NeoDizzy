@@ -80,7 +80,7 @@ struct QQMusicCollectionView: View {
     }
     private var isAlbum: Bool { if case .album = route { true } else { false } }
     private var descriptionTitle: String? {
-        switch route { case .album: "专辑介绍"; case .playlist: "歌单介绍"; default: nil }
+        switch route { case .album: "专辑介绍"; case .playlist: "播放列表介绍"; default: nil }
     }
     private var needsLogin: Bool { route == .daily && store.credential == nil }
     private var tracks: [Track] { model.songs.map(\.track) }
@@ -242,54 +242,17 @@ struct QQMusicSongRows: View {
     var numbered = false
     @Environment(QQMusicStore.self) private var store
     @Environment(PlayerStore.self) private var player
-    @Environment(\.openRoute) private var openRoute
-    @State private var albumNavigation = AlbumNavigationPreparation()
-    #if os(iOS)
-    @Environment(DownloadStore.self) private var downloads
-    @State private var showsDownloadQueue = false
-    #endif
 
     var body: some View {
         ForEach(Array(songs.enumerated()), id: \.element.mid) { index, song in
-            SongRow(track: song.track, style: numbered ? .numbered(String(index + 1)) : .artwork,
-                    actions: actions(song)) {
+            SongRow(track: song.track, style: numbered ? .numbered(String(index + 1)) : .artwork) {
                 guard store.active else { return }
                 player.play(songs.map(\.track), startAt: index)
             }
         }
-        #if os(iOS)
-        .sheet(isPresented: $showsDownloadQueue) { DownloadQueueSheet() }
-        #endif
-        .preparedAlbumNavigation(albumNavigation)
-        .onChange(of: songs.map(\.mid)) { _, _ in albumNavigation.cancel() }
-        .onChange(of: store.revision) { _, _ in albumNavigation.cancel() }
     }
 
-    private func actions(_ song: QQMusicSong) -> [SongRowAction] {
-        var actions: [SongRowAction] = []
-        if !song.albumMid.isEmpty {
-            actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") {
-                guard store.active else { return }
-                if let route = albumNavigation.begin(.qqmusic(.album(song.albumMid)), artworkURL: QQMusicSong.cover(albumMid: song.albumMid)) {
-                    openRoute(route)
-                }
-            })
-        }
-        for singer in song.singers {
-            actions.append(.init(id: "artist-\(singer.id)", title: "歌手 · \(singer.name)", systemImage: "person") {
-                openRoute(.qqmusic(.artist(singer.id)))
-            })
-        }
-        #if os(iOS)
-        actions.append(.init(id: "download", title: "下载", systemImage: "arrow.down.circle") {
-            Task {
-                await downloads.enqueueQQMusicSong(song.track, quality: store.playbackSettings.quality)
-                showsDownloadQueue = true
-            }
-        })
-        #endif
-        return actions
-    }
+
 }
 
 private struct QQMusicResultStatus: View {

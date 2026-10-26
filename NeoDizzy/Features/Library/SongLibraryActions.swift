@@ -5,14 +5,18 @@ import SwiftUI
     var playlist = false
     var login = false
     var failure: String?
-}
 
-struct SongLibraryActions: View {
-    let track: Track
-    let presentation: SongActionPresentation
-    var body: some View {
-        FavoriteButton(track: track, presentation: presentation)
-        Button("加入歌单", systemImage: "text.badge.plus") { presentation.playlist = true }
+    func toggleFavorite(_ track: Track, favorites: FavoritesStore, modules: ModuleRegistry) {
+        if let provider = track.remoteSource?.providerID, modules.requiresLogin(providerID: provider) {
+            login = true
+            return
+        }
+        let target = !favorites.contains(track)
+        Task {
+            do { try await favorites.setLiked(track, target) }
+            catch is CancellationError { }
+            catch { failure = error.localizedDescription }
+        }
     }
 }
 

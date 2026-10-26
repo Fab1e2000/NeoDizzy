@@ -236,7 +236,7 @@ actor QQMusicClient {
         guard let number = Int64(id) else { throw QQMusicError.invalidResponse }
         var tracks: [QQMusicSong] = []
         var pagination = QQMusicCollectionPagination()
-        var title = "歌单", cover: URL?
+        var title = "播放列表", cover: URL?
         var detailDescription = ""
         while true {
             guard revision == generation else { throw CancellationError() }

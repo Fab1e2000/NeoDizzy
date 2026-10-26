@@ -31,7 +31,7 @@ struct UnifiedSearchView: View {
         .rootTabNavigationBehavior()
         // 与 MeloX 相同：搜索框固定在页面顶部，不挂在标签栏上；手势收起键盘只收起键盘，关键词和结果保留。
         .searchable(text: $search.text, isPresented: $search.isActive,
-                    placement: .navigationBarDrawer(displayMode: .always), prompt: Text("歌曲、专辑、歌单、社团"))
+                    placement: .navigationBarDrawer(displayMode: .always), prompt: Text("歌曲、专辑、播放列表、社团"))
         .onSubmit(of: .search) { submit(trimmed) }
         // 停止输入一会儿后自动搜索；清空输入回到最近搜索。
         .task(id: trimmed) {

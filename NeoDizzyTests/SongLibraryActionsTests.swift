@@ -10,9 +10,9 @@ struct SongLibraryActionsTests {
         init(_ id: String = "test-provider") {
             descriptor = ModuleDescriptor(id: ModuleID(rawValue: id), title: "Test", systemImage: "music.note")
         }
-        func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
+        func songAlbumRoute(for track: Track) -> AppRoute? {
             songActionVisits += 1
-            return AnyView(Text("Actions"))
+            return .localAlbum(id: track.discID)
         }
         func rootView() -> AnyView { AnyView(EmptyView()) }
         func destination(for route: AppRoute) -> AnyView? { nil }
@@ -45,11 +45,11 @@ struct SongLibraryActionsTests {
     @Test func songActionsAreDispatchedOnlyToTheirOwner() throws {
         let first = Provider("first"), second = Provider("second")
         let registry = try ModuleRegistry([first, second])
-        #expect(registry.songActions(for: track(provider: "second"), onImportLyrics: nil) != nil)
+        #expect(registry.songAlbumRoute(for: track(provider: "second")) != nil)
         #expect(first.songActionVisits == 0)
         #expect(second.songActionVisits == 1)
         registry.remove(ModuleID(rawValue: "second"))
-        #expect(registry.songActions(for: track(provider: "second"), onImportLyrics: nil) == nil)
+        #expect(registry.songAlbumRoute(for: track(provider: "second")) == nil)
         #expect(first.songActionVisits == 0)
     }
 

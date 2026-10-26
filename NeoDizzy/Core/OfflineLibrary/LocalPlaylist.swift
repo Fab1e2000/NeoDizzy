@@ -96,7 +96,7 @@ nonisolated enum LocalPlaylistFile {
     static func write(title: String, entries: [(Track, URL?)], source: LibrarySource?, existing: URL?, root: URL) throws {
         let directory = try checked("Playlists", root: root)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let name = OfflinePaths.directoryName(title, fallback: "新歌单") + ".m3u8"
+        let name = OfflinePaths.directoryName(title, fallback: "新播放列表") + ".m3u8"
         let path = try existing.map { try OfflinePaths.relativePath(of: $0, inside: root) } ?? "Playlists/\(name)"
         guard path.split(separator: "/").count == 2, path.hasPrefix("Playlists/"), path.hasSuffix(".m3u8") else {
             throw OfflineLibraryError.unsafePath(path)

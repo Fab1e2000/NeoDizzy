@@ -30,7 +30,7 @@ extension AccountLibraryMirror {
         let playlists = library.playlists.map { playlist in
             item(providerID: "qqmusic", kind: .playlist, itemID: playlist.id,
                  title: playlist.isLiked ? String(localized: "我喜欢的音乐") : playlist.title,
-                 subtitle: playlist.isOwned ? String(localized: "我创建的 · \(playlist.songCount) 首") : String(localized: "QQ 音乐 · 收藏歌单"),
+                 subtitle: playlist.isOwned ? String(localized: "我创建的 · \(playlist.songCount) 首") : String(localized: "QQ 音乐 · 收藏播放列表"),
                  coverURL: playlist.coverURL, isLikedPlaylist: playlist.isLiked, isPermanent: playlist.isOwned)
         }
         let albums = library.albums.map { album in

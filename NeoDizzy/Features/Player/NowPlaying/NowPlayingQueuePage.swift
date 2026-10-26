@@ -295,28 +295,35 @@ struct NowPlayingQueueRow: View {
     let onPlay: () -> Void
 
     var body: some View {
-        Button(action: onPlay) {
-            HStack(spacing: 12) {
-                ArtworkImage(
-                    url: entry.song.coverURL,
-                    cornerRadius: 6
-                )
-                .frame(width: 48, height: 48)
+        SongMenuHost(track: entry.song, play: onPlay) { configuration in
+            HStack(spacing: 0) {
+                Button(action: onPlay) {
+                    HStack(spacing: 12) {
+                        ArtworkImage(
+                            url: entry.song.coverURL,
+                            cornerRadius: 6
+                        )
+                        .frame(width: 48, height: 48)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.song.title)
-                        .font(.body)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.song.title)
+                                .font(.body)
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
 
-                    // 与头部共用原生 Vibrancy。
-                    NowPlayingVibrantLabel(text: entry.song.artists, fontSize: 13)
+                            // 与头部共用原生 Vibrancy。
+                            NowPlayingVibrantLabel(text: entry.song.artists, fontSize: 13)
+                        }
+
+                        Spacer(minLength: 4)
+                    }
+                    .contentShape(.rect)
                 }
-
-                Spacer(minLength: 4)
+                .buttonStyle(.plain)
+                NowPlayingMenuButton(track: entry.song) { configuration.nativeItems }
+                    .frame(width: 36, height: 44)
             }
-            .contentShape(.rect)
+            .contextMenu { SongMenuContents(configuration: configuration) }
         }
-        .buttonStyle(.plain)
     }
 }

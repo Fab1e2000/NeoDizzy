@@ -117,7 +117,7 @@ nonisolated struct LibraryExport: Codable {
         let localPlaylists = offline.localPlaylists.map { playlist in
             Collection(providerID: playlist.source?.provider ?? "local", kind: "localPlaylist",
                        itemID: playlist.source?.id ?? playlist.fileURL.lastPathComponent, title: playlist.title,
-                       subtitle: "本地歌单", songs: playlist.tracks.map { Song($0) }, songsComplete: true, origin: .local)
+                       subtitle: "本地播放列表", songs: playlist.tracks.map { Song($0) }, songsComplete: true, origin: .local)
         }
         let remote = mirror.collections.filter { !$0.isLikedPlaylist }.map { item in
             Collection(providerID: item.providerID, kind: item.kind.rawValue, itemID: item.itemID,

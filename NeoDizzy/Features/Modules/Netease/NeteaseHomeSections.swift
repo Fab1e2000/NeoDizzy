@@ -23,15 +23,15 @@ struct NeteaseHomeSections: View {
             }
             if personal.showsInitialSkeleton {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("雷达歌单").font(.title2.bold()).redacted(reason: .placeholder)
+                    Text("雷达播放列表").font(.title2.bold()).redacted(reason: .placeholder)
                     NeteaseSkeleton(layout: .shelf)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("正在加载雷达歌单")
+                .accessibilityLabel("正在加载雷达播放列表")
             }
             if let error = personal.error {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("雷达歌单暂不可用：\(error)").font(.footnote).foregroundStyle(.secondary)
+                    Text("雷达播放列表暂不可用：\(error)").font(.footnote).foregroundStyle(.secondary)
                     Button("重试") { Task { await personal.load(api: store.api, userID: store.profile?.userId, kind: 0, refresh: true) } }
                 }
             }

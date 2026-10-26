@@ -53,14 +53,14 @@ enum LocalLibraryRoute: Hashable {
 extension AppRoute {
     static var favorites: Self { Self(moduleID: .localLibrary, destination: LocalLibraryRoute.favorites, title: "喜欢") }
     static func localPlaylist(id: String) -> Self {
-        Self(moduleID: .localLibrary, destination: LocalLibraryRoute.playlist(id), title: String(localized: "本地歌单"))
+        Self(moduleID: .localLibrary, destination: LocalLibraryRoute.playlist(id), title: String(localized: "本地播放列表"))
     }
 
     static func libraryAlbums(_ filter: LibraryOriginFilter) -> Self {
         Self(moduleID: .localLibrary, destination: LocalLibraryRoute.albums(filter), title: String(localized: "专辑"))
     }
     static func libraryPlaylists(_ filter: LibraryOriginFilter) -> Self {
-        Self(moduleID: .localLibrary, destination: LocalLibraryRoute.playlists(filter), title: String(localized: "歌单"))
+        Self(moduleID: .localLibrary, destination: LocalLibraryRoute.playlists(filter), title: String(localized: "播放列表"))
     }
     static func librarySongs(_ filter: LibraryOriginFilter) -> Self {
         Self(moduleID: .localLibrary, destination: LocalLibraryRoute.songs(filter), title: String(localized: "歌曲"))

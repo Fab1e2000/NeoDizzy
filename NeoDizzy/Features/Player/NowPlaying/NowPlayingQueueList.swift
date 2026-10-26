@@ -16,6 +16,12 @@ nonisolated struct UpcomingQueueEntry: Identifiable, Hashable, Sendable {
 /// 被拖行只能上下移动，拖起时整行（通栏）换成半透明高亮底色，和系统音乐一致。
 /// 行内容仍由 SwiftUI 渲染。SwiftUI 的 `List` 走的是拖放，没有这两项的公开接口。
 struct NowPlayingQueueList: UIViewRepresentable {
+    @Environment(ModuleRegistry.self) private var modules
+    @Environment(FavoritesStore.self) private var favorites
+    @Environment(PlayerStore.self) private var player
+    @Environment(OfflineLibraryStore.self) private var library
+    @Environment(DownloadStore.self) private var downloads
+    @Environment(\.openRoute) private var openRoute
     @Environment(\.nowPlayingBackdropImage) private var backdropImage
     @Environment(\.nowPlayingBackdropAnchor) private var backdropAnchor
     let entries: [UpcomingQueueEntry]
@@ -238,6 +244,12 @@ struct NowPlayingQueueList: UIViewRepresentable {
                         guard let self, let index = self.entriesByID[id]?.queueIndex else { return }
                         self.latest?.onPlay(index)
                     }
+                    .environment(latest.modules)
+                    .environment(latest.favorites)
+                    .environment(latest.player)
+                    .environment(latest.library)
+                    .environment(latest.downloads)
+                    .environment(\.openRoute, latest.openRoute)
                     .environment(\.nowPlayingBackdropImage, latest.backdropImage)
                     .environment(\.nowPlayingBackdropAnchor, latest.backdropAnchor)
                 }

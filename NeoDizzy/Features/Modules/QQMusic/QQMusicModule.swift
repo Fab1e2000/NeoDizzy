@@ -23,9 +23,9 @@ final class QQMusicModule: AppModule {
     func openAccount() { store.showsAccount = true }
     func dismissAccount() { store.showsAccount = false }
     func deactivate() { store.deactivate(); cache.stop() }
-    func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
-        guard track.remoteSource?.providerID == "qqmusic" else { return nil }
-        return AnyView(QQMusicPlayerActions(track: track, onImportLyrics: onImportLyrics))
+    func songAlbumRoute(for track: Track) -> AppRoute? {
+        guard !track.discID.isEmpty else { return nil }
+        return .qqmusic(.album(track.discID))
     }
     func loginView() -> AnyView? { AnyView(QQMusicLoginView(store: store)) }
     func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] {
@@ -54,10 +54,10 @@ final class QQMusicModule: AppModule {
         }
         onLibraryChange()
     }
-    func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction] {
-        [.init(id: "download", title: "转为下载", systemImage: "arrow.down.circle") {
+    func songDownloadAction(for track: Track, downloads: DownloadStore) -> SongRowAction? {
+        .init(id: "download", title: "下载", systemImage: "arrow.down.circle") {
             Task { await downloads.enqueueQQMusicSong(track, quality: self.store.playbackSettings.quality) }
-        }]
+        }
     }
     func rootView() -> AnyView { AnyView(QQMusicHomeView()) }
     func searchSection(query: String) -> AnyView? { AnyView(QQMusicSearchSection(query: query)) }

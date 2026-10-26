@@ -29,7 +29,7 @@ struct LocalLibraryView: View {
                     ContentSkeleton(layout: .grid)
                 } else if recent.isEmpty && played.isEmpty {
                     ContentUnavailableView("资料库还是空的", systemImage: "music.note.list",
-                        description: Text("导入音乐，或登录已启用的音乐平台：喜欢的歌、收藏的歌单与专辑、已购专辑会出现在这里。"))
+                        description: Text("导入音乐，或登录已启用的音乐平台：喜欢的歌、收藏的播放列表与专辑、已购专辑会出现在这里。"))
                 } else if !recent.isEmpty {
                     RecentlyAddedGrid(items: recent)
                         .padding(.vertical, 16)
@@ -508,7 +508,7 @@ nonisolated private struct RecentLibraryItem: Identifiable, Sendable {
                  coverURL: album.coverURL, addedAt: album.entries.map { addedDate($0.fileURL) }.max() ?? .distantPast)
         }
         let playlistItems = playlists.map { playlist in
-            Self(id: playlist.id, kind: .playlist, title: playlist.title, subtitle: "歌单 · \(playlist.tracks.count) 首",
+            Self(id: playlist.id, kind: .playlist, title: playlist.title, subtitle: "播放列表 · \(playlist.tracks.count) 首",
                  coverURL: playlist.coverURL, addedAt: addedDate(playlist.fileURL))
         }
         return Array((albumItems + playlistItems).sorted { $0.addedAt > $1.addedAt }.prefix(limit))
@@ -593,7 +593,7 @@ struct LibrarySearchPage: View {
         let songs = Array(result.songs.prefix(200))
         List {
             if !result.collections.isEmpty {
-                Section("专辑与歌单") {
+                Section("专辑与播放列表") {
                     ForEach(result.collections) { item in
                         AlbumNavigationLink(value: item.route, artworkURL: item.coverURL) {
                             SearchMediaRow(title: item.title, subtitle: "\(item.origin.label) · \(item.subtitle)", artworkURL: item.coverURL,

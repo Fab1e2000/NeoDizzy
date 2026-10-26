@@ -15,9 +15,9 @@ struct QQMusicPlaylistPicker: View {
                 Button("登录 QQ 音乐") { showsLogin = true }
             } else {
                 if let error { Text(error).foregroundStyle(.secondary) }
-                if loading && store.library.writablePlaylists.isEmpty { ProgressView("正在加载歌单") }
+                if loading && store.library.writablePlaylists.isEmpty { ProgressView("正在加载播放列表") }
                 else if !loading && error == nil && store.library.writablePlaylists.isEmpty {
-                    ContentUnavailableView("暂无可添加的歌单", systemImage: "music.note.list", description: Text("请先在 QQ 音乐中创建歌单。"))
+                    ContentUnavailableView("暂无可添加的播放列表", systemImage: "music.note.list", description: Text("请先在 QQ 音乐中创建播放列表。"))
                 }
                 ForEach(store.library.writablePlaylists) { playlist in
                     Button {
@@ -79,7 +79,7 @@ struct QQMusicCollectionFavorite: View {
             CollectionLibraryActionLabel(isAdded: owned || selected == true, isWorking: working)
         }
         .disabled(working || owned || (store.credential != nil && selected == nil))
-        .accessibilityLabel(owned ? "我的歌单" : selected == true ? "从资料库移除" : "加入资料库")
+        .accessibilityLabel(owned ? "我的播放列表" : selected == true ? "从资料库移除" : "加入资料库")
         .accessibilityHint(selected == true && !owned ? "同时在 QQ 音乐取消收藏" : "同时收藏到 QQ 音乐账号")
         .confirmationDialog("从资料库移除「\(collection.title)」？", isPresented: $confirmsRemoval, titleVisibility: .visible) {
             Button("从资料库移除", role: .destructive) { toggle() }

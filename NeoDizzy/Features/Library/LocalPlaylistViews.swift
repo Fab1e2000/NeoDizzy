@@ -83,7 +83,7 @@ struct LocalPlaylistsView: View {
             }
             Button("取消", role: .cancel) { }
         } message: { playlist in
-            Text(playlist.source == nil ? "将删除「\(playlist.title)」，音乐文件会保留。" : "将删除「\(playlist.title)」及此歌单目录中的下载文件。")
+            Text(playlist.source == nil ? "将删除「\(playlist.title)」，音乐文件会保留。" : "将删除「\(playlist.title)」及此播放列表目录中的下载文件。")
         }
         .alert("新建播放列表", isPresented: $creating) {
             TextField("播放列表名称", text: $name)
@@ -121,13 +121,13 @@ struct LocalPlaylistDetailView: View {
                         SongRow(track: track) { player.play(playlist.tracks, startAt: index) }
                     }
                     if playlist.tracks.isEmpty {
-                        ContentUnavailableView("歌单还是空的", systemImage: "music.note.list",
-                            description: Text("从歌曲菜单选择「加入歌单」来添加音乐。"))
+                        ContentUnavailableView("播放列表还是空的", systemImage: "music.note.list",
+                            description: Text("从歌曲菜单选择「加入播放列表」来添加音乐。"))
                     }
                     if let failure { Text(failure).foregroundStyle(.red).padding(.vertical) }
                 }
                 .padding(.horizontal, 20).padding(.bottom, 32)
-            } else { ContentUnavailableView("找不到歌单", systemImage: "music.note.list") }
+            } else { ContentUnavailableView("找不到播放列表", systemImage: "music.note.list") }
         }
         .dizzyPageBackground()
         #if os(iOS)
@@ -140,13 +140,13 @@ struct LocalPlaylistDetailView: View {
         .toolbar {
             if playlist != nil {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("删除歌单", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+                    Button("删除播放列表", systemImage: "trash", role: .destructive) { confirmingDelete = true }
                 }
             }
         }
-        .confirmationDialog(playlist?.source == nil ? "删除歌单？音乐文件会保留。" : "删除歌单及其下载文件？", isPresented: $confirmingDelete, titleVisibility: .visible) {
+        .confirmationDialog(playlist?.source == nil ? "删除播放列表？音乐文件会保留。" : "删除播放列表及其下载文件？", isPresented: $confirmingDelete, titleVisibility: .visible) {
             if let playlist {
-                Button("删除歌单", role: .destructive) {
+                Button("删除播放列表", role: .destructive) {
                     Task {
                         do { try await library.deletePlaylist(playlist); dismiss() }
                         catch { failure = error.localizedDescription }

@@ -145,7 +145,7 @@ struct NeteaseCollectionView: View {
                         if !model.detailDescription.isEmpty {
                             AlbumDescriptionExcerpt(text: model.detailDescription, title: model.title,
                                                     subtitle: collectionSubtitle,
-                                                    accessibilityTitle: isAlbum ? "专辑介绍" : "歌单介绍")
+                                                    accessibilityTitle: isAlbum ? "专辑介绍" : "播放列表介绍")
                                 .padding(.horizontal, 20).padding(.bottom, 20)
                         }
                         NeteaseSongRows(songs: model.songs, sourceID: sourceID, numbered: isAlbum)
@@ -216,7 +216,7 @@ struct NeteaseCollectionView: View {
         case .liked: return "收藏在网易云账号中的歌曲"
         case .recent: return "网易云账号的最近播放记录"
         case .personalizedSongs: return "为你发现新音乐"
-        default: return model.playlist?.creator?.nickname ?? "歌单"
+        default: return model.playlist?.creator?.nickname ?? "播放列表"
         }
     }
     private func load(append: Bool = false, refresh: Bool = false) async {
@@ -279,20 +279,13 @@ struct NeteaseSongRows: View {
     var numbered = false
     @Environment(PlayerStore.self) private var player
     @Environment(NeteaseStore.self) private var store
-    @Environment(NeteaseContentCache.self) private var contentCache
-    @Environment(\.openRoute) private var openRoute
-    @Environment(DownloadStore.self) private var downloads
     @Environment(OfflineLibraryStore.self) private var library
-    @Environment(AccountLibraryMirror.self) private var mirror
     @State private var downloadedKeys: Set<RemoteTrackKey> = []
-    @State private var showsDownloads = false
-    @State private var error: String?
-    @State private var albumNavigation = AlbumNavigationPreparation()
     var body: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
                 SongRow(track: song.track, style: numbered ? .numbered(String(index + 1)) : .artwork,
-                        isDownloaded: song.track.remoteKey.map(downloadedKeys.contains) == true, actions: actions(song)) {
+                        isDownloaded: song.track.remoteKey.map(downloadedKeys.contains) == true) {
                     player.play(songs.map(\.track), startAt: index, sourceID: sourceID)
                 }
             }
@@ -306,39 +299,6 @@ struct NeteaseSongRows: View {
             guard !Task.isCancelled else { return }
             downloadedKeys = keys
         }
-        .sheet(isPresented: $showsDownloads) { DownloadQueueSheet() }
-        .preparedAlbumNavigation(albumNavigation)
-        .onChange(of: songs.map(\.id)) { albumNavigation.cancel() }
-        .onChange(of: store.revision) { albumNavigation.cancel() }
-        .alert("操作失败", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("好", role: .cancel) { error = nil }
-        } message: { Text(error ?? "") }
-    }
-    private func actions(_ song: NeteaseSong) -> [SongRowAction] {
-        var actions: [SongRowAction] = []
-        // 已下载由行尾图标表示，菜单里不再列出；已缓存的歌下载时直接用缓存文件。
-        if song.track.remoteKey.map(downloadedKeys.contains) != true {
-            let title = player.cachedQuality(for: song.track) != nil ? "转为下载" : "下载"
-            actions.append(.init(id: "download", title: title, systemImage: "arrow.down.circle") {
-                Task {
-                    await downloads.enqueueNetease(kind: "single", id: song.id, title: song.name, coverURL: song.album?.artworkURL,
-                                                   quality: store.playbackSettings.quality)
-                    showsDownloads = true
-                }
-            })
-        }
-        for artist in song.artists where artist.id > 0 {
-            actions.append(.init(id: "artist/\(artist.id)", title: "歌手：\(artist.name)", systemImage: "person") { openRoute(.netease(.artist(artist.id))) })
-        }
-        if let album = song.album, album.id > 0 {
-            actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") {
-                let page = contentCache.page(.route(.album(album.id)), revision: store.revision)
-                if page.title.isEmpty { page.title = album.name }
-                if page.artwork == nil { page.artwork = album.artworkURL }
-                if let route = albumNavigation.begin(.netease(.album(album.id)), artworkURL: page.artwork) { openRoute(route) }
-            })
-        }
-        return actions
     }
 }
 
@@ -380,50 +340,17 @@ struct NeteaseTrackRow: View {
     var sourceID: Int?
     @Environment(PlayerStore.self) private var player
     @Environment(NeteaseStore.self) private var store
-    @Environment(NeteaseContentCache.self) private var contentCache
-    @Environment(DownloadStore.self) private var downloads
     @Environment(OfflineLibraryStore.self) private var library
-    @Environment(\.openRoute) private var openRoute
-    @State private var albumNavigation = AlbumNavigationPreparation()
 
     var body: some View {
         let track = song.track
         let downloaded = library.localFile(for: track) != nil
-        SongRow(track: track, isDownloaded: downloaded,
-                actions: actions(downloaded: downloaded)) {
+        SongRow(track: track, isDownloaded: downloaded) {
             player.play(songs.map(\.track), startAt: songs.firstIndex(of: song) ?? 0, sourceID: sourceID)
         }
-        .preparedAlbumNavigation(albumNavigation)
-        .onChange(of: song.id) { albumNavigation.cancel() }
-        .onChange(of: store.revision) { albumNavigation.cancel() }
     }
 
-    private func actions(downloaded: Bool) -> [SongRowAction] {
-        var actions: [SongRowAction] = []
-        if !downloaded {
-            actions.append(.init(id: "download", title: player.cachedQuality(for: song.track) != nil ? "转为下载" : "下载",
-                                 systemImage: "arrow.down.circle") {
-                Task {
-                    await downloads.enqueueNetease(kind: "single", id: song.id, title: song.name, coverURL: song.album?.artworkURL,
-                                                   quality: store.playbackSettings.quality)
-                }
-            })
-        }
-        for artist in song.artists where artist.id > 0 {
-            actions.append(.init(id: "artist/\(artist.id)", title: "歌手：\(artist.name)", systemImage: "person") {
-                openRoute(.netease(.artist(artist.id)))
-            })
-        }
-        if let album = song.album, album.id > 0 {
-            actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") {
-                let page = contentCache.page(.route(.album(album.id)), revision: store.revision)
-                if page.title.isEmpty { page.title = album.name }
-                if page.artwork == nil { page.artwork = album.artworkURL }
-                if let route = albumNavigation.begin(.netease(.album(album.id)), artworkURL: page.artwork) { openRoute(route) }
-            })
-        }
-        return actions
-    }
+
 }
 
 /// 统一搜索里的「网易云」一组：未登录时一行提示，前五首歌，下面是歌单、专辑、歌手三个入口。
@@ -463,7 +390,7 @@ struct NeteaseSearchSection: View {
             }
             Grid(horizontalSpacing: 8) {
                 GridRow {
-                    kindLink("歌单", kind: 1000)
+                    kindLink("播放列表", kind: 1000)
                     kindLink("专辑", kind: 10)
                     kindLink("歌手", kind: 100)
                 }
@@ -512,7 +439,7 @@ struct NeteaseSearchPage: View {
                 Text("歌曲").tag(1)
                 Text("专辑").tag(10)
                 Text("歌手").tag(100)
-                Text("歌单").tag(1000)
+                Text("播放列表").tag(1000)
             }
             .pickerStyle(.segmented)
             .listRowSeparator(.hidden)

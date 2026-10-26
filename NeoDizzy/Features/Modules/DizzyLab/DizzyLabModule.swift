@@ -35,9 +35,9 @@ final class DizzyLabModule: AppModule {
     init(services: DizzyLabServices, onAccountChange: @escaping () -> Void = {}, onLibraryChange: @escaping () -> Void = {}) {
         self.services = services; self.onAccountChange = onAccountChange; self.onLibraryChange = onLibraryChange
     }
-    func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
-        guard track.localSource == nil, track.remoteSource == nil else { return nil }
-        return AnyView(DizzyLabPlayerActions(track: track, onImportLyrics: onImportLyrics))
+    func songAlbumRoute(for track: Track) -> AppRoute? {
+        guard !track.discID.isEmpty else { return nil }
+        return .disc(id: track.discID)
     }
     func collectionRoute(kind: String, itemID: String) -> AppRoute? {
         kind == "album" ? .disc(id: itemID) : nil

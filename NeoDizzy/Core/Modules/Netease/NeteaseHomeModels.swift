@@ -53,7 +53,7 @@ nonisolated struct NeteaseHomeResource: Decodable, Identifiable {
     var playlist: NeteasePlaylist? {
         guard ["list", "playlist"].contains(resourceType?.lowercased() ?? ""),
               let id = resourceID.flatMap(Int.init), id > 0 else { return nil }
-        return NeteasePlaylist(id: id, name: uiElement?.mainTitle?.title ?? "歌单", picUrl: uiElement?.image?.imageUrl,
+        return NeteasePlaylist(id: id, name: uiElement?.mainTitle?.title ?? "播放列表", picUrl: uiElement?.image?.imageUrl,
                               coverImgUrl: nil, trackCount: nil, description: nil, tracks: nil, trackIds: nil)
     }
     var song: NeteaseSong? {

@@ -21,9 +21,9 @@ final class NeteaseModule: AppModule {
     }
     func openAccount() { store.showsAccount = true }
     func dismissAccount() { store.showsAccount = false; store.showsLogin = false }
-    func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
-        guard track.remoteSource?.providerID == "netease" else { return nil }
-        return AnyView(NeteasePlayerActions(track: track, onImportLyrics: onImportLyrics))
+    func songAlbumRoute(for track: Track) -> AppRoute? {
+        guard let id = Int(track.discID), id > 0 else { return nil }
+        return .netease(.album(id))
     }
     func loginView() -> AnyView? { AnyView(NeteaseLoginView(store: store)) }
     func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] {
@@ -64,10 +64,10 @@ final class NeteaseModule: AppModule {
         // Publish the confirmed change before returning, even without a mounted scope view.
         onLibraryChange()
     }
-    func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction] {
-        [.init(id: "download", title: "转为下载", systemImage: "arrow.down.circle") {
+    func songDownloadAction(for track: Track, downloads: DownloadStore) -> SongRowAction? {
+        .init(id: "download", title: "下载", systemImage: "arrow.down.circle") {
             Task { await downloads.enqueueNeteaseSong(track, quality: self.store.playbackSettings.quality) }
-        }]
+        }
     }
     func deactivate() { contentCache.stop() }
     func rootView() -> AnyView { AnyView(NeteaseHomeView()) }

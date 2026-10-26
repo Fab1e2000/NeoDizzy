@@ -10,14 +10,14 @@ nonisolated enum NeteaseRoute: Hashable {
     var title: String {
         switch self {
         case .album: "专辑"
-        case .playlist: "歌单"
+        case .playlist: "播放列表"
         case .daily: "每日推荐"
         case .radio: "私人 FM"
         case .charts: "排行榜"
-        case .myPlaylists: "我的歌单"
-        case .recommended: "推荐歌单"
-        case .quality: "精品歌单"
-        case .category(let name): name == "全部" ? "分类歌单" : name
+        case .myPlaylists: "我的播放列表"
+        case .recommended: "推荐播放列表"
+        case .quality: "精品播放列表"
+        case .category(let name): name == "全部" ? "分类播放列表" : name
         case .newAlbums: "新碟上架"
         case .newSongs: "新歌速递"
         case .personalizedSongs: "新歌推荐"

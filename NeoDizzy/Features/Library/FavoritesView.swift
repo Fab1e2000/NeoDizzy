@@ -18,16 +18,7 @@ struct FavoriteButton: View {
     }
     private var button: some View {
         Button {
-            if let provider = track.remoteSource?.providerID, modules.requiresLogin(providerID: provider) {
-                actionPresentation.login = true
-                return
-            }
-            let target = !liked
-            Task {
-                do { try await favorites.setLiked(track, target) }
-                catch is CancellationError { }
-                catch { actionPresentation.failure = error.localizedDescription }
-            }
+            actionPresentation.toggleFavorite(track, favorites: favorites, modules: modules)
         } label: {
             if playerStyle {
                 Image(systemName: liked ? "heart.fill" : "heart")
@@ -49,7 +40,6 @@ struct FavoritesPage: View {
     @Environment(FavoritesStore.self) private var favorites
     @Environment(PlayerStore.self) private var player
     @Environment(OfflineLibraryStore.self) private var library
-    @Environment(DownloadStore.self) private var downloads
     @Environment(ModuleRegistry.self) private var modules
     var body: some View {
         let songs = favorites.songs
@@ -75,7 +65,7 @@ struct FavoritesPage: View {
                 }
                 ForEach(songs.enumerated(), id: \.element.id) { index, song in
                     let downloaded = library.localFile(for: song.track) != nil
-                    SongRow(track: song.track, isDownloaded: downloaded, actions: actions(song.track, downloaded: downloaded)) {
+                    SongRow(track: song.track, isDownloaded: downloaded) {
                         player.play(tracks, startAt: index)
                     }
                 }
@@ -96,9 +86,4 @@ struct FavoritesPage: View {
         .refreshable { await favorites.refresh() }
     }
 
-    /// 已缓存的网易云歌曲可以直接转为下载。
-    private func actions(_ track: Track, downloaded: Bool) -> [SongRowAction] {
-        guard !downloaded, player.cachedQuality(for: track) != nil else { return [] }
-        return modules.cachedSongActions(for: track, downloads: downloads)
-    }
 }

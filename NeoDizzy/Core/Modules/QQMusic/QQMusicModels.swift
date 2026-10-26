@@ -91,7 +91,7 @@ nonisolated enum QQMusicError: LocalizedError {
 nonisolated enum QQMusicSearchKind: Int, CaseIterable, Hashable, Sendable {
     case songs = 0, albums = 2, artists = 1, playlists = 3
     var title: String {
-        switch self { case .songs: "歌曲"; case .albums: "专辑"; case .artists: "歌手"; case .playlists: "歌单" }
+        switch self { case .songs: "歌曲"; case .albums: "专辑"; case .artists: "歌手"; case .playlists: "播放列表" }
     }
     var responseKey: String {
         switch self { case .songs: "item_song"; case .albums: "item_album"; case .artists: "singer"; case .playlists: "item_songlist" }

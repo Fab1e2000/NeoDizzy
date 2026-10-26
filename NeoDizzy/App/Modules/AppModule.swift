@@ -53,7 +53,7 @@ protocol AppModule {
     func rootView() -> AnyView
     func destination(for route: AppRoute) -> AnyView?
     func install(in content: AnyView) -> AnyView
-    func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView?
+    func songAlbumRoute(for track: Track) -> AppRoute?
     func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination]
     var artistNavigation: PlayerArtistNavigation { get }
     func handleURL(_ url: URL, host: ModuleHost) -> Bool
@@ -65,14 +65,14 @@ protocol AppModule {
     func collectionRoute(kind: String, itemID: String) -> AppRoute?
     func collectionRemoval(for item: MirroredCollection) -> LibraryRemoval?
     func removeCollection(kind: String, itemID: String) async throws
-    func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction]
+    func songDownloadAction(for track: Track, downloads: DownloadStore) -> SongRowAction?
 }
 
 extension AppModule {
     var downloadsWholeAlbums: Bool { false }
     var libraryOrigin: LibraryOrigin { LibraryOrigin(rawValue: descriptor.id.rawValue, label: descriptor.title, systemImage: descriptor.systemImage) }
     var accountEntry: ModuleAccountEntry? { nil }
-    func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? { nil }
+    func songAlbumRoute(for track: Track) -> AppRoute? { nil }
     func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] { [] }
     var artistNavigation: PlayerArtistNavigation { .perArtist }
     func openAccount() {}
@@ -86,7 +86,7 @@ extension AppModule {
     func collectionRoute(kind: String, itemID: String) -> AppRoute? { nil }
     func collectionRemoval(for item: MirroredCollection) -> LibraryRemoval? { nil }
     func removeCollection(kind: String, itemID: String) async throws { throw ModuleCapabilityError.unavailable }
-    func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction] { [] }
+    func songDownloadAction(for track: Track, downloads: DownloadStore) -> SongRowAction? { nil }
 
 }
 
@@ -147,18 +147,18 @@ final class ModuleRegistry {
         guard let module = module(providerID: providerID) else { throw ModuleCapabilityError.unavailable }
         try await module.removeCollection(kind: kind, itemID: itemID)
     }
-    func cachedSongActions(for track: Track, downloads: DownloadStore) -> [SongRowAction] {
-        guard let source = track.remoteSource else { return [] }
-        return module(providerID: source.providerID)?.cachedSongActions(for: track, downloads: downloads) ?? []
+    func songDownloadAction(for track: Track, downloads: DownloadStore) -> SongRowAction? {
+        guard track.localSource == nil, let provider = track.playbackProviderID else { return nil }
+        return module(providerID: provider)?.songDownloadAction(for: track, downloads: downloads)
     }
     func downloadsWholeAlbums(providerID: String) -> Bool { module(providerID: providerID)?.downloadsWholeAlbums ?? false }
     func origin(providerID: String) -> LibraryOrigin? {
         guard providerID != "local" else { return .local }
         return module(providerID: providerID)?.libraryOrigin
     }
-    func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
+    func songAlbumRoute(for track: Track) -> AppRoute? {
         guard let providerID = track.playbackProviderID else { return nil }
-        return module(providerID: providerID)?.songActions(for: track, onImportLyrics: onImportLyrics)
+        return module(providerID: providerID)?.songAlbumRoute(for: track)
     }
     /// 本地音乐和没有对应来源的歌按作者分别进入。
     func artistNavigation(for track: Track) -> PlayerArtistNavigation {

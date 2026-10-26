@@ -15,7 +15,7 @@ struct QQMusicHomeView: View {
         }) {
             QQMusicDiscoveryShortcuts()
             VStack(alignment: .leading, spacing: 14) {
-                QQMusicSectionLink(title: "推荐歌单", route: .recommended)
+                QQMusicSectionLink(title: "推荐播放列表", route: .recommended)
                 if !recommendations.playlists.isEmpty {
                     QQMusicCoverShelf(collections: Array(recommendations.playlists.prefix(8)))
                 }
