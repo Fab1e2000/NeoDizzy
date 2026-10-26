@@ -94,7 +94,8 @@ struct NowPlayingLyricsPage: View {
                         lyrics: lyrics, playerFrame: playerFrame, activeID: lyrics.activeLine(at: player.progress),
                         bottomOverlayHeight: appleMusicBottomOverlayHeight, isActive: isActive,
                         isInterfaceHidden: Binding(get: { isInterfaceHidden }, set: { onInterfaceVisibilityChange?(!$0) }),
-                        onSeek: { player.seek(to: $0) }
+                        onSeek: { player.seek(to: $0) },
+                        playerCoordinateSpace: .named(NowPlayingContentCoordinateSpace.name)
                     )
                 } else {
                     ScrollView {
@@ -139,7 +140,8 @@ struct NowPlayingLyricsPage: View {
         guard presentation == .portrait, !showsSongHeader else {
             return 0
         }
-        return NowPlayingSongHeader.referenceHeight
+        return NowPlayingSongHeader.topInset
+            + NowPlayingSongHeader.referenceHeight
             + lyricsContentSpacing
     }
 

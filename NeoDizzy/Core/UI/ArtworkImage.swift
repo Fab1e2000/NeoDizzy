@@ -13,6 +13,7 @@ struct ArtworkImage: View {
     var contentMode: ContentMode = .fill
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         GeometryReader { proxy in
@@ -34,19 +35,10 @@ struct ArtworkImage: View {
     }
 
     private func imageRequest(for size: CGSize) -> ImageRequest? {
-        guard let url else { return nil }
-        var request = ImageRequest(url: url)
-        request.thumbnail = ImageRequest.ThumbnailOptions(
-            size: decodeSize ?? Self.bucketed(size),
+        ArtworkImagePipeline.request(
+            for: url, size: size, displayScale: displayScale, decodeSize: decodeSize,
             contentMode: contentMode == .fit ? .aspectFit : .aspectFill
         )
-        return request
-    }
-
-    /// 解码尺寸按 128 点向上取整：拖动窗口时同一档位内复用同一个请求，不会每一帧都重新解码。
-    private static func bucketed(_ size: CGSize) -> CGSize {
-        func round(_ value: CGFloat) -> CGFloat { (max(value, 1) / 128).rounded(.up) * 128 }
-        return CGSize(width: round(size.width), height: round(size.height))
     }
 
     private var imageLoadAnimation: Animation? {

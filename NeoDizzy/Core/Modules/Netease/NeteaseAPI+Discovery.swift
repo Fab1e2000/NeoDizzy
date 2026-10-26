@@ -44,9 +44,4 @@ extension NeteaseAPI {
         let value: Response = try await client.webRequest("/api/personalized/newsong", data: ["type": "recommend", "limit": 30, "areaId": 0], readFallback: true)
         return value.result.compactMap(\.song)
     }
-    func similarSongs(_ id: Int) async throws -> [NeteaseSong] {
-        struct Response: Decodable { let songs: [NeteaseSong] }
-        let value: Response = try await client.webRequest("/api/v1/discovery/simiSong", data: ["songid": id, "limit": 30, "offset": 0], readFallback: true)
-        return value.songs
-    }
 }

@@ -31,6 +31,7 @@ static BOOL __ln_hackApplied = NO;
 
 + (void)load
 {
+#if !LNPOPUP_EXTERNAL_ACCESSORY_ONLY
 	@autoreleasepool
 	{
 		__LNFrameForHostedAccessoryViewKey = LNPopupHiddenString("_frameForHostedAccessoryView");
@@ -66,6 +67,7 @@ static BOOL __ln_hackApplied = NO;
 			}
 		}
 	}
+#endif
 }
 
 - (BOOL)_ln_wantsMinimizedPopupBar
@@ -80,6 +82,11 @@ static BOOL __ln_hackApplied = NO;
 
 - (CGRect)_ln_proposedFrameForPopupBar
 {
+#if LNPOPUP_EXTERNAL_ACCESSORY_ONLY
+	// The external transition source supplies its own geometry. Do not query
+	// UIKit's private hosted accessory resolver or minimization state.
+	return CGRectZero;
+#else
 	if(@available(iOS 27, *))
 	{
 		static NSString* key = LNPopupHiddenString("_hostedElementLayoutResolver");
@@ -88,6 +95,7 @@ static BOOL __ln_hackApplied = NO;
 	}
 	
 	return [[self valueForKey:__LNFrameForHostedAccessoryViewKey] CGRectValue];
+#endif
 }
 
 static const void* __LNPopupTabBarMinimizationDelegateKey = &__LNPopupTabBarMinimizationDelegateKey;

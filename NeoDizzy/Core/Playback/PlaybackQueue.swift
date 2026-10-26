@@ -65,6 +65,24 @@ nonisolated struct PlaybackQueue: Sendable {
         return remaining + Array(order.prefix(position))
     }
 
+    /// 播放顺序里的上一首下标（随机时按随机顺序）。列表循环时第一首接最后一首。
+    func previousIndex(wraps: Bool) -> Int? {
+        guard !tracks.isEmpty else { return nil }
+        if position > 0 { return index(at: position - 1) }
+        return wraps && tracks.count > 1 ? index(at: tracks.count - 1) : nil
+    }
+
+    /// 只取相邻条目时不构造整份待播队列。与 upcomingIndices 一样，不把当前条目作为下一首。
+    func nextIndex(wraps: Bool) -> Int? {
+        guard tracks.count > 1 else { return nil }
+        if position + 1 < tracks.count { return index(at: position + 1) }
+        return wraps ? index(at: 0) : nil
+    }
+
+    private func index(at position: Int) -> Int {
+        isShuffled ? shuffledOrder[position] : position
+    }
+
     mutating func updateMetadata(_ replacements: [String: Track]) {
         tracks = tracks.map { replacements[$0.id] ?? $0 }
     }
@@ -102,21 +120,19 @@ nonisolated struct PlaybackQueue: Sendable {
     }
 
     mutating func move(by offset: Int, wraps: Bool) -> Bool {
-        let order = isShuffled ? shuffledOrder : Array(tracks.indices)
-        guard !order.isEmpty else { return false }
-        let position = isShuffled ? shuffledPosition : currentIndex
+        guard !tracks.isEmpty else { return false }
         var destination = position + offset
-        if order.indices.contains(destination) {
+        if tracks.indices.contains(destination) {
             // 按现有顺序继续。
         } else if wraps {
-            destination = offset > 0 ? 0 : order.count - 1
+            destination = offset > 0 ? 0 : tracks.count - 1
         } else {
             return false
         }
 
         if isShuffled {
             shuffledPosition = destination
-            currentIndex = order[destination]
+            currentIndex = shuffledOrder[destination]
         } else {
             currentIndex = destination
         }
@@ -124,10 +140,8 @@ nonisolated struct PlaybackQueue: Sendable {
     }
 
     func canMove(by offset: Int, wraps: Bool) -> Bool {
-        let order = isShuffled ? shuffledOrder : Array(tracks.indices)
-        guard !order.isEmpty else { return false }
-        let position = isShuffled ? shuffledPosition : currentIndex
-        return order.indices.contains(position + offset) || wraps
+        guard !tracks.isEmpty else { return false }
+        return tracks.indices.contains(position + offset) || wraps
     }
 
     mutating func toggleShuffle() {

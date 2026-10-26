@@ -34,9 +34,6 @@ struct DizzyLabAccountSettings: View {
             }
         }
         Section {
-            NavigationLink(value: AppRoute.page { BrowsingHistoryView() }) {
-                Label("浏览记录", systemImage: "clock.arrow.circlepath")
-            }
             Link("访问 DizzyLab 官网", destination: DizzyURL.site)
         }
         .listRowBackground(DizzyPalette.surface)

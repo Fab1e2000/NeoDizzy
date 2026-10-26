@@ -82,19 +82,6 @@ extension QQMusicClient {
         return QQMusicBrowsePage(artists: try rows.map(QQMusicArtist.init(json:)), nextOffset: Self.followingOffset(offset, count: rows.count, total: total))
     }
 
-    func similarSongs(mid: String) async throws -> [QQMusicSong] {
-        let revision = generation
-        let song = try await song(mid: mid)
-        guard revision == generation else { throw CancellationError() }
-        guard let id = Int64(song.id) else { throw QQMusicError.invalidResponse }
-        let data = try await call("music.recommend.TrackRelationServer", "GetSimilarSongs", ["songid": id])
-        guard let rows = data["vecSong"] as? [[String: Any]] else { throw QQMusicError.invalidResponse }
-        return try rows.map { row in
-            guard let track = row["track"] as? [String: Any] else { throw QQMusicError.invalidResponse }
-            return try QQMusicSong(json: track)
-        }
-    }
-
     nonisolated private static func followingOffset(_ offset: Int, count: Int, total: Int) -> Int? {
         count > 0 && offset + count < total ? offset + count : nil
     }

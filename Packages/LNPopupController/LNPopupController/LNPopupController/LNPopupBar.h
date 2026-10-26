@@ -12,6 +12,7 @@
 #import <LNPopupController/LNPopupCustomBarViewController.h>
 #import <LNPopupController/LNPopupBarAppearance.h>
 #import <LNPopupController/LNPopupImageView.h>
+#import <LNPopupController/LNPopupExternalTransitionSource.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -95,6 +96,11 @@ NS_SWIFT_UI_ACTOR
 NS_SWIFT_UI_ACTOR
 /// A popup bar is a view that displays popup information. Content is populated from ``LNPopupItem`` items.
 @interface LNPopupBar : UIView <UIAppearanceContainer>
+
+/// An externally owned accessory used by the original LN transition engine.
+/// Set before presentation. The logical popup bar stays hidden and does not
+/// participate in the host's bottom-bar layout or safe area.
+@property (nullable, nonatomic, strong) LNPopupExternalTransitionSource* externalTransitionSource;
 
 /// If `true`, the popup bar will automatically inherit its appearance from the bottom docking view.
 ///

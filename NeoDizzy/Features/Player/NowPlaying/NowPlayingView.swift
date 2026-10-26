@@ -16,27 +16,31 @@ struct NowPlayingView: View {
     @State private var appleMusicControlsActivityGeneration = 0
     @State private var isQueueSongHeaderHidden = false
     @State private var queueSongHeaderOffset: CGFloat = 0
+    @State private var geometryState: NowPlayingGeometry
     @State private var artworkPageFrame = CGRect.zero
     @State private var preparedLyricsSongID: Track.ID?
-    @State private var playerFrame = CGRect.zero
     @State private var lyricsModel = NowPlayingLyricsModel()
     @State private var importingLyrics = false
     @State private var importTrackID: String?
     @Namespace private var pageArtworkNamespace
     private var page: NowPlayingPage { pageTransition.page }
     private let onDismiss: (() -> Void)?
-    init(initialPage: NowPlayingPage = .artwork, onDismiss: (() -> Void)? = nil) {
+    init(initialPage: NowPlayingPage = .artwork, onDismiss: (() -> Void)? = nil,
+         geometry: NowPlayingGeometry = NowPlayingGeometry()) {
         self.onDismiss = onDismiss
         _pageTransition = State(initialValue: NowPlayingTransitionCoordinator(initialPage: initialPage))
+        // Geometry belongs to this presentation's identity; callers may supply
+        // its initial owner to observe layout without screen-coordinate feedback.
+        _geometryState = State(initialValue: geometry)
     }
     var body: some View {
         GeometryReader { geometry in
             let layout = NowPlayingLayout(contentSize: geometry.size)
             ZStack {
-                NowPlayingBackground(
-                    artworkURL: player.currentTrack?.coverURL,
-                    isBehindLyrics: page == .lyrics
-                )
+                // 背景自己在铺满安全区之后上报位置，背景副本才能和它完全重合。
+                NowPlayingArtworkBackdrop(artworkURL: player.currentTrack?.coverURL) {
+                    geometryState.backdropFrame = $0
+                }
                 // iPhone 只支持竖屏（见 project.yml 的 UISupportedInterfaceOrientations），不保留横屏布局。
                 if let song = player.currentTrack {
                     portraitContent(for: song, layout: layout)
@@ -45,10 +49,12 @@ struct NowPlayingView: View {
                 }
             }
             .environment(\.nowPlayingLayout, layout)
+            .environment(\.nowPlayingBackdropFrame, geometryState.backdropFrame)
         }
+        .coordinateSpace(.named(NowPlayingContentCoordinateSpace.name))
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { playerFrame = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { geometryState.contentSize = $0 }
         .task(id: "\(player.currentTrack?.id ?? "")/\(library.contentRevision)/\(lyricsModel.revision)") {
             guard let track = player.currentTrack else { return }
             preparedLyricsSongID = nil
@@ -185,8 +191,13 @@ struct NowPlayingView: View {
 
             if page != .artwork {
                 sharedPortraitSongHeader(for: song)
+                    .padding(.top, NowPlayingSongHeader.topInset)
                     .offset(y: sharedPortraitSongHeaderOffset)
-                    .clipped()
+                    .opacity(
+                        NowPlayingSongHeader.scrollFadeOpacity(
+                            scrolled: -sharedPortraitSongHeaderOffset
+                        )
+                    )
                     .transition(
                         NowPlayingPageTransition.songHeader(
                             reducesMotion: accessibilityReduceMotion
@@ -234,7 +245,10 @@ struct NowPlayingView: View {
                 GeometryReader { geometry in
                     // The queue cover follows the list behind its top edge.
                     // Keep the artwork page's shadow uncut beneath the handle.
-                    Rectangle()
+                    VStack(spacing: 0) {
+                        NowPlayingQueueTopFade(height: queueHeaderFadeHeight)
+                        Rectangle()
+                    }
                         .padding(page == .queue ? 0 : -max(geometry.size.width, geometry.size.height))
                 }
             }
@@ -363,7 +377,7 @@ struct NowPlayingView: View {
             song: song, lyrics: lyricsModel.lyrics, errorMessage: lyricsModel.error,
             isActive: page == .lyrics, isInterfaceHidden: hidesLyricsControls,
             artworkNamespace: pageArtworkNamespace, showsSongHeader: false,
-            playerFrame: playerFrame,
+            playerFrame: geometryState.contentFrame,
             onInterfaceVisibilityChange: setAppleMusicLyricsControlsVisible,
             onInitialFocusPrepared: onInitialFocusPrepared
         )
@@ -445,7 +459,7 @@ struct NowPlayingView: View {
 
         return CGRect(
             x: 0,
-            y: sharedPortraitSongHeaderOffset,
+            y: NowPlayingSongHeader.topInset + sharedPortraitSongHeaderOffset,
             width: NowPlayingSongHeader.referenceHeight,
             height: NowPlayingSongHeader.referenceHeight
         )
@@ -475,6 +489,10 @@ struct NowPlayingView: View {
 
     private var sharedPortraitSongHeaderOffset: CGFloat {
         page == .queue ? queueSongHeaderOffset : 0
+    }
+
+    private var queueHeaderFadeHeight: CGFloat {
+        page == .queue ? min(24, max(0, -queueSongHeaderOffset)) : 0
     }
 
     private func pageContentTransition(

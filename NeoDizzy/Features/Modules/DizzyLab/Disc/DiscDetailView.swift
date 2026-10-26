@@ -2,7 +2,6 @@ import Combine
 import SwiftUI
 
 struct DiscDetailView: View {
-    @Environment(BrowsingHistoryStore.self) private var history
     @Environment(OfflineLibraryStore.self) private var offline
     @Environment(AccountLibraryMirror.self) private var accountLibrary
     @Environment(SavedLibraryStore.self) private var savedLibrary
@@ -14,10 +13,6 @@ struct DiscDetailView: View {
     init(id: String, cachedModel: DiscDetailModel? = nil, initialArtworkURL: URL? = nil) {
         self.initialArtworkURL = initialArtworkURL
         _model = State(initialValue: cachedModel ?? DiscDetailModel(id: id))
-    }
-
-    private var historySummary: DiscSummary? {
-        offline.collection(provider: "dizzylab", kind: "album", id: model.id)?.detail.summary ?? model.detail.value?.summary
     }
 
     private var displayedArtworkURL: URL? {
@@ -35,9 +30,16 @@ struct DiscDetailView: View {
         }?.coverURL
     }
 
+    /// 已扫描的专辑、详情或失败信息有了，内容就淡入。
+    private var isContentReady: Bool {
+        offline.collection(provider: "dizzylab", kind: "album", id: model.id) != nil
+            || model.detail.value != nil || model.detail.failure != nil
+    }
+
     var body: some View {
         // Keep background state alive when loading content is replaced by album details.
-        AlbumDetailScrollView(artworkURL: initialArtworkURL ?? libraryArtworkURL ?? displayedArtworkURL) {
+        AlbumDetailScrollView(artworkURL: initialArtworkURL ?? libraryArtworkURL ?? displayedArtworkURL,
+                              isContentReady: isContentReady) {
             if let album = offline.collection(provider: "dizzylab", kind: "album", id: model.id) {
                 // 已扫描到的专辑立即显示，不发起详情或试听时长请求。
                 DiscDetailContent(detail: album.detail, tracks: album.tracks, artworkURL: album.coverURL)
@@ -86,10 +88,6 @@ struct DiscDetailView: View {
                     Label("更多", systemImage: "ellipsis")
                 }
             }
-        }
-        .onAppear { history.visit(id: model.id, summary: historySummary) }
-        .onChange(of: historySummary) { _, summary in
-            if let summary { history.update(summary) }
         }
         .onReceive(NotificationCenter.default.publisher(for: .dizzyAccountDidChange)) { _ in
             // 重新读取当前账号的购买权限，不复用上一会话的下载入口。

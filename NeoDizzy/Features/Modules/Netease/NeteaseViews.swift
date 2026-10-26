@@ -117,7 +117,7 @@ struct NeteaseCollectionView: View {
                     }
                 }.dizzyPageBackground()
             } else if isSongCollection {
-                AlbumDetailScrollView(artworkURL: artwork) {
+                AlbumDetailScrollView(artworkURL: artwork, isContentReady: !model.showsInitialSkeleton) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         AlbumHero(artworkURL: artwork, title: model.title.isEmpty ? route.title : model.title,
                                   metadata: model.hasLoaded ? "\(model.playlist?.trackCount ?? tracks.count) 首歌曲" : "歌曲数量", reservesTitleSpace: true, metadataIsPlaceholder: model.showsInitialSkeleton) {
@@ -215,7 +215,6 @@ struct NeteaseCollectionView: View {
         case .newSongs(let region): return region.title
         case .liked: return "收藏在网易云账号中的歌曲"
         case .recent: return "网易云账号的最近播放记录"
-        case .similar: return "发现相似的音乐"
         case .personalizedSongs: return "为你发现新音乐"
         default: return model.playlist?.creator?.nickname ?? "歌单"
         }
@@ -316,9 +315,7 @@ struct NeteaseSongRows: View {
         } message: { Text(error ?? "") }
     }
     private func actions(_ song: NeteaseSong) -> [SongRowAction] {
-        var actions: [SongRowAction] = [
-            .init(id: "similar", title: "相似歌曲", systemImage: "music.note.list") { openRoute(.netease(.similar(song.id))) }
-        ]
+        var actions: [SongRowAction] = []
         // 已下载由行尾图标表示，菜单里不再列出；已缓存的歌下载时直接用缓存文件。
         if song.track.remoteKey.map(downloadedKeys.contains) != true {
             let title = player.cachedQuality(for: song.track) != nil ? "转为下载" : "下载"
@@ -376,7 +373,7 @@ struct NeteaseResultStatus: View {
 
 // Adapted from MeloX Features/Search/SearchView.swift and Features/Artist/ArtistDetailView.swift (GPL-3.0).
 
-/// 一首网易云歌曲的列表行：点一下从这首开始播放整组，长按有相似歌曲、下载、歌手、专辑。
+/// 一首网易云歌曲的列表行：点一下从这首开始播放整组，长按有下载、歌手、专辑。
 struct NeteaseTrackRow: View {
     let song: NeteaseSong
     let songs: [NeteaseSong]
@@ -402,9 +399,7 @@ struct NeteaseTrackRow: View {
     }
 
     private func actions(downloaded: Bool) -> [SongRowAction] {
-        var actions: [SongRowAction] = [
-            .init(id: "similar", title: "相似歌曲", systemImage: "music.note.list") { openRoute(.netease(.similar(song.id))) },
-        ]
+        var actions: [SongRowAction] = []
         if !downloaded {
             actions.append(.init(id: "download", title: player.cachedQuality(for: song.track) != nil ? "转为下载" : "下载",
                                  systemImage: "arrow.down.circle") {
@@ -597,14 +592,12 @@ struct NeteaseArtistDetailView: View {
     @State private var reloadToken = 0
 
     var body: some View {
-        AlbumDetailScrollView(artworkURL: artist?.artworkURL) {
+        AlbumDetailScrollView(artworkURL: artist?.artworkURL, isContentReady: artist != nil || failure != nil) {
             if let artist {
                 content(artist)
             } else if let failure {
                 LoadFailureView(message: failure) { self.failure = nil; reloadToken += 1 }
                     .padding(.top, 120)
-            } else {
-                ProgressView().frame(maxWidth: .infinity).padding(.top, 200)
             }
         }
         .navigationTitle("")

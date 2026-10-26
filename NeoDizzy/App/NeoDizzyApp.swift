@@ -22,6 +22,7 @@ final class NeoDizzyAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        ArtworkImagePipeline.configureMemoryCache()
         Task { await services.restore() }
         return true
     }

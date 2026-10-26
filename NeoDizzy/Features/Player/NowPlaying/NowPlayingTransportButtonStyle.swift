@@ -4,12 +4,15 @@ import SwiftUI
 
 struct NowPlayingTransportButtonStyle: ButtonStyle {
     let reducesMotion: Bool
+    /// 松手时图标用带过冲的弹簧弹回（播放/暂停按钮用），否则平缓回到原大。
+    var springsBack = false
 
     func makeBody(configuration: Configuration) -> some View {
         NowPlayingTransportButtonStyleBody(
             label: configuration.label,
             isPressed: configuration.isPressed,
-            reducesMotion: reducesMotion
+            reducesMotion: reducesMotion,
+            springsBack: springsBack
         )
     }
 }
@@ -18,6 +21,7 @@ private struct NowPlayingTransportButtonStyleBody<Label: View>: View {
     let label: Label
     let isPressed: Bool
     let reducesMotion: Bool
+    let springsBack: Bool
 
     @State private var iconScale: CGFloat = 1
     @State private var highlightScale =
@@ -97,9 +101,11 @@ private struct NowPlayingTransportButtonStyleBody<Label: View>: View {
             }
         } else {
             withAnimation(
-                .easeInOut(
-                    duration: NowPlayingTransportButtonAnimation.releaseDuration
-                )
+                springsBack
+                    ? .spring(duration: 0.45, bounce: 0.5)
+                    : .easeInOut(
+                        duration: NowPlayingTransportButtonAnimation.releaseDuration
+                    )
             ) {
                 iconScale = 1
             }

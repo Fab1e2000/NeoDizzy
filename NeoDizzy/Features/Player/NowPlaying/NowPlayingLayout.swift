@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// Moves with the popup content. A dismissal changes its screen position, not
+/// the relative positions used by artwork, backdrop copies and lyric focus.
+nonisolated enum NowPlayingContentCoordinateSpace {
+    static let name = "NowPlayingContent"
+}
+
+@Observable
+final class NowPlayingGeometry {
+    var contentSize: CGSize = .zero
+    var backdropFrame: CGRect = .zero
+
+    var contentFrame: CGRect { CGRect(origin: .zero, size: contentSize) }
+}
+
 /// User-adjusted portrait layout, exported 2026-10-24 at 20:45.
 /// Reference: 402 × 874 pt, with a 62 pt top and 34 pt bottom safe area.
 /// Convert screen coordinates into the actual safe content area, rather than

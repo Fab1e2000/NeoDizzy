@@ -5,7 +5,7 @@ extension ModuleID { static let qqmusic = ModuleID(rawValue: "qqmusic") }
 nonisolated enum QQMusicRoute: Hashable {
     case search(String), album(String), playlist(String), chart(String), song(String)
     case recommended, charts, chartGroup(String), radar, daily
-    case typedSearch(String, QQMusicSearchKind), artist(String), artistAlbums(String), artists, newAlbums(Int), similar(String)
+    case typedSearch(String, QQMusicSearchKind), artist(String), artistAlbums(String), artists, newAlbums(Int)
 
     var title: String {
         switch self {
@@ -13,7 +13,6 @@ nonisolated enum QQMusicRoute: Hashable {
         case .artist, .artists: "歌手"
         case .artistAlbums: "歌手专辑"
         case .newAlbums: "新碟上架"
-        case .similar: "相似歌曲"
         case .album: "专辑"
         case .playlist: "歌单"
         case .chart: "排行榜"

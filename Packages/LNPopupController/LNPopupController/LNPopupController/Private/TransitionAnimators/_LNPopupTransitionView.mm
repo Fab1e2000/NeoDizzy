@@ -137,6 +137,35 @@ static NSString* const AllowsBackdropGroupsKey = LNPopupHiddenString("allowsBack
 	[_portalView setValue:@(allowsEffects) forKey:AllowsBackdropGroupsKey];
 }
 
+- (void)_updateSourceScale
+{
+	if(_scalesSourceToBounds == NO || _portalView == nil) { return; }
+	CGSize size = self.sourceLayer.bounds.size;
+	if(size.width <= 0.0 || size.height <= 0.0 || self.bounds.size.width <= 0.0 || self.bounds.size.height <= 0.0) { return; }
+	_portalView.bounds = (CGRect){CGPointZero, size};
+	_portalView.center = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+	_portalView.transform = CGAffineTransformMakeScale(self.bounds.size.width / size.width, self.bounds.size.height / size.height);
+}
+
+- (void)setScalesSourceToBounds:(BOOL)scalesSourceToBounds
+{
+	_scalesSourceToBounds = scalesSourceToBounds;
+	_portalView.autoresizingMask = scalesSourceToBounds ? UIViewAutoresizingNone : UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+	[self _updateSourceScale];
+}
+
+- (void)setBounds:(CGRect)bounds
+{
+	[super setBounds:bounds];
+	[self _updateSourceScale];
+}
+
+- (void)setFrame:(CGRect)frame
+{
+	[super setFrame:frame];
+	[self _updateSourceScale];
+}
+
 - (CGFloat)cornerRadius
 {
 	return _radiusContainerView.layer.cornerRadius;

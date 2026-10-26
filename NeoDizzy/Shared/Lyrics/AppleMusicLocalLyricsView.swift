@@ -13,6 +13,8 @@ struct AppleMusicLocalLyricsView: View {
     let isActive: Bool
     @Binding var isInterfaceHidden: Bool
     let onSeek: (Double) -> Void
+    /// Must match playerFrame; a movable presentation should use its own space.
+    var playerCoordinateSpace: CoordinateSpace = .global
     /// macOS 侧边歌词面板使用较小的固定字号和随系统外观变化的文字颜色；iOS 播放页保持默认值。
     var fixedFontSize: CGFloat? = nil
     var foreground: Color = .white
@@ -23,9 +25,7 @@ struct AppleMusicLocalLyricsView: View {
     @State private var browsing = false
     @State private var interacting = false
     @State private var resumeGeneration = 0
-    @State private var rowHeights: [Int: CGFloat] = [:]
-    /// 每行在可视区域里的实际上沿，用来确认滚动后当前行真的停在聚焦位置。
-    @State private var rowTops: [Int: CGFloat] = [:]
+    @State private var rowGeometry = LyricsRowGeometry()
     /// 上一次对齐到的行；与新行相邻时才用弹簧动画，跳转（拖进度条、点歌词）直接到位。
     @State private var lastFocusedID: Int?
     @State private var visibility = LyricsScrollInterfaceVisibilityTracker()
@@ -37,10 +37,10 @@ struct AppleMusicLocalLyricsView: View {
             let height = viewport.size.height
             let referenceHeight = max(height - min(max(bottomOverlayHeight, 0), max(height - 1, 0)), 1)
             let lineHeight = LyricsFontMetrics.boldLineHeight(size: fontSize)
-            let focusedHeight = activeID.flatMap { rowHeights[$0] } ?? lineHeight
+            let focusedHeight = rowGeometry.height(for: activeID) ?? lineHeight
             let visibleHeight = isInterfaceHidden ? height : referenceHeight
             let preferredY = playerFrame.minY + playerFrame.height * min(max(focusPosition.isFinite ? focusPosition : 0.5, 0.05), 0.8)
-                - viewport.frame(in: .global).minY
+                - viewport.frame(in: playerCoordinateSpace).minY
             let focusTop = min(max(preferredY - focusedHeight / 2, visibleHeight * 0.08),
                                max(visibleHeight * 0.08, visibleHeight * 0.84 - focusedHeight))
             let anchor = min(max(focusTop / max(height - focusedHeight, 1), 0), 1)
@@ -87,6 +87,9 @@ struct AppleMusicLocalLyricsView: View {
                 .onChange(of: isActive) { _, active in
                     if active { browsing = false } else { resumeGeneration += 1 }
                 }
+                .onChange(of: activeID, initial: true) { _, id in
+                    rowGeometry.focus(on: id)
+                }
                 // 当前行、聚焦位置、页面是否显示或是否在手动浏览变化时，重新对齐；新请求会取消旧的。
                 .task(id: FocusRequest(id: activeID, focusTop: focusTop, isActive: isActive, browsing: browsing)) {
                     await focus(proxy, anchor: anchor, focusTop: focusTop, viewportHeight: height)
@@ -114,10 +117,15 @@ struct AppleMusicLocalLyricsView: View {
                 .background(foreground.opacity(pressProgress * 0.12), in: .rect(cornerRadius: 12))
         }
         .scaleEffect(focused ? 1 : motion.deselectedScale, anchor: .topLeading)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeights[line.id] = $0 }
-        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("localLyricsViewport")).minY } action: {
-            rowTops[line.id] = $0
+        .onGeometryChange(for: LyricsRowGeometry.Measurement.self) { geometry in
+            LyricsRowGeometry.Measurement(
+                height: geometry.size.height,
+                top: geometry.frame(in: .named("localLyricsViewport")).minY
+            )
+        } action: {
+            rowGeometry.record($0, for: line.id)
         }
+        .onDisappear { rowGeometry.discardPosition(for: line.id) }
         .visualEffect { content, geometry in
             let distance = abs(geometry.frame(in: .named("localLyricsViewport")).midY - focusTop)
             let relativeDistance = max(distance / max(stride, 1), 0)
@@ -152,7 +160,7 @@ struct AppleMusicLocalLyricsView: View {
         guard isActive, !browsing, let id = activeID else { return }
         // 相邻的行、或者已经在屏幕上的行（点了一句歌词）用弹簧滚过去；其余直接跳到位。
         let isAdjacent = lastFocusedID.map { abs($0 - id) <= 1 } ?? false
-        let isOnScreen = lastFocusedID != nil && rowTops[id].map { abs($0 - focusTop) < viewportHeight } == true
+        let isOnScreen = lastFocusedID != nil && rowGeometry.top(for: id).map { abs($0 - focusTop) < viewportHeight } == true
         lastFocusedID = id
         let spring = motion.lineChangeSpring
         let animated = (isAdjacent || isOnScreen) && !reducesMotion
@@ -163,7 +171,7 @@ struct AppleMusicLocalLyricsView: View {
         // 动画中的位置还在变化，等弹簧基本停下再核对。
         do { try await Task.sleep(for: .milliseconds(animated ? 700 : 32)) } catch { return }
         for _ in 0..<8 {
-            if let top = rowTops[id], abs(top - focusTop) <= 2 { return }
+            if let top = rowGeometry.top(for: id), abs(top - focusTop) <= 2 { return }
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
             withTransaction(transaction) { proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: anchor)) }

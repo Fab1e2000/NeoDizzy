@@ -1,0 +1,164 @@
+import SwiftUI
+import UIKit
+
+/// 全屏播放器里“歌名 + 作者”这一块：左右滑动切到上一首/下一首（和系统音乐一样，任何页面都可以）。
+///
+/// 拖动时当前歌名跟手，相邻一首的歌名从旁边淡入；松手过线或甩得够快就切歌并振动，否则弹回。
+/// 没有相邻曲目的方向会有阻尼。手势只认横向拖动，不影响下拉收起播放器和点作者名弹菜单。
+struct NowPlayingTrackSwipe<Content: View>: View {
+    let song: Track
+    /// 相邻歌名离当前歌名的距离；不传时用这一块自己的宽度再留一点间隔。
+    var pageDistance: CGFloat? = nil
+    /// `interactive` 为 false 时是相邻曲目的预览，只显示文字，不响应点击。
+    @ViewBuilder let content: (_ track: Track, _ interactive: Bool) -> Content
+
+    @Environment(PlayerStore.self) private var player
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @State private var offset: CGFloat = 0
+    @State private var measuredWidth: CGFloat = 0
+    @State private var isCommitting = false
+
+    private static var spacing: CGFloat { 24 }
+
+    var body: some View {
+        let previous = player.previousInOrder
+        let next = player.nextInOrder
+        let distance = max(pageDistance ?? (measuredWidth + Self.spacing), 1)
+
+        ZStack(alignment: .topLeading) {
+            if offset > 0, let previous {
+                neighbor(previous.track, at: offset - distance, distance: distance)
+            }
+            content(song, true)
+                .offset(x: offset)
+                .opacity(Self.visibility(at: offset, distance: distance))
+            if offset < 0, let next {
+                neighbor(next.track, at: offset + distance, distance: distance)
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measuredWidth = $0 }
+        .gesture(
+            NowPlayingHorizontalPan(
+                onChange: { translation in
+                    guard !isCommitting else { return }
+                    let hasNeighbor = translation < 0 ? next != nil : previous != nil
+                    // 没有相邻曲目的方向加阻尼。
+                    offset = hasNeighbor ? translation : translation * 0.25
+                },
+                onEnd: { translation, velocity in
+                    finish(translation: translation, velocity: velocity,
+                           previous: previous, next: next, distance: distance)
+                },
+                onCancel: {
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { offset = 0 }
+                }
+            )
+        )
+    }
+
+    private func neighbor(_ track: Track, at x: CGFloat, distance: CGFloat) -> some View {
+        content(track, false)
+            .offset(x: x)
+            .opacity(Self.visibility(at: x, distance: distance))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    /// 离原位越远越透明。静止时透明度正好是 1：作者名的叠加提亮只在透明度为 1 时生效。
+    private static func visibility(at x: CGFloat, distance: CGFloat) -> Double {
+        max(0, 1 - abs(x) / distance)
+    }
+
+    private func finish(
+        translation: CGFloat,
+        velocity: CGFloat,
+        previous: UpcomingTrack?,
+        next: UpcomingTrack?,
+        distance: CGFloat
+    ) {
+        guard !isCommitting else { return }
+        let threshold = distance * 0.3
+        let target: (entry: UpcomingTrack, direction: CGFloat)?
+        if (translation < -threshold || velocity < -600), translation <= 0, let next {
+            target = (next, -1)
+        } else if (translation > threshold || velocity > 600), translation >= 0, let previous {
+            target = (previous, 1)
+        } else {
+            target = nil
+        }
+
+        guard let target else {
+            withAnimation(accessibilityReduceMotion ? nil : .spring(duration: 0.35, bounce: 0.2)) {
+                offset = 0
+            }
+            return
+        }
+
+        isCommitting = true
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        let commit = {
+            player.skip(toQueueIndex: target.entry.index)
+            // 新的当前曲目就是刚滑过来的那一首，瞬间归位看不出跳动。
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { offset = 0 }
+            isCommitting = false
+        }
+        if accessibilityReduceMotion {
+            commit()
+        } else {
+            withAnimation(.spring(duration: 0.28, bounce: 0), completionCriteria: .logicallyComplete) {
+                offset = target.direction * distance
+            } completion: {
+                commit()
+            }
+        }
+    }
+}
+
+/// 只认横向拖动的平移手势。用 UIKit 手势是为了在作者名（原生按钮）上拖动也能识别。
+private struct NowPlayingHorizontalPan: UIGestureRecognizerRepresentable {
+    let onChange: (CGFloat) -> Void
+    let onEnd: (_ translation: CGFloat, _ velocity: CGFloat) -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        // Shared explicitly with LN's external-source dismissal recognizer.
+        pan.name = "NeoDizzy.NowPlayingTrackSwipe"
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        let translation = recognizer.translation(in: recognizer.view).x
+        switch recognizer.state {
+        case .began, .changed:
+            onChange(translation)
+        case .ended:
+            onEnd(translation, recognizer.velocity(in: recognizer.view).x)
+        case .cancelled, .failed:
+            onCancel()
+        default:
+            break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        /// Use accumulated travel, leaving diagonal intent to the player pan.
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let translation = pan.translation(in: pan.view?.window)
+            return abs(translation.x) > abs(translation.y) * 1.25
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            other.name == "LNPopupExternalDismissPan"
+        }
+    }
+}

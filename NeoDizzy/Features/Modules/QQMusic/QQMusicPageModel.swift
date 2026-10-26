@@ -145,7 +145,6 @@ final class QQMusicPageModel {
             case .artistAlbums(let mid): browsePage = try await store.api.artistAlbums(mid: mid, offset: offset)
             case .artists: browsePage = try await store.api.artists(offset: offset, page: page)
             case .newAlbums(let area): browsePage = try await store.api.newAlbums(area: area, offset: offset)
-            case .similar(let mid): newSongs = try await store.api.similarSongs(mid: mid)
             case .song(let mid):
                 let song = try await store.api.song(mid: mid)
                 newSongs = [song]; newTitle = song.title; newArtwork = song.coverURL

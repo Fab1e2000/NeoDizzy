@@ -15,6 +15,7 @@ configFiles:
   Release: Config/Signing.xcconfig
 
 packages:
+  # 原 LN 转场引擎，本地 fork 从系统 bottom accessory 读取转场源。
   LNPopupUI:
     path: Packages/LNPopupUI
   AudioTags:
@@ -78,6 +79,8 @@ targets:
         CFBundleLocalizations: [zh-Hans]
         CFBundleDisplayName: NeoDizzy
         UIUserInterfaceStyle: Light
+        # 允许播放器拖动转场的 CADisplayLink 使用 ProMotion 的高刷新率。
+        CADisableMinimumFrameDurationOnPhone: true
         CFBundleShortVersionString: "0.7.0"
         CFBundleVersion: "8"
         CFBundleURLTypes:

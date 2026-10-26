@@ -40,6 +40,53 @@ struct PlaybackQueueTests {
         #expect(queue.upcomingIndices(wraps: true) == [3, 4, 0, 1])
     }
 
+    @Test func previousFollowsPlayOrderAndWrapsWhenRepeatingAll() {
+        var queue = PlaybackQueue()
+        queue.replace(with: tracks, startingAt: 0)
+        #expect(queue.previousIndex(wraps: false) == nil)
+        #expect(queue.previousIndex(wraps: true) == 4)
+        queue.restore(tracks: tracks, currentIndex: 1, isShuffled: true, shuffledOrder: [0, 3, 1, 4, 2])
+        // 随机时按随机顺序：当前是第 1 首，排在 3 后面。
+        #expect(queue.previousIndex(wraps: false) == 3)
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func adjacentLookupsFollowQueueAcrossEveryPosition(shuffled: Bool, wraps: Bool) {
+        let order = shuffled ? [0, 3, 1, 4, 2] : Array(tracks.indices)
+        for position in order.indices {
+            var queue = PlaybackQueue()
+            queue.restore(tracks: tracks, currentIndex: order[position], isShuffled: shuffled, shuffledOrder: order)
+            let next = position + 1 < order.count ? order[position + 1] : wraps ? order[0] : nil
+            let previous = position > 0 ? order[position - 1] : wraps ? order.last : nil
+            #expect(queue.nextIndex(wraps: wraps) == next)
+            #expect(queue.previousIndex(wraps: wraps) == previous)
+            #expect(queue.canMove(by: 1, wraps: wraps) == (next != nil))
+            #expect(queue.canMove(by: -1, wraps: wraps) == (previous != nil))
+            let original = queue.currentIndex
+            let moved = queue.move(by: 1, wraps: wraps)
+            #expect(moved == (next != nil))
+            #expect(queue.currentIndex == (next ?? original))
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func adjacentLookupsExcludeCurrentEntryInEmptyAndSingleTrackQueues(shuffled: Bool) {
+        var queue = PlaybackQueue()
+        queue.restore(tracks: [], currentIndex: 0, isShuffled: shuffled, shuffledOrder: [])
+        #expect(queue.nextIndex(wraps: true) == nil)
+        #expect(queue.previousIndex(wraps: true) == nil)
+        #expect(!queue.canMove(by: 1, wraps: true))
+        let movedEmptyQueue = queue.move(by: -1, wraps: true)
+        #expect(!movedEmptyQueue)
+        queue.restore(tracks: [tracks[0]], currentIndex: 0, isShuffled: shuffled, shuffledOrder: [0])
+        #expect(queue.nextIndex(wraps: true) == nil)
+        #expect(queue.previousIndex(wraps: true) == nil)
+        // 播放器仍可循环播放唯一条目，但相邻条目 UI 不重复展示它。
+        let repeatedSingleTrack = queue.move(by: 1, wraps: true)
+        #expect(repeatedSingleTrack)
+        #expect(queue.currentIndex == 0)
+    }
+
     @Test func selectingFromQueueKeepsShuffleOrder() {
         var queue = PlaybackQueue()
         queue.restore(tracks: tracks, currentIndex: 0, isShuffled: true, shuffledOrder: [0, 3, 1, 4, 2])

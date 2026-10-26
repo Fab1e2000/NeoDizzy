@@ -108,7 +108,7 @@ struct RootView: View {
         .onChange(of: tabSettings.visibleModules, initial: true) { _, _ in
             host.reconcileSelection()
         }
-        // 向下滚动时收起标签栏，LN 负责协调迷你播放器的位置。
+        // 标签栏与系统底部附件共同收起，由系统协调位置和页面边距。
         .tabBarMinimizeBehavior(.onScrollDown)
         // 齿轮始终打开同一个全局设置页；账号由模块呈现。
         .environment(settingsPresentation)
@@ -122,13 +122,17 @@ struct RootView: View {
             AppSettingsView().environment(settingsPresentation)
                 .statusBarHidden(isImmersive)
         }
-        // LN 转场配合 MeloX 全屏内容；底部栏固定浅色，不参与页面外观切换。
+        // 系统附件配合独立的播放器转场；底部栏固定浅色。
         .modifier(PlayerPopup(
             isPresented: $nowPlaying.isPresented,
             isSuppressed: isMiniPlayerSuppressed,
             colorScheme: .light,
             onClose: finishPlayerNavigation
         ))
+        .onChange(of: nowPlaying.isPresented) { _, isPresented in
+            // Reopening during dismissal cancels the old navigation request.
+            if isPresented { pendingPlayerRoute = nil }
+        }
         .statusBarHidden(isImmersive)
         .onOpenURL { modules.handleURL($0, host: host) }
         // 本机喜欢、收藏后立刻更新资料库；换账号时重新同步。

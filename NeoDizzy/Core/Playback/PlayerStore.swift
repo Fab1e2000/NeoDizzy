@@ -184,6 +184,22 @@ final class PlayerStore {
         return queue.upcomingIndices(wraps: repeatMode == .all).map { UpcomingTrack(index: $0, track: queue.tracks[$0]) }
     }
 
+    /// 当前曲目在队列里的下标（迷你播放器左右滑动切歌用）。
+    var currentQueueIndex: Int { queue.currentIndex }
+
+    /// 播放顺序里的上一首。漫游时就是播放记录里的上一首。
+    var previousInOrder: UpcomingTrack? {
+        let index = isDiscovery
+            ? (queue.currentIndex > 0 ? queue.currentIndex - 1 : nil)
+            : queue.previousIndex(wraps: repeatMode == .all)
+        return index.map { UpcomingTrack(index: $0, track: queue.tracks[$0]) }
+    }
+
+    var nextInOrder: UpcomingTrack? {
+        guard !isDiscovery, let index = queue.nextIndex(wraps: repeatMode == .all) else { return nil }
+        return UpcomingTrack(index: index, track: queue.tracks[index])
+    }
+
     @ObservationIgnored private var player: AVQueuePlayer
     @ObservationIgnored private var standbyPlayer: AVQueuePlayer
     @ObservationIgnored private var bypassCacheForRetry = false
@@ -510,6 +526,18 @@ final class PlayerStore {
         cancelQueuedNext()
         guard queue.select(index: index) else { prepareQueuedNext(); return }
         load(autoplay: true)
+    }
+
+    /// 迷你播放器左右滑动切到相邻的一首，保持当前的播放/暂停状态。
+    /// 和「上一首」按钮不同，不会因为已经播了几秒就回到本首开头。
+    func skip(toQueueIndex index: Int) {
+        guard index != queue.currentIndex else { return }
+        playbackIntentRevision &+= 1
+        cancelQueuedNext()
+        // 和「上一首」一样，漫游往回退时丢掉已经在取的下一首。
+        if isDiscovery { cancelDiscoveryRequest() }
+        guard queue.select(index: index) else { prepareQueuedNext(); return }
+        load(autoplay: isPlaying)
     }
 
     func moveUpcomingQueueItems(fromOffsets source: IndexSet, toOffset destination: Int) {
@@ -972,7 +1000,14 @@ final class PlayerStore {
         progressUpdatedAt = .now
         updateNowPlaying()
         if abs(progress - lastSavedProgress) >= 10 {
-            saveState()
+            switch persistence.saveProgress(progress) {
+            case .saved:
+                lastSavedProgress = progress
+            case .needsSnapshot:
+                saveState()
+            case .superseded, .invalidProgress:
+                break
+            }
         }
     }
 

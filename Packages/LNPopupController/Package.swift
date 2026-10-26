@@ -17,7 +17,12 @@ extension URL {
 
 //This recursively iterates all directories under LNPopupController/Private and adds them as header search paths.
 let start = URL(filePath: "LNPopupController/LNPopupController/Private", relativeTo: packageBase)
-var settings: [PackageDescription.CSetting] = [.headerSearchPath(start.targetRelativePath)]
+// NeoDizzy owns its system bottom accessory. Keep LN's transition engine and
+// instance-scoped helpers without installing its process-wide UIKit patches.
+var settings: [PackageDescription.CSetting] = [
+	.headerSearchPath(start.targetRelativePath),
+	.define("LNPOPUP_EXTERNAL_ACCESSORY_ONLY", to: "1")
+]
 if let enumerator = FileManager.default.enumerator(at: start, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
 	for case let fileURL as URL in enumerator {
 		do {

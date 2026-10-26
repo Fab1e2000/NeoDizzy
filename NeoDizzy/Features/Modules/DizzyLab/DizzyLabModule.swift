@@ -42,8 +42,11 @@ final class DizzyLabModule: AppModule {
     func collectionRoute(kind: String, itemID: String) -> AppRoute? {
         kind == "album" ? .disc(id: itemID) : nil
     }
+    /// 这个来源只有社团页，没有艺人页：点作者名直接进入专辑所属的社团。
+    var artistNavigation: PlayerArtistNavigation { .single }
     func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] {
-        guard track.playbackProviderID == descriptor.id.rawValue else { return [] }
+        // 歌曲的来源标识是 libraryOrigin（"dizzylab"），和模块 ID（"dizzyLab"）大小写不同。
+        guard track.playbackProviderID == libraryOrigin.rawValue else { return [] }
         let label = try await DizzyAPI.shared.discDetail(id: track.discID).summary.labelName
         try Task.checkCancellation()
         // This source exposes label pages, not individual performer pages.
@@ -102,7 +105,6 @@ private struct DizzyLabScope: View {
             )) { loginSheet }
             .environment(services.account)
             .environment(services.purchases)
-            .environment(services.browsingHistory)
             .onChange(of: scenePhase, initial: true) { _, phase in
                 if phase == .background { services.purchases.pause() }
                 if phase == .active { Task { await services.purchases.check() } }

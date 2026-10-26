@@ -1,4 +1,6 @@
 import Foundation
+import Observation
+import Synchronization
 import Testing
 @testable import NeoDizzy
 
@@ -138,8 +140,83 @@ import Testing
         store.register("netease", provider: FavoritesProvider(account: { account }, load: { [song] }, setLiked: { _, _ in }))
         await store.refresh()
         account = "b"; store.updateAccounts(); #expect(store.songs.isEmpty)
+        #expect(!store.contains(song))
         account = "a"; store.updateAccounts(); #expect(store.contains(song))
         account = nil; store.updateAccounts(); #expect(store.songs.isEmpty)
+        #expect(!store.contains(song))
+    }
+
+    @Test func cachedFavoritesFollowDeviceProviderAvailabilityAndMutations() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FavoritesStore(directory: folder)
+        let local = Track(discID: "", number: "1", title: "Local", artists: "", albumTitle: "", coverURL: nil,
+                          localSource: .init(albumID: "album", trackID: "local"))
+        let other = track("extension", "1")
+        store.registerDeviceProvider("extension")
+        try await store.setLiked(local, true)
+        try await store.setLiked(other, true)
+        #expect(store.songs.map(\.id) == ["extension/1", "local/local"])
+        #expect(store.contains(other))
+
+        store.setDeviceProviders(["local"])
+        #expect(!store.contains(other))
+        #expect(store.songs.map(\.id) == ["local/local"])
+        store.registerDeviceProvider("extension")
+        #expect(store.contains(other))
+        #expect(store.songs.map(\.id) == ["extension/1", "local/local"])
+        try await store.setLiked(other, false)
+        #expect(!store.contains(other))
+        #expect(store.contains(local))
+        #expect(store.songs.map(\.id) == ["local/local"])
+
+        try await store.setLiked(other, true)
+        #expect(store.contains(other))
+        store.unregister("extension")
+        #expect(!store.contains(other))
+        #expect(store.songs.map(\.id) == ["local/local"])
+        #expect(store.records["device"]?.count == 2)
+    }
+
+    @Test func cachedFavoriteReadsKeepObservationDependencies() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FavoritesStore(directory: folder), song = track()
+        var account: String? = "a"
+        store.register("netease", provider: FavoritesProvider(account: { account }, load: { [song] }, setLiked: { _, _ in }))
+        await store.refresh()
+        #expect(store.contains(song)) // Populate the cache before observation starts.
+        let accountChanges = Mutex(0)
+        withObservationTracking {
+            _ = store.contains(song)
+        } onChange: {
+            accountChanges.withLock { $0 += 1 }
+        }
+        account = nil
+        store.updateAccounts()
+        #expect(accountChanges.withLock { $0 } == 1)
+        #expect(!store.contains(song))
+
+        account = "a"
+        store.updateAccounts()
+        #expect(store.contains(song))
+        let recordChanges = Mutex(0)
+        withObservationTracking {
+            _ = store.songs
+        } onChange: {
+            recordChanges.withLock { $0 += 1 }
+        }
+        try await store.setLiked(song, false)
+        #expect(recordChanges.withLock { $0 } == 1)
+        #expect(store.songs.isEmpty)
+        #expect(!store.contains(song))
+
+        let providerChanges = Mutex(0)
+        withObservationTracking {
+            _ = store.songs
+        } onChange: {
+            providerChanges.withLock { $0 += 1 }
+        }
+        store.setDeviceProviders(["local"])
+        #expect(providerChanges.withLock { $0 } == 1)
     }
 
     @Test func staleRefreshCannotOverwriteSuccessfulMutation() async throws {

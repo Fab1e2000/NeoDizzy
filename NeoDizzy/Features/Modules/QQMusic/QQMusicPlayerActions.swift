@@ -27,14 +27,6 @@ struct QQMusicPlayerActions: View {
                     }
                 })
             }
-            if let mid = track.remoteSource?.itemID {
-                items.append(UIAction(title: "相似歌曲", image: UIImage(systemName: "sparkles")) { _ in
-                    openRoute(.qqmusic(.similar(mid)))
-                })
-                items.append(UIAction(title: "歌曲详情", image: UIImage(systemName: "music.note")) { _ in
-                    openRoute(.qqmusic(.song(mid)))
-                })
-            }
             if let onImportLyrics {
                 items.append(UIAction(title: "导入本地歌词", image: UIImage(systemName: "square.and.arrow.down")) { _ in onImportLyrics() })
             }

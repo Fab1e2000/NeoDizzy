@@ -61,7 +61,7 @@ def main():
             "AudioTagEditingTests", "LocalLyricsTests", "LocalLibraryTests", "PlaybackTests", "DownloadTests", "OfflineLibraryTests", "JSONDecodingTests",
             "PageParserTests", "DizzyURLTests", "AccountTests", "PurchaseTests",
             "PurchaseConfirmationTests", "CheckoutNavigationTests", "PurchaseStoreTests",
-            "AlipayReturnRouterTests", "CommunityTests", "FeedPaginationTests", "BrowsingHistoryTests",
+            "AlipayReturnRouterTests", "CommunityTests", "FeedPaginationTests",
         ):
             matches = list((ROOT / "NeoDizzyTests").rglob(f"{name}.swift"))
             if len(matches) != 1:

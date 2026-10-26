@@ -67,6 +67,24 @@ import Testing
         try await waitFor { starts == ["1", "2"] && r.player.progress > 0.2 && r.player.reporting.listenedSeconds > 0.2 }
     }
 
+    @Test func periodicProgressRestoresWithoutRewritingTheQueueSnapshot() async throws {
+        let r = try rig(); defer { r.clean() }
+        r.player.play([r.selection(1).track, r.selection(2).track], startAt: 0)
+        try await waitFor { r.player.duration > 0 && !r.player.isLoading }
+        let original = try #require(r.defaults.data(forKey: "player.playbackSnapshot"))
+        let reader = PlaybackPersistence(defaults: r.defaults)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(15))
+        while (reader.load()?.progress ?? 0) < 10, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let saved = try #require(reader.load())
+        #expect(saved.progress >= 10)
+        #expect(saved.progress <= r.player.progress)
+        #expect(saved.currentIndex == 0)
+        #expect(saved.queue.map(\.id) == [r.selection(1).track.id, r.selection(2).track.id])
+        #expect(r.defaults.data(forKey: "player.playbackSnapshot") == original)
+    }
+
     @Test func repeatOneNaturallyReplaysWithNewReportingSession() async throws {
         let r = try rig(); defer { r.clean() }
         var starts: [String] = []

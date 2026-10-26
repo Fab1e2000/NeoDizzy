@@ -19,7 +19,7 @@
 	
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((animator.duration * 0.38) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
 		[animator addAnimations:^{
-			self.transitionView.cornerRadius = self.popupBar.imageView.cornerRadius;
+			self.transitionView.cornerRadius = self.barArtworkCornerRadius;
 		}];
 	});
 }
@@ -28,7 +28,7 @@
 {
 	[super beforeAnyAnimation];
 	
-	_targetShadow = self.popupBar.imageView.shadow.copy;
+	_targetShadow = self.barArtworkShadow.copy;
 	
 	NSShadow* hiddenShadow = [_targetShadow copy];
 	hiddenShadow.shadowColor = [_targetShadow.shadowColor colorWithAlphaComponent:0.0];

@@ -25,12 +25,23 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
 }
 
 @Observable @MainActor final class FavoritesStore {
-    private(set) var records: [String: [FavoriteSong]] = [:]
+    private(set) var records: [String: [FavoriteSong]] = [:] {
+        didSet { cachedSnapshot = nil }
+    }
     private(set) var pending = Set<String>()
     private(set) var syncing = Set<String>()
     private(set) var errors: [String: String] = [:]
-    private var accounts: [String: String] = [:]
-    private var deviceProviders: Set<String> = ["local", "dizzylab"]
+    private var accounts: [String: String] = [:] {
+        didSet { cachedSnapshot = nil }
+    }
+    private var deviceProviders: Set<String> = ["local", "dizzylab"] {
+        didSet { cachedSnapshot = nil }
+    }
+    private struct Snapshot {
+        let songs: [FavoriteSong]
+        let ids: Set<String>
+    }
+    @ObservationIgnored private var cachedSnapshot: Snapshot?
     @ObservationIgnored private var providers: [String: FavoritesProvider] = [:]
     @ObservationIgnored private var versions: [String: Int] = [:]
     @ObservationIgnored private var epochs: [String: Int] = [:]
@@ -56,7 +67,15 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
         } catch { errors["storage"] = error.localizedDescription }
     }
 
-    var songs: [FavoriteSong] {
+    var songs: [FavoriteSong] { snapshot.songs }
+
+    private var snapshot: Snapshot {
+        // Cache hits must still observe every input, so account changes and provider
+        // removal update already-visible favorite buttons as well as the list.
+        _ = records
+        _ = accounts
+        _ = deviceProviders
+        if let cachedSnapshot { return cachedSnapshot }
         let scopes = ["device"] + accounts.map { "\($0.key)/\($0.value)" }.sorted()
         // 各来源内部严格保留接口顺序；只比较每个列表的首项来合并来源。
         // 新喜欢插入来源列表首位，其时间也使它成为统一列表的第一项。
@@ -65,15 +84,25 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
         }
         var offsets = Array(repeating: 0, count: lists.count)
         var result: [FavoriteSong] = []
-        while let index = lists.indices.filter({ offsets[$0] < lists[$0].count }).max(by: {
-            let lhs = lists[$0][offsets[$0]].addedAt ?? .distantPast
-            let rhs = lists[$1][offsets[$1]].addedAt ?? .distantPast
-            return lhs == rhs ? $0 > $1 : lhs < rhs
-        }) {
+        result.reserveCapacity(lists.reduce(0) { $0 + $1.count })
+        while true {
+            var next: Int?
+            for index in lists.indices where offsets[index] < lists[index].count {
+                if let current = next {
+                    let candidateDate = lists[index][offsets[index]].addedAt ?? .distantPast
+                    let currentDate = lists[current][offsets[current]].addedAt ?? .distantPast
+                    if candidateDate > currentDate { next = index }
+                } else {
+                    next = index
+                }
+            }
+            guard let index = next else { break }
             result.append(lists[index][offsets[index]])
             offsets[index] += 1
         }
-        return result
+        let snapshot = Snapshot(songs: result, ids: Set(result.map(\.id)))
+        cachedSnapshot = snapshot
+        return snapshot
     }
 
     /// 升级时导入已有喜欢缓存；已有数据库（包括空列表）绝不被旧缓存覆盖。
@@ -163,7 +192,7 @@ nonisolated struct FavoriteSong: Codable, Identifiable, Equatable {
             if changed { try replace(scope: scope, values: values) }
         }
     }
-    func contains(_ track: Track) -> Bool { songs.contains { $0.id == FavoriteSong(track: track).id } }
+    func contains(_ track: Track) -> Bool { snapshot.ids.contains(FavoriteSong(track: track).id) }
     func setDeviceProviders(_ ids: Set<String>) { deviceProviders = ids }
     func registerDeviceProvider(_ id: String) { deviceProviders.insert(id) }
     private func invalidateSession(_ id: String) {

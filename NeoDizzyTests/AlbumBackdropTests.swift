@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import Nuke
 import SwiftUI
 import UIKit
 import Testing
@@ -7,6 +8,22 @@ import Testing
 
 @Suite(.serialized)
 struct AlbumBackdropTests {
+    @MainActor @Test func preloadingKeepsHeroAndBackdropWithoutSpeculativeVariants() async throws {
+        let url = try blueArtworkFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        await AlbumArtworkPreload.prepare(url)
+
+        #expect(AlbumArtworkPreload.hasPreparedBackdrop(for: url))
+        #expect(ImagePipeline.shared.cache[AlbumArtworkPreload.heroRequest(for: url)] != nil)
+        var unusedCard = ImageRequest(url: url)
+        unusedCard.thumbnail = .init(size: CGSize(width: 256, height: 256), contentMode: .aspectFill)
+        var unusedAvatar = ImageRequest(url: url)
+        unusedAvatar.thumbnail = .init(size: CGSize(width: 128, height: 128), contentMode: .aspectFit)
+        #expect(ImagePipeline.shared.cache[unusedCard] == nil)
+        #expect(ImagePipeline.shared.cache[unusedAvatar] == nil)
+    }
+
     @MainActor @Test func preparedArtworkProvidesTheInitialPaletteSynchronously() async throws {
         let url = try blueArtworkFile()
         defer { try? FileManager.default.removeItem(at: url) }

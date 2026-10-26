@@ -117,7 +117,7 @@ struct QQMusicCollectionView: View {
                     }.padding(20)
                 }.dizzyPageBackground()
             } else {
-                AlbumDetailScrollView(artworkURL: artwork) {
+                AlbumDetailScrollView(artworkURL: artwork, isContentReady: !showsInitialSkeleton) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         AlbumHero(artworkURL: artwork, title: model.title.isEmpty ? route.title : model.title,
                                   metadata: model.hasLoaded ? "\(tracks.count) 首歌曲" : "歌曲数量",
@@ -266,11 +266,7 @@ struct QQMusicSongRows: View {
     }
 
     private func actions(_ song: QQMusicSong) -> [SongRowAction] {
-        var actions: [SongRowAction] = [
-            .init(id: "song", title: "歌曲详情", systemImage: "music.note") {
-                openRoute(.qqmusic(.song(song.mid)))
-            }
-        ]
+        var actions: [SongRowAction] = []
         if !song.albumMid.isEmpty {
             actions.append(.init(id: "album", title: "前往专辑", systemImage: "square.stack") {
                 guard store.active else { return }
@@ -279,9 +275,6 @@ struct QQMusicSongRows: View {
                 }
             })
         }
-        actions.append(.init(id: "similar", title: "相似歌曲", systemImage: "sparkles") {
-            openRoute(.qqmusic(.similar(song.mid)))
-        })
         for singer in song.singers {
             actions.append(.init(id: "artist-\(singer.id)", title: "歌手 · \(singer.name)", systemImage: "person") {
                 openRoute(.qqmusic(.artist(singer.id)))

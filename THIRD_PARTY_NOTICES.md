@@ -107,5 +107,6 @@ THE SOFTWARE.
 
 - 来源：https://github.com/LeoNatan/LNPopupUI （`60853564423524c9ed15cc74c5969d3e1ca666f1`）与 https://github.com/LeoNatan/LNPopupController （4.6.1）。
 - MIT 许可证；源码及许可保留在 `Packages/LNPopupUI`、`Packages/LNPopupController`，应用内附带 `LNPopupLicenses.txt`。
-- 主应用采用上述固定版本：LNPopupUI 移除重复的 split-view API 声明、依赖指向本地 LNPopupController；LNPopupController 移除不存在的工程排除项。运行时实现未修改。
-- 用于 iOS 迷你播放器与全屏转场；全屏内容使用原有 MeloX 移植实现。
+- 主应用静态链接本地 fork。`LNPopupExternalTransitionSource` 让原 LN 动画器读取系统底部附件中自有内容和封面的真实视图；保留原 portal、玻璃过渡层、分阶段动画及交互状态机。
+- 本地 `LNPOPUP_EXTERNAL_ACCESSORY_ONLY` 构建关闭 LN 对宿主标签栏、导航栏、窗口与安全区的全局 hook；独立容器承载全屏内容，不绘制 LN 自有迷你栏。转场仍沿用上游内部 portal 实现，不属于纯公开 API 重写。
+- `NativePlayerPresentation.swift` 仅负责 SwiftUI 状态和独立 UIKit 容器的生命周期桥接。迷你播放器使用系统底部附件，全屏内容继续使用原有 MeloX 移植实现。

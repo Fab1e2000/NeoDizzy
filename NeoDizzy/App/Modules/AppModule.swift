@@ -32,6 +32,14 @@ struct PlayerArtistDestination: Identifiable {
     var id: AppRoute { route }
 }
 
+/// 播放器里点作者名时的去处。
+enum PlayerArtistNavigation {
+    /// 每位作者各自的艺人页（作者名按本地拆分，多位时弹菜单）。
+    case perArtist
+    /// 整首歌只有一个去处（比如来源只提供社团页），点了直接进入，不按作者名拆分。
+    case single
+}
+
 /// A compiled-in feature plugs into these slots; the host never switches on provider IDs.
 @MainActor
 protocol AppModule {
@@ -47,6 +55,7 @@ protocol AppModule {
     func install(in content: AnyView) -> AnyView
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView?
     func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination]
+    var artistNavigation: PlayerArtistNavigation { get }
     func handleURL(_ url: URL, host: ModuleHost) -> Bool
     /// 统一搜索里这个模块的一组结果（含标题和「查看全部」）；没有搜索能力的模块返回 nil。
     func searchSection(query: String) -> AnyView?
@@ -65,6 +74,7 @@ extension AppModule {
     var accountEntry: ModuleAccountEntry? { nil }
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? { nil }
     func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] { [] }
+    var artistNavigation: PlayerArtistNavigation { .perArtist }
     func openAccount() {}
     func dismissAccount() {}
     func deactivate() {}
@@ -149,6 +159,12 @@ final class ModuleRegistry {
     func songActions(for track: Track, onImportLyrics: (() -> Void)?) -> AnyView? {
         guard let providerID = track.playbackProviderID else { return nil }
         return module(providerID: providerID)?.songActions(for: track, onImportLyrics: onImportLyrics)
+    }
+    /// 本地音乐和没有对应来源的歌按作者分别进入。
+    func artistNavigation(for track: Track) -> PlayerArtistNavigation {
+        guard track.localSource == nil, let provider = track.playbackProviderID,
+              let owner = module(providerID: provider) else { return .perArtist }
+        return owner.artistNavigation
     }
     func artistDestinations(for track: Track) async throws -> [PlayerArtistDestination] {
         if track.localSource != nil {

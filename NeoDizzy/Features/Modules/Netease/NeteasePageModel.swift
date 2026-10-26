@@ -125,7 +125,6 @@ final class NeteasePageModel {
                 case .artistAlbums(let id):
                     let page = try await api.artistAlbums(id, offset: start)
                     newAlbums = page.items; hasMore = page.more
-                case .similar(let id): newSongs = try await api.similarSongs(id)
                 // 搜索页按关键词加载（上面的 query 分支），不走路由。
                 case .search: break
                 }

@@ -12,22 +12,6 @@ nonisolated struct UpcomingQueueEntry: Identifiable, Hashable, Sendable {
     let song: Track
 }
 
-/// 播放器弹出层（LNPopup）只在滚动视图"没有竖向内容"时才让它的下滑触发收起；
-/// 队列很短时列表装得下，下滑就会误收起播放器。这里让它始终报告"有竖向内容"，
-/// 配合 `alwaysBounceVertical`，列表区域内的下滑只用来滚动，收起只能从顶部把手触发。
-/// 注意：类名（含外层类型名，Swift 嵌套类型的完整名字会带上外层）里不能出现 "Queu"，
-/// LNPopup 会按这个字样把它当成分页滚动视图，去调用它没有的私有方法而崩溃。所以必须放在最外层。
-final class ReorderListCollectionView: UICollectionView {
-    override var contentSize: CGSize {
-        get {
-            var size = super.contentSize
-            size.height = max(size.height, bounds.height + 1)
-            return size
-        }
-        set { super.contentSize = newValue }
-    }
-}
-
 /// 继续播放列表。用原生 `UICollectionView` 的交互式移动做拖动排序：
 /// 被拖行只能上下移动，拖起时整行（通栏）换成半透明高亮底色，和系统音乐一致。
 /// 行内容仍由 SwiftUI 渲染。SwiftUI 的 `List` 走的是拖放，没有这两项的公开接口。
@@ -50,7 +34,8 @@ struct NowPlayingQueueList: UIViewRepresentable {
         configuration.backgroundColor = .clear
         let layout = UICollectionViewCompositionalLayout.list(using: configuration)
 
-        let collectionView = ReorderListCollectionView(frame: .zero, collectionViewLayout: layout)
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        // 收起手势由播放器的显式区域接收，列表区域始终只处理滚动和排序。
         collectionView.alwaysBounceVertical = true
         collectionView.backgroundColor = .clear
         collectionView.contentInsetAdjustmentBehavior = .never
@@ -341,14 +326,66 @@ struct NowPlayingQueueList: UIViewRepresentable {
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard let latest else { return }
-            // 顶部不做橡皮筋回弹：播放器下滑收起时，LNPopup 会把滚动偏移反复拉回起点，
-            // 和列表自己的回弹来回拉扯，内容就上下抖。
+            // 保持现有顶部边界，头部滚动与吸附不额外叠加橡皮筋位移。
             let top = -scrollView.adjustedContentInset.top
             if scrollView.contentOffset.y < top {
                 scrollView.contentOffset.y = top
             }
             let offset = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
             latest.onScroll(min(max(offset, 0), latest.headerHeight))
+            // 手指按着往下拉列表时不振。
+            if let previous = previousOffset, latest.headerHeight > 0,
+               !(scrollView.isTracking && offset < previous) {
+                playSnapFeedbackIfReached(from: previous, to: offset, headerHeight: latest.headerHeight)
+            }
+            previousOffset = offset
+        }
+
+        private var previousOffset: CGFloat?
+        private let snapFeedback = UIImpactFeedbackGenerator(style: .soft)
+
+        /// 滚到两个停靠位置之一（头部完整露出、头部刚好滚出去）就振一下，
+        /// 吸附、惯性经过、手指往上推过去都算；离开后再回来才会再振。
+        private func playSnapFeedbackIfReached(from previous: CGFloat, to offset: CGFloat, headerHeight: CGFloat) {
+            for anchor in [0, headerHeight] {
+                let wasAway = abs(previous - anchor) >= 0.5
+                let reached = (previous - anchor) * (offset - anchor) <= 0
+                if wasAway && reached {
+                    snapFeedback.impactOccurred(intensity: 1)
+                    snapFeedback.prepare()
+                    return
+                }
+            }
+        }
+
+        /// 松手后不停在歌曲头部只露出一部分的位置：要么头部完整露出，要么整个滚出去（模式按钮贴顶）。
+        /// 有明显滑动方向时顺着方向吸附，否则吸到较近的一端。
+        func scrollViewWillEndDragging(
+            _ scrollView: UIScrollView,
+            withVelocity velocity: CGPoint,
+            targetContentOffset: UnsafeMutablePointer<CGPoint>
+        ) {
+            guard let headerHeight = latest?.headerHeight, headerHeight > 0 else { return }
+            let top = -scrollView.adjustedContentInset.top
+            let target = targetContentOffset.pointee.y - top
+            guard target > 0, target < headerHeight else { return }
+            // 列表太短、滚不到头部完全隐藏的位置时，只能回到顶部。
+            let maxOffset = scrollView.contentSize.height + scrollView.adjustedContentInset.bottom
+                - scrollView.bounds.height - top
+            let canHideHeader = maxOffset >= headerHeight
+            let hidesHeader: Bool
+            if velocity.y > 0.2 {
+                hidesHeader = true
+            } else if velocity.y < -0.2 {
+                hidesHeader = false
+            } else {
+                hidesHeader = target >= headerHeight / 2
+            }
+            targetContentOffset.pointee.y = top + (hidesHeader && canHideHeader ? headerHeight : 0)
+        }
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            snapFeedback.prepare()
         }
     }
 }

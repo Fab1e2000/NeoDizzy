@@ -4,6 +4,7 @@ import SwiftUI
 
 struct NowPlayingQueuePage: View {
     @Environment(PlayerStore.self) private var player
+    @Environment(\.nowPlayingLayout) private var layout
 
     let song: Track
     let presentation: NowPlayingLyricsPresentation
@@ -49,9 +50,27 @@ struct NowPlayingQueuePage: View {
                 onMove: moveQueueItems,
                 onScroll: updateSongHeaderState
             )
+            // 列表外面有渐隐遮罩，行里作者名的叠加提亮要和遮罩里的背景副本叠加。
+            .nowPlayingBackdropUnderlay(artworkURL: player.currentTrack?.coverURL)
             // 页面外层有 32pt 的水平内边距；列表自己向两侧多出同样的宽度，行内容再缩进回来。
             .mask {
-                Rectangle()
+                // Fade the last row into the live player backdrop without
+                // introducing a tinted material strip above the scrubber.
+                VStack(spacing: 0) {
+                    NowPlayingQueueTopFade(height: 24)
+                    Rectangle()
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black.opacity(0.8), location: 0.35),
+                            .init(color: .black.opacity(0.35), location: 0.7),
+                            .init(color: .clear, location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 80)
+                }
                     .padding(.horizontal, -Self.contentHorizontalInset)
                     .padding(.top, modeControlsOffset + 60)
             }
@@ -69,9 +88,11 @@ struct NowPlayingQueuePage: View {
                         usesReferenceLayout: true,
                         usesArtworkTransition: usesArtworkTransition && isSongHeaderAtRest
                     )
-                    .frame(height: songHeaderHeight)
+                    .frame(height: NowPlayingSongHeader.referenceHeight)
+                    .padding(.top, NowPlayingSongHeader.topInset)
+                    .frame(height: songHeaderHeight, alignment: .top)
                     .offset(y: -scrollOffset)
-                    .clipped()
+                    .opacity(NowPlayingSongHeader.scrollFadeOpacity(scrolled: scrollOffset))
                 }
             }
             .padding(.bottom, bottomContentInset)
@@ -99,8 +120,12 @@ struct NowPlayingQueuePage: View {
         }
     }
 
+    /// 头部占的整段高度：上方留白、头部本身、到模式按钮的间距。
     private var songHeaderHeight: CGFloat {
-        presentation == .portrait ? NowPlayingSongHeader.referenceHeight : 0
+        presentation == .portrait
+            ? NowPlayingSongHeader.topInset + NowPlayingSongHeader.referenceHeight
+                + NowPlayingSongHeader.bottomSpacing
+            : 0
     }
 
     private var modeControlsOffset: CGFloat {
@@ -108,8 +133,10 @@ struct NowPlayingQueuePage: View {
     }
 
     private var bottomContentInset: CGFloat {
+        // Leave a small gap above the progress track, halfway between the
+        // original fixed inset and the track-aligned version.
         presentation == .portrait
-            ? NowPlayingBottomControls.coreHeight
+            ? max(0, layout.contentSize.height - 3 - layout.contentY(567.25))
             : 12
     }
 
@@ -145,6 +172,25 @@ struct NowPlayingQueuePage: View {
                 toOffset: destination
             )
         }
+    }
+}
+
+/// A short transparent-to-opaque edge shared by the queue and its header.
+struct NowPlayingQueueTopFade: View {
+    let height: CGFloat
+
+    var body: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .black.opacity(0.35), location: 0.3),
+                .init(color: .black.opacity(0.8), location: 0.65),
+                .init(color: .black, location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: height)
     }
 }
 
@@ -238,9 +284,11 @@ struct NowPlayingQueueRow: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
 
+                    // 和头部作者名一样做叠加提亮（见 NowPlayingArtistButton）。
                     Text(entry.song.artists)
                         .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.58))
+                        .foregroundStyle(.white.opacity(0.46))
+                        .blendMode(.plusLighter)
                         .lineLimit(1)
                 }
 

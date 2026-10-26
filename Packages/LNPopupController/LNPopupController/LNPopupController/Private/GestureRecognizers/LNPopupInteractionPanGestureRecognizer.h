@@ -15,4 +15,6 @@
 
 - (instancetype)initWithTarget:(id)target action:(SEL)action popupController:(LNPopupController*)popupController;
 
+- (void)_recordExternalCoordinatedGesture:(UIGestureRecognizer*)gesture;
+
 @end

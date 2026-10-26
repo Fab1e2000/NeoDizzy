@@ -27,7 +27,51 @@ struct LoadFailureView: View {
     }
 }
 
-/// Content placeholders are immediate and static; progress indicators are reserved for operations.
+/// 和系统音乐一样的页面加载：内容就绪前不显示（背景和导航栏上的玻璃按钮照常显示），
+/// 就绪后用透明度淡入；超过 0.8 秒还没就绪，才在页面中间显示转圈。
+extension View {
+    func pageContentReveal(isReady: Bool) -> some View {
+        modifier(PageContentReveal(isReady: isReady))
+    }
+}
+
+private struct PageContentReveal: ViewModifier {
+    let isReady: Bool
+    @Environment(\.accessibilityReduceMotion) private var reducesMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isReady ? 1 : 0)
+            .animation(reducesMotion ? nil : .easeOut(duration: 0.35), value: isReady)
+            .allowsHitTesting(isReady)
+    }
+}
+
+/// 页面内容迟迟没就绪时才出现的转圈，快速加载时不闪。
+struct DelayedLoadingIndicator: View {
+    let isActive: Bool
+    @State private var isVisible = false
+
+    var body: some View {
+        ZStack {
+            if isActive && isVisible {
+                ProgressView().transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+        .task(id: isActive) {
+            isVisible = false
+            guard isActive else { return }
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) { isVisible = true }
+        }
+    }
+}
+
+/// 加载中的占位：只占住位置、不显示（和系统音乐一样，加载时页面上只有背景和按钮），
+/// 内容到了以后替换它。
 enum ContentSkeletonLayout {
     case grid, rows, songs, numberedSongs, comments, article, lyrics, profile, pack
 }
@@ -87,6 +131,7 @@ struct ContentSkeleton: View {
                 }.frame(maxWidth: .infinity)
             }
         }
+        .hidden()
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("正在加载内容")
@@ -209,21 +254,28 @@ struct LoadableContent<Value, Content: View>: View {
     var skeletonIsPage = false
     @ViewBuilder let content: (Value) -> Content
 
+    @Environment(\.accessibilityReduceMotion) private var reducesMotion
+
     var body: some View {
         Group {
             if let value = state.value {
                 content(value)
+                    .transition(.opacity)
             } else if let failure = state.failure {
                 LoadFailureView(message: failure) { await state.load() }
+                    .transition(.opacity)
             } else {
                 if skeletonIsPage {
-                    ScrollView { ContentSkeleton(layout: skeleton).padding(20) }
+                    DelayedLoadingIndicator(isActive: true)
                 } else {
                     ContentSkeleton(layout: skeleton)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // 内容到了以后淡入。
+        .animation(reducesMotion ? nil : .easeOut(duration: 0.35), value: state.value != nil)
+        .animation(reducesMotion ? nil : .easeOut(duration: 0.35), value: state.failure)
         .task { await state.loadIfNeeded() }
     }
 }

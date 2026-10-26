@@ -13,7 +13,7 @@
 
 - (CGRect)sourceFrame
 {
-	return [self.popupBar.imageView.window convertRect:self.popupBar.imageView.bounds fromView:self.popupBar.imageView];
+	return self.barArtworkFrameInWindow;
 }
 
 - (CGRect)targetFrame
@@ -43,7 +43,7 @@
 
 - (CGRect)sourceContentFrame
 {
-	return [self.popupContentView.superview convertRect:self.popupBar.contentView.bounds fromView:self.popupBar.contentView];
+	return self.barContentFrame;
 }
 
 - (CGRect)targetContentFrame
@@ -53,7 +53,7 @@
 
 - (LNPopupViewCorners)sourceContentCornerRadius
 {
-	return self.popupBar.contentView.effectView.corners;
+	return self.barContentCorners;
 }
 
 - (LNPopupViewCorners)targetContentCornerRadius
@@ -80,13 +80,13 @@
 
 - (CGFloat)scaledBarImageViewCornerRadius
 {
-	return self.popupBar.imageView.cornerRadius * self.targetFrame.size.width / self.popupBar.imageView.bounds.size.width;
+	return self.barArtworkCornerRadius * self.targetFrame.size.width / MAX(self.barArtworkView.bounds.size.width, 1.0);
 }
 
 - (NSShadow *)scaledBarImageViewShadow
 {
-	NSShadow* scaled = self.popupBar.imageView.shadow.copy;
-	scaled.shadowBlurRadius = scaled.shadowBlurRadius * self.targetFrame.size.width / self.popupBar.imageView.bounds.size.width;
+	NSShadow* scaled = self.barArtworkShadow.copy;
+	scaled.shadowBlurRadius = scaled.shadowBlurRadius * self.targetFrame.size.width / MAX(self.barArtworkView.bounds.size.width, 1.0);
 	return scaled;
 }
 
@@ -100,7 +100,7 @@
 	[super beforeAnyAnimation];
 	
 	self.crossfadeView.alpha = 1.0;
-	self.crossfadeView.cornerRadius = self.popupBar.imageView.cornerRadius;
+	self.crossfadeView.cornerRadius = self.barArtworkCornerRadius;
 }
 
 - (void)performBeforeAdditionalAnimations
@@ -119,6 +119,11 @@
 	self.crossfadeView.cornerRadius = self.transitionView.cornerRadius;
 	
 	self.contentViewTransitionView.alpha = self.targetContentAlpha;
+	if(self.accessoryTransitionEffectView != nil)
+	{
+		self.contentTransitionEffectView.effect = self.popupContentView._currentEffect;
+		self.accessoryTransitionEffectView.effect = nil;
+	}
 }
 
 - (void)performAdditional01Animations

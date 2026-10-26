@@ -200,6 +200,18 @@ NS_SWIFT_UI_ACTOR
 /// This property is KVO-compliant.
 @property (nonatomic, readonly) LNPopupPresentationState popupPresentationState;
 
+/// Whether an interactive drag or an animated transition is in progress. (read-only)
+///
+/// Includes settling back to the current presentation state after a cancelled drag.
+/// Hosts must not overwrite popup geometry while this property is `true`.
+@property (nonatomic, readonly) BOOL popupTransitionInProgress;
+
+/// Whether the external-source popup can begin a new interactive drag. (read-only)
+///
+/// Includes an open popup and an interruptible opening or return animation.
+/// Closing animations and an already active drag cannot begin another interaction.
+@property (nonatomic, readonly) BOOL popupInteractionCanBegin;
+
 /// The delegate that handles popup presentation-related messages.
 @property (nonatomic, weak) id<LNPopupPresentationDelegate> popupPresentationDelegate;
 

@@ -45,6 +45,7 @@ extern BOOL __LNEnableSlowTransitionsDebug(void);
 @property (nonatomic) LNPopupPresentationState popupControllerTargetState;
 
 @property (nonatomic, readonly) BOOL stateAllowsLayout;
+@property (nonatomic, readonly) BOOL popupInteractionCanBegin;
 
 @property (nonatomic, weak) id<LNPopupPresentationDelegate> userPopupPresentationDelegate;
 

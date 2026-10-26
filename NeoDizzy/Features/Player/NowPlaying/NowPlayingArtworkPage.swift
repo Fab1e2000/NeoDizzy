@@ -116,19 +116,26 @@ struct NowPlayingArtworkPage: View {
                 }
                 .position(x: proxy.size.width / 2, y: layout.pageY(112) + artworkSize / 2)
 
-                Text(song.title)
-                    .font(.system(size: 20, weight: .semibold))
-                    .tracking(0)
-                    .foregroundStyle(.white.opacity(0.98))
-                    .lineLimit(1)
-                    .frame(width: layout.width(227), height: 27, alignment: .leading)
-                    .position(x: layout.x(145.5), y: layout.pageY(503.5))
+                // 左右滑动歌名切到上一首/下一首；相邻歌名在歌名这一栏的宽度之外淡入。
+                NowPlayingTrackSwipe(song: song, pageDistance: layout.width(227) + 24) { track, interactive in
+                    ZStack {
+                        // 放不下时滚动显示（相邻曲目的预览不滚）。
+                        NowPlayingMarqueeText(text: track.title, isActive: interactive)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.98))
+                            .lineLimit(1)
+                            .frame(width: layout.width(227), height: 27, alignment: .leading)
+                            .contentShape(.rect)
+                            .position(x: layout.x(145.5), y: layout.pageY(503.5))
 
-                NowPlayingArtistButton(track: song)
-                    .font(.system(size: 20))
-                    .foregroundStyle(.white.opacity(0.64))
-                    .frame(width: layout.width(215), height: 26, alignment: .leading)
-                    .position(x: layout.x(139.5), y: layout.pageY(528.5))
+                        NowPlayingArtistButton(track: track, interactive: interactive)
+                            .font(.system(size: 20))
+                            .lineLimit(1)
+                            .frame(width: layout.width(215), height: 26, alignment: .leading)
+                            .position(x: layout.x(139.5), y: layout.pageY(528.5))
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                }
 
                 NowPlayingSongActions(track: song)
                     .fixedSize()

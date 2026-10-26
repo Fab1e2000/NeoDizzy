@@ -160,11 +160,15 @@ extension AlbumPlaybackActions where Accessory == EmptyView {
 /// 封面平均色混入白色，叠加低透明度模糊封面，始终使用浅色背景。
 struct AlbumDetailScrollView<Content: View>: View {
     let artworkURL: URL?
+    /// 内容是否已就绪。没就绪时只显示背景和导航栏按钮，就绪后内容淡入（见 pageContentReveal）。
+    var isContentReady = true
     @ViewBuilder var content: Content
     @State private var appearance: AlbumBackdropModel
+    @Environment(\.accessibilityReduceMotion) private var reducesMotion
 
-    init(artworkURL: URL?, @ViewBuilder content: () -> Content) {
+    init(artworkURL: URL?, isContentReady: Bool = true, @ViewBuilder content: () -> Content) {
         self.artworkURL = artworkURL
+        self.isContentReady = isContentReady
         self.content = content()
         // 从缓存里取到时第一帧就是封面色，推入页面不闪底色。
         _appearance = State(initialValue: AlbumBackdropModel(url: artworkURL))
@@ -176,10 +180,14 @@ struct AlbumDetailScrollView<Content: View>: View {
     var body: some View {
         ZStack {
             AlbumArtworkBackground(backdrop: backdrop)
-            ScrollView { content }
+                // 背景色没能在第一帧确定时（封面还没取到），到了以后平滑过渡，不跳变。
+                .animation(reducesMotion ? nil : .easeInOut(duration: 0.5), value: backdrop)
+            ScrollView { content.pageContentReveal(isReady: isContentReady) }
                 .scrollIndicators(.hidden)
                 .tint(.primary)
+            DelayedLoadingIndicator(isActive: !isContentReady)
         }
+
         .environment(\.colorScheme, colorScheme)
         .environment(\.albumBackdrop, backdrop)
         // 专辑及其表单统一使用浅色，操作按钮保持中性色。
@@ -207,10 +215,8 @@ final class AlbumBackdropModel {
         guard !Task.isCancelled, let loaded,
               backdrop?.alreadyDisplays(loaded) != true else { return }
         // Prepared navigation already has the final background on its first frame.
-        // Unknown artwork (e.g. recent songs) is applied as soon as it becomes available.
-        var transaction = Transaction(animation: nil)
-        transaction.disablesAnimations = true
-        withTransaction(transaction) { backdrop = loaded }
+        // Colors that arrive later cross-fade in AlbumDetailScrollView instead of jumping.
+        backdrop = loaded
     }
 }
 
@@ -250,6 +256,8 @@ private struct AlbumArtworkBackground: View {
                             .resizable().scaledToFill()
                             .frame(width: proxy.size.width, height: proxy.size.height)
                             .opacity(0.10)
+                            // 换成另一张封面时新旧图交叉淡入。
+                            .id(ObjectIdentifier(backdrop))
                             .transition(.opacity)
                     }
                 } else {
@@ -394,13 +402,8 @@ extension AlbumArtworkPreload {
         request.priority = .low
         _ = try? await ImagePipeline.shared.image(for: request)
         _ = await backdrop
-        guard !Task.isCancelled else { return }
-        // Match ArtworkImage's common phone-grid and avatar decode buckets too.
-        request.thumbnail = .init(size: CGSize(width: 256, height: 256), contentMode: .aspectFill)
-        _ = try? await ImagePipeline.shared.image(for: request)
-        guard !Task.isCancelled else { return }
-        request.thumbnail = .init(size: CGSize(width: 128, height: 128), contentMode: .aspectFit)
-        _ = try? await ImagePipeline.shared.image(for: request)
+        // Visible cards request their actual pixel size. Pre-decoding two unrelated
+        // card/avatar variants here retains extra bitmaps for every browsed album.
     }
 
     /// Only warm the first screen; visible cards continue prefetching as the user scrolls.

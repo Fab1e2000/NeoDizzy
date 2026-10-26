@@ -14,14 +14,13 @@ struct NeteasePlayerActions: View {
     @State private var albumNavigation = AlbumNavigationPreparation()
     var body: some View {
         HStack(spacing: 4.25) {
-            if let id = (track.remoteSource?.itemID).flatMap(Int.init) {
+            if (track.remoteSource?.itemID).flatMap(Int.init) != nil {
                 FavoriteButton(track: track, playerStyle: true)
                 NowPlayingMenuButton(track: track) {
                     var items: [UIMenuElement] = [
                         UIAction(title: "加入歌单", image: UIImage(systemName: "text.badge.plus")) { _ in
                             showsPicker = true
-                        },
-                        UIAction(title: "相似歌曲", image: UIImage(systemName: "music.note.list")) { _ in openRoute(.netease(.similar(id))) }
+                        }
                     ]
                     if let albumID = Int(track.discID), albumID > 0 {
                         items.append(UIAction(title: "前往专辑", image: UIImage(systemName: "square.stack")) { _ in

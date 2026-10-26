@@ -44,48 +44,55 @@ import MediaPlayer
         await #expect(throws: CancellationError.self) { try await request.value }
     }
 
-    @Test func creatingMoreMenuDoesNotLoadArtistsUntilRequested() async throws {
+    @Test func artistMenuUsesLocalNamesWithoutLoading() throws {
         let owner = ArtistFixtureModule("provider")
         let registry = try ModuleRegistry([owner])
-        let route = AppRoute(moduleID: owner.descriptor.id, destination: "artist", title: "Artist")
-        owner.resolve = { [.init(name: "Artist", route: route)] }
         let menu = PlayerArtistMenuController()
-        menu.bind(track: track(provider: "provider"), modules: registry, open: { _ in })
-        let action = try #require(menu.action(for: UIButton()))
-        #expect(action.attributes.contains(.keepsMenuPresented))
-        _ = menu.menu()
+        var opened: [AppRoute] = []
+        menu.bind(track: track(provider: "provider", artists: "First / Second"), modules: registry, open: { opened.append($0) })
+        let items = try #require(menu.menu()).children
+        #expect(items.map(\.title) == ["前往First", "前往Second"])
+        let more = try #require(menu.action(for: UIButton()) as? UIMenu)
+        #expect(more.children.count == 2)
+        #expect(menu.destinations().map(\.route.moduleID) == [.inlinePage, .inlinePage])
         #expect(owner.requests == 0)
-        let items: [UIMenuElement] = await withCheckedContinuation { continuation in
-            menu.load { continuation.resume(returning: $0) }
-        }
-        #expect(owner.requests == 1)
-        #expect(items.count == 1 && items.first?.title == "前往Artist")
+        #expect(opened.isEmpty)
     }
 
-    @Test func artistMenuShowsFailureInPlaceAndRejectsOldTrackResults() async throws {
+    @Test func singleArtistOpensDirectlyAndLocalTracksUseLibrary() throws {
+        let registry = try ModuleRegistry([ArtistFixtureModule("provider")])
+        let menu = PlayerArtistMenuController()
+        var opened: [AppRoute] = []
+        menu.bind(track: track(provider: "provider"), modules: registry, open: { opened.append($0) })
+        #expect(menu.menu() == nil)
+        #expect(menu.action(for: UIButton()) is UIAction)
+        menu.openSingle()
+        #expect(opened.map(\.title) == ["Artist"])
+        let local = Track(discID: "", number: "1", title: "Song", artists: "Local Artist", albumTitle: "", coverURL: nil,
+                          localSource: .init(albumID: "local", trackID: "one"))
+        menu.bind(track: local, modules: registry, open: { opened.append($0) })
+        #expect(menu.destinations().first?.route == .libraryArtist("Local Artist", filter: .all))
+    }
+
+    @Test func singleDestinationSourceSkipsTheArtistSplit() throws {
         let owner = ArtistFixtureModule("provider")
+        owner.artistNavigation = .single
         let registry = try ModuleRegistry([owner])
         let menu = PlayerArtistMenuController()
-        menu.bind(track: track(provider: "provider"), modules: registry, open: { _ in })
-        owner.resolve = { throw ArtistFixtureError.unavailable }
-        let failure: [UIMenuElement] = await withCheckedContinuation { continuation in
-            menu.load { continuation.resume(returning: $0) }
-        }
-        #expect((failure.first as? UIAction)?.attributes.contains(.disabled) == true)
-        var resume: CheckedContinuation<Void, Never>?
-        owner.resolve = {
-            await withCheckedContinuation { resume = $0 }
-            return [.init(name: "Old", route: .libraryArtist("Old", filter: .all))]
-        }
-        let result = Task { @MainActor in
-            await withCheckedContinuation { (continuation: CheckedContinuation<[UIMenuElement], Never>) in
-                menu.load { continuation.resume(returning: $0) }
-            }
-        }
-        while resume == nil { await Task.yield() }
-        menu.bind(track: nil, modules: registry, open: { _ in })
-        resume?.resume()
-        #expect(await result.value.isEmpty)
+        menu.bind(track: track(provider: "provider", artists: "First / Second"), modules: registry, open: { _ in })
+        #expect(menu.destinations().map(\.name) == ["First / Second"])
+        #expect(menu.menu() == nil)
+        #expect(owner.requests == 0)
+    }
+
+    @Test func artistPageMatchesByNameThenPositionThenSingleResult() {
+        let a = AppRoute(moduleID: ModuleID(rawValue: "p"), destination: "a", title: "A")
+        let b = AppRoute(moduleID: ModuleID(rawValue: "p"), destination: "b", title: "B")
+        let both = [PlayerArtistDestination(name: "Alpha", route: a), PlayerArtistDestination(name: "Beta", route: b)]
+        #expect(PlayerArtistPage.match(name: " beta ", index: 0, count: 2, in: both) == b)
+        #expect(PlayerArtistPage.match(name: "Other", index: 1, count: 2, in: both) == b)
+        #expect(PlayerArtistPage.match(name: "Other", index: 0, count: 3, in: [both[0]]) == a)
+        #expect(PlayerArtistPage.match(name: "Other", index: 0, count: 3, in: both) == nil)
     }
 
     @Test func nativeArtistMenuDoesNotExpandTheQueueHeaderVertically() {
@@ -111,8 +118,8 @@ import MediaPlayer
         }
     }
 
-    private func track(provider: String) -> Track {
-        Track(discID: "album", number: "1", title: "Song", artists: "Artist", albumTitle: "Album", coverURL: nil,
+    private func track(provider: String, artists: String = "Artist") -> Track {
+        Track(discID: "album", number: "1", title: "Song", artists: artists, albumTitle: "Album", coverURL: nil,
               remoteSource: .init(providerID: provider, itemID: "song"))
     }
 }
@@ -122,6 +129,7 @@ private enum ArtistFixtureError: Error { case unavailable }
     let descriptor: ModuleDescriptor
     var requests = 0
     var resolve: () async throws -> [PlayerArtistDestination] = { [] }
+    var artistNavigation = PlayerArtistNavigation.perArtist
     init(_ id: String) { descriptor = .init(id: ModuleID(rawValue: id), title: id, systemImage: "music.note") }
     func rootView() -> AnyView { AnyView(EmptyView()) }
     func destination(for route: AppRoute) -> AnyView? { nil }

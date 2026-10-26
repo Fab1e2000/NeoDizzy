@@ -1,10 +1,104 @@
 import Foundation
+import Observation
 import SwiftUI
+import Synchronization
 import UIKit
 import Testing
 @testable import NeoDizzy
 
 @Suite(.serialized) @MainActor struct NowPlayingPortTests {
+    @Test(arguments: [NowPlayingPage.artwork, .queue])
+    func popupMotionDoesNotInvalidatePlayerContentGeometry(page: NowPlayingPage) async throws {
+        let name = "PlayerGeometryTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let tracks = (0..<8).map {
+            Track(discID: "", number: "\($0)", title: "几何测试 \($0)", artists: "测试艺术家",
+                  albumTitle: "专辑", coverURL: nil,
+                  localSource: .init(albumID: "test", trackID: "\($0)"))
+        }
+        let persistence = PlaybackPersistence(defaults: defaults)
+        persistence.save(.init(queue: tracks, currentIndex: 0, progress: 0,
+                               repeatMode: .off, isShuffled: false, shuffledOrder: []))
+        let player = PlayerStore(persistence: persistence)
+        player.restore()
+        let library = OfflineLibraryStore(defaults: defaults)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let favorites = FavoritesStore(directory: directory)
+        let modules = try ModuleRegistry([LocalLibraryModule(library: library)])
+        let geometry = NowPlayingGeometry()
+        let hosting = UIHostingController(rootView: NowPlayingView(initialPage: page, geometry: geometry)
+            .environment(player).environment(library).environment(favorites).environment(modules))
+        // Isolate presentation movement from actual safe-area/layout changes.
+        hosting.safeAreaRegions = []
+        let parent = UIViewController()
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = parent
+        window.makeKeyAndVisible()
+        parent.addChild(hosting)
+        hosting.view.frame = parent.view.bounds
+        parent.view.addSubview(hosting.view)
+        hosting.didMove(toParent: parent)
+        defer {
+            hosting.willMove(toParent: nil)
+            hosting.view.removeFromSuperview()
+            hosting.removeFromParent()
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+
+        func waitUntil(_ condition: () -> Bool) async throws {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while !condition(), ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            #expect(condition())
+        }
+        try await waitUntil { geometry.contentSize.width > 0 && geometry.backdropFrame.width > 0 }
+        try await Task.sleep(for: .milliseconds(150))
+        let initialContent = geometry.contentFrame
+        let initialBackdrop = geometry.backdropFrame
+        let initialCenter = hosting.view.center
+        let initialScreenFrame = hosting.view.convert(hosting.view.bounds, to: window)
+        let changes = Mutex(0)
+        withObservationTracking {
+            _ = geometry.contentFrame
+            _ = geometry.backdropFrame
+        } onChange: {
+            changes.withLock { $0 += 1 }
+        }
+
+        // LN moves and gathers the UIKit content host during an interactive close.
+        // Screen geometry must change without publishing that motion into SwiftUI.
+        for (translation, scale): (CGFloat, CGFloat) in [(24, 1), (80, 0.97), (140, 0.92), (60, 0.98), (0, 1)] {
+            hosting.view.center = CGPoint(x: initialCenter.x, y: initialCenter.y + translation)
+            hosting.view.transform = CGAffineTransform(scaleX: scale, y: scale)
+            window.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(60))
+            let screenFrame = hosting.view.convert(hosting.view.bounds, to: window)
+            #expect(abs(screenFrame.midY - initialScreenFrame.midY - translation) < 1)
+            #expect(abs(screenFrame.width - initialScreenFrame.width * scale) < 1)
+            if translation != 0 { #expect(screenFrame != initialScreenFrame) }
+            #expect(geometry.contentFrame == initialContent)
+            #expect(geometry.backdropFrame == initialBackdrop)
+            #expect(changes.withLock { $0 } == 0)
+        }
+
+        // Genuine bounds changes still invalidate layout; this must not become a
+        // frozen one-time measurement just to suppress dismissal updates.
+        let resized = CGSize(width: hosting.view.bounds.width - 24, height: hosting.view.bounds.height - 96)
+        hosting.view.frame = CGRect(origin: .zero, size: resized)
+        hosting.view.setNeedsLayout()
+        hosting.view.layoutIfNeeded()
+        try await waitUntil {
+            geometry.contentSize == resized && geometry.backdropFrame.size != initialBackdrop.size
+        }
+        #expect(geometry.contentFrame.origin == .zero)
+        #expect(changes.withLock { $0 } > 0)
+    }
+
     @Test func slowQueueScrollKeepsViewportAndContentStableAcrossHeaderBoundary() async throws {
         let name = "QueueScrollTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))

@@ -65,17 +65,25 @@ struct NowPlayingTransportControls: View {
 
     @Environment(\.nowPlayingLayout) private var layout
 
+    @State private var showsLoadingIndicator = false
+    /// 每点一次上一首/下一首加一，触发图标的推进动画。
+    @State private var previousTrigger = 0
+    @State private var nextTrigger = 0
+
     var body: some View {
         GeometryReader { proxy in
             ZStack {
 
             Button {
+                previousTrigger += 1
                 player.previous()
             } label: {
-                Image(systemName: "backward.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 40.67, height: 27.39)
+                NowPlayingSkipIcon(
+                    direction: .backward,
+                    trigger: previousTrigger,
+                    reducesMotion: accessibilityReduceMotion
+                )
+                .frame(width: 40.67, height: 27.39)
                     .frame(width: 64, height: 64)
                     .contentShape(.circle)
             }
@@ -90,38 +98,39 @@ struct NowPlayingTransportControls: View {
             Button {
                 player.togglePlayback()
             } label: {
-                Group {
-                    if player.isLoading {
+                ZStack {
+                    NowPlayingPlayPauseIcon(
+                        isPlaying: player.isPlaying,
+                        reducesMotion: accessibilityReduceMotion
+                    )
+                    .frame(width: 32, height: 40)
+                    .opacity(showsLoadingIndicator ? 0 : 1)
+                    .scaleEffect(showsLoadingIndicator ? 0.6 : 1)
+
+                    if showsLoadingIndicator {
                         ProgressView()
                             .controlSize(.large)
                             .tint(.white)
-                    } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 32, height: 40)
-                            .contentTransition(
-                                accessibilityReduceMotion
-                                    ? .identity
-                                    : .symbolEffect(
-                                        .replace.downUp.wholeSymbol,
-                                        options: .speed(1.6)
-                                    )
-                            )
-                            .animation(
-                                accessibilityReduceMotion
-                                    ? nil
-                                    : .snappy(duration: 0.2, extraBounce: 0),
-                                value: player.isPlaying
-                            )
+                            .transition(.opacity)
                     }
                 }
                 .frame(width: 64, height: 64)
+                // 加载很快结束时不闪转圈：持续 0.3 秒以上才换成转圈。
+                .task(id: player.isLoading) {
+                    if player.isLoading {
+                        try? await Task.sleep(for: .milliseconds(300))
+                        guard !Task.isCancelled else { return }
+                    }
+                    withAnimation(accessibilityReduceMotion ? nil : .smooth(duration: 0.2)) {
+                        showsLoadingIndicator = player.isLoading
+                    }
+                }
                 .contentShape(.circle)
             }
             .buttonStyle(
                 NowPlayingTransportButtonStyle(
-                    reducesMotion: accessibilityReduceMotion
+                    reducesMotion: accessibilityReduceMotion,
+                    springsBack: true
                 )
             )
             .accessibilityLabel(
@@ -132,12 +141,15 @@ struct NowPlayingTransportControls: View {
             .position(x: proxy.size.width / 2, y: 41)
 
             Button {
+                nextTrigger += 1
                 player.next()
             } label: {
-                Image(systemName: "forward.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 40.67, height: 27.39)
+                NowPlayingSkipIcon(
+                    direction: .forward,
+                    trigger: nextTrigger,
+                    reducesMotion: accessibilityReduceMotion
+                )
+                .frame(width: 40.67, height: 27.39)
                     .frame(width: 64, height: 64)
                     .contentShape(.circle)
             }
