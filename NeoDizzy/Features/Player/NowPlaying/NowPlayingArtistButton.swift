@@ -48,7 +48,7 @@ struct NowPlayingVibrantLabel: View {
                     if let image, let backdropAnchor {
                         NowPlayingAlignedBackdrop(image: image, anchor: backdropAnchor,
                                                   animated: !reduceMotion)
-                            .brightness(0.45)
+                            .brightness(0.65)
                     }
                 }
                 .clipped()

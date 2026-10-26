@@ -89,7 +89,12 @@ import UIKit
         // Exercise LN's public inline trait, the same signal sent by tab minimization.
         let content = try #require(container.popupContent)
         content.traitOverrides[LNPopupBar.EnvironmentTrait.self] = .inline
-        try await waitUntil { titlePan(in: container.popupBar) != nil }
+        // The recognizer already exists before the trait update. Wait for the
+        // compact layout itself, rather than recording the previous regular height.
+        try await waitUntil {
+            guard let view = titlePan(in: container.popupBar)?.view else { return false }
+            return view.bounds.height > 0 && view.bounds.height <= 20
+        }
         let compactPan = try #require(titlePan(in: container.popupBar))
         let titleView = try #require(compactPan.view)
         let compactHeight = titleView.bounds.height
@@ -113,6 +118,8 @@ import UIKit
         // Native closure (also used by the drag interaction) must update SwiftUI and routing callback.
         container.closePopup(animated: false)
         try await waitUntil { !state.isPresented && state.closeCount == 1 }
+        #expect(!state.isPresented)
+        #expect(state.closeCount == 1)
         #expect(container.popupPresentationState == .barPresented)
         #expect(container.popupBar.overrideUserInterfaceStyle == .dark)
 
@@ -150,12 +157,12 @@ import UIKit
         if let data = image.pngData() { Attachment.record(data, named: name) }
     }
 
-    private func waitUntil(_ condition: () -> Bool) async throws {
+    private func waitUntil(line: Int = #line, _ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
         while !condition(), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(50))
         }
-        #expect(condition())
+        #expect(condition(), "Timed out waiting at line \(line)")
     }
 }
 

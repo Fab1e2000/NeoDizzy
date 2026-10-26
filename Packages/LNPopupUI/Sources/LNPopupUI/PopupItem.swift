@@ -45,6 +45,14 @@ struct PopupItemImage: PopupItemImageType {
 	}
 }
 
+/// Custom artwork hosted in the existing popup image slot, retaining its own transitions.
+@MainActor public struct PopupItemViewImage: PopupItemImageType {
+    let content: AnyView
+    public init<Content: View>(@ViewBuilder content: () -> Content) {
+        self.content = AnyView(content().aspectRatio(1, contentMode: .fit))
+    }
+}
+
 // MARK: - Popup Item
 
 /// A model that represents an item which can be displayed in a popup bar.

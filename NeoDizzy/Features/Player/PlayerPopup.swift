@@ -10,11 +10,11 @@ struct PlayerPopup: ViewModifier {
     let colorScheme: ColorScheme
     let onClose: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reducesMotion
     @Environment(PlayerStore.self) private var player
     @AppStorage(ImmersiveMode.storageKey) private var isImmersive = false
     @State private var isBarPresented = false
     @State private var artwork: UIImage?
-    @State private var loadedArtworkURL: URL?
     @State private var compactControls = false
     @State private var appearance = PlayerPopupAppearance()
 
@@ -47,29 +47,30 @@ struct PlayerPopup: ViewModifier {
                 isBarPresented = visible
             }
             .task(id: player.currentTrack?.coverURL) {
-                artwork = nil
-                loadedArtworkURL = nil
                 guard let url = player.currentTrack?.coverURL else { return }
                 var request = ImageRequest(url: url)
                 request.thumbnail = .init(size: CGSize(width: 160, height: 160), unit: .pixels,
                                           contentMode: .aspectFill)
                 let image = try? await ImagePipeline.shared.image(for: request)
                 guard !Task.isCancelled else { return }
-                artwork = image
-                loadedArtworkURL = url
+                if let image { artwork = image }
             }
     }
 
-    private var barImage: Image {
-        if loadedArtworkURL == player.currentTrack?.coverURL, let artwork {
-            return Image(uiImage: artwork)
+    private var barImage: PopupItemViewImage {
+        PopupItemViewImage {
+            if let artwork {
+                NowPlayingBackdropImage(image: artwork, animated: !reducesMotion)
+            } else {
+                Color.clear
+            }
         }
-        return Image(systemName: "music.note")
     }
+
 }
 
 private struct PlayerPopupContent: View {
-    let barImage: Image
+    let barImage: PopupItemViewImage
     let compact: Bool
     let colorScheme: ColorScheme
     let onDismiss: () -> Void
@@ -83,7 +84,9 @@ private struct PlayerPopupContent: View {
                 NowPlayingView(onDismiss: onDismiss)
                     .popupItem {
                         PopupItem(id: track.id, image: barImage, title: {
-                            NowPlayingTrackSwipe(song: track, usesUIKitTouchSurface: true) { song, interactive in
+                            MiniPlayerTitlePager(height: isCompact ? 18 : 36, song: track, currentIndex: player.currentQueueIndex,
+                                                 previous: player.previousInOrder, next: player.nextInOrder,
+                                                 select: player.skip(toQueueIndex:)) { song, interactive in
                                 VStack(alignment: .leading, spacing: 2) {
                                     NowPlayingMarqueeText(text: song.title, isActive: interactive && !isCompact)
                                         .font(.system(size: 15, weight: .medium))
@@ -97,6 +100,7 @@ private struct PlayerPopupContent: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(.rect)
                             }
+                            .frame(height: isCompact ? 18 : 36)
                             .clipped()
                             .environment(player)
                             .environment(\.colorScheme, colorScheme)

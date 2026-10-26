@@ -38,6 +38,7 @@ struct NowPlayingTrackSwipe<Content: View>: View {
                 neighbor(next.track, at: offset + distance, distance: distance)
             }
         }
+        .modifier(TrackSwipeEdgeFade(displacement: offset, pageDistance: distance, width: measuredWidth))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measuredWidth = $0 }
         .modifier(TrackSwipeGestureModifier(
             usesUIKitTouchSurface: usesUIKitTouchSurface,
@@ -100,7 +101,7 @@ struct NowPlayingTrackSwipe<Content: View>: View {
         }
 
         isCommitting = true
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        TrackSwipeFeedback.selection()
         let commit = {
             player.skip(toQueueIndex: target.entry.index)
             // 新的当前曲目就是刚滑过来的那一首，瞬间归位看不出跳动。
@@ -207,5 +208,34 @@ private struct TrackSwipeTouchSurface: UIViewRepresentable {
         let directionDelegate = NowPlayingHorizontalPan.Coordinator()
         init(pan: NowPlayingHorizontalPan) { self.pan = pan }
         @objc func handle(_ gesture: UIPanGestureRecognizer) { pan.handle(gesture) }
+    }
+}
+
+/// Both player surfaces use the same generator lifecycle and unmodified soft impact.
+@MainActor enum TrackSwipeFeedback {
+    static func selection() { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
+}
+
+private struct TrackSwipeEdgeFade: ViewModifier, Animatable {
+    var displacement: CGFloat
+    let pageDistance: CGFloat
+    let width: CGFloat
+    var animatableData: CGFloat {
+        get { displacement }
+        set { displacement = newValue }
+    }
+    func body(content: Content) -> some View {
+        let safeWidth = max(width, 1)
+        let fadeWidth = min(CGFloat(10), safeWidth / 4)
+        let travel = abs(displacement - (displacement / pageDistance).rounded() * pageDistance)
+        let edgeOpacity = 1 - min(travel / fadeWidth, 1)
+        content.mask {
+            LinearGradient(stops: [
+                .init(color: .black.opacity(edgeOpacity), location: 0),
+                .init(color: .black, location: fadeWidth / safeWidth),
+                .init(color: .black, location: 1 - fadeWidth / safeWidth),
+                .init(color: .black.opacity(edgeOpacity), location: 1)
+            ], startPoint: .leading, endPoint: .trailing)
+        }
     }
 }

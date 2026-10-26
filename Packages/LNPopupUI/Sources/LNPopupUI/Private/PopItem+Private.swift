@@ -138,7 +138,11 @@ extension PopupItem {
 		} else {
 			imageData = nil
 		}
-		createOrUpdateImageAdapter(in: popupItem, for: imageData)
+        if let custom = image as? PopupItemViewImage {
+            createOrUpdateCustomImageAdapter(in: popupItem, content: custom.content)
+        } else {
+            createOrUpdateImageAdapter(in: popupItem, for: imageData)
+        }
 
 		buttonContainer.update(popupItem, for: popupBar)
 

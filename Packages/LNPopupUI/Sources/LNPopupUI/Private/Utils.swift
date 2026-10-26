@@ -237,3 +237,17 @@ struct EquatableEmptyView: View, Equatable {
 		EmptyView()
 	}
 }
+
+@MainActor internal func createOrUpdateCustomImageAdapter(in popupItem: LNPopupItem, content: AnyView) {
+    if let adapter = popupItem.value(forKey: "swiftuiImageController") as? LNPopupBarImageAdapter {
+        adapter.rootView = content
+        adapter.contentMode = .fit
+        adapter.aspectRatio = 1
+    } else {
+        let adapter = LNPopupBarImageAdapter(rootView: content)
+        adapter.contentMode = .fit
+        adapter.aspectRatio = 1
+        if #available(iOS 16.4, *) { adapter.safeAreaRegions = [] }
+        popupItem.setValue(adapter, forKey: "swiftuiImageController")
+    }
+}
