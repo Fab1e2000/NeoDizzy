@@ -17,6 +17,7 @@ struct NowPlayingView: View {
     @State private var isQueueSongHeaderHidden = false
     @State private var queueSongHeaderOffset: CGFloat = 0
     @State private var geometryState: NowPlayingGeometry
+    @State private var backdropAnchor = NowPlayingBackdropAnchor()
     @State private var backdropImage: UIImage?
     @State private var artworkPageFrame = CGRect.zero
     @State private var preparedLyricsSongID: Track.ID?
@@ -42,7 +43,8 @@ struct NowPlayingView: View {
                 NowPlayingArtworkBackdrop(
                     artworkURL: player.currentTrack?.coverURL,
                     onFrameChange: { geometryState.backdropFrame = $0 },
-                    onImageChange: { backdropImage = $0 }
+                    onImageChange: { backdropImage = $0 },
+                    anchor: backdropAnchor
                 )
                 // iPhone 只支持竖屏（见 project.yml 的 UISupportedInterfaceOrientations），不保留横屏布局。
                 if let song = player.currentTrack {
@@ -52,7 +54,7 @@ struct NowPlayingView: View {
                 }
             }
             .environment(\.nowPlayingLayout, layout)
-            .environment(\.nowPlayingBackdropFrame, geometryState.backdropFrame)
+            .environment(\.nowPlayingBackdropAnchor, backdropAnchor)
             .environment(\.nowPlayingBackdropImage, backdropImage)
         }
         .coordinateSpace(.named(NowPlayingContentCoordinateSpace.name))

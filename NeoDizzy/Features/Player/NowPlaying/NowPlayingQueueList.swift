@@ -17,7 +17,7 @@ nonisolated struct UpcomingQueueEntry: Identifiable, Hashable, Sendable {
 /// 行内容仍由 SwiftUI 渲染。SwiftUI 的 `List` 走的是拖放，没有这两项的公开接口。
 struct NowPlayingQueueList: UIViewRepresentable {
     @Environment(\.nowPlayingBackdropImage) private var backdropImage
-    @Environment(\.nowPlayingBackdropFrame) private var backdropFrame
+    @Environment(\.nowPlayingBackdropAnchor) private var backdropAnchor
     let entries: [UpcomingQueueEntry]
     var subtitle: String = "接下来播放的歌曲"
     /// 顶部给歌曲头部和模式按钮预留的高度，头部叠在上层，随列表滚动。
@@ -160,12 +160,14 @@ struct NowPlayingQueueList: UIViewRepresentable {
                 || previousList.headerHeight != list.headerHeight
                 || previousList.horizontalInset != list.horizontalInset
                 || previousList.backdropImage !== list.backdropImage
-                || previousList.backdropFrame != list.backdropFrame {
+                || previousList.backdropAnchor !== list.backdropAnchor {
                 reconfigured += [.spacer, .title, .empty] + list.entries.map { .track($0.id) }
             }
             let existing = Set(snapshot.itemIdentifiers)
             snapshot.reconfigureItems(reconfigured.filter(existing.contains))
 
+            if hasApplied, reconfigured.isEmpty,
+               dataSource.snapshot().itemIdentifiers == snapshot.itemIdentifiers { return }
             dataSource.apply(snapshot, animatingDifferences: hasApplied)
             hasApplied = true
         }
@@ -209,7 +211,7 @@ struct NowPlayingQueueList: UIViewRepresentable {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .environment(\.nowPlayingBackdropImage, latest.backdropImage)
-                    .environment(\.nowPlayingBackdropFrame, latest.backdropFrame)
+                    .environment(\.nowPlayingBackdropAnchor, latest.backdropAnchor)
                 }
                 .margins(.horizontal, inset)
                 .margins(.top, 14)
@@ -237,7 +239,7 @@ struct NowPlayingQueueList: UIViewRepresentable {
                         self.latest?.onPlay(index)
                     }
                     .environment(\.nowPlayingBackdropImage, latest.backdropImage)
-                    .environment(\.nowPlayingBackdropFrame, latest.backdropFrame)
+                    .environment(\.nowPlayingBackdropAnchor, latest.backdropAnchor)
                 }
                 .margins(.leading, inset)
                 .margins(.trailing, 0)
@@ -339,6 +341,7 @@ struct NowPlayingQueueList: UIViewRepresentable {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            latest?.backdropAnchor?.refresh()
             guard let latest else { return }
             // 保持现有顶部边界，头部滚动与吸附不额外叠加橡皮筋位移。
             let top = -scrollView.adjustedContentInset.top

@@ -33,7 +33,7 @@ struct NowPlayingVibrantLabel: View {
     let text: String
     let fontSize: CGFloat
     @Environment(\.nowPlayingBackdropImage) private var image
-    @Environment(\.nowPlayingBackdropFrame) private var backdropFrame
+    @Environment(\.nowPlayingBackdropAnchor) private var backdropAnchor
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var glyphs: some View {
@@ -43,25 +43,15 @@ struct NowPlayingVibrantLabel: View {
     var body: some View {
         glyphs.hidden()
             .overlay {
-                GeometryReader { proxy in
-                    let frame = proxy.frame(in: .global)
-                    ZStack(alignment: .topLeading) {
-                        Color(white: 0.88)
-                        if let image, backdropFrame.width > 0, backdropFrame.height > 0 {
-                            Image(uiImage: image)
-                                .resizable()
-                                .frame(width: backdropFrame.width, height: backdropFrame.height)
-                                .brightness(0.45)
-                                .offset(x: backdropFrame.minX - frame.minX,
-                                        y: backdropFrame.minY - frame.minY)
-                                .id(image)
-                                .transition(.opacity)
-                        }
+                ZStack {
+                    Color(white: 0.88)
+                    if let image, let backdropAnchor {
+                        NowPlayingAlignedBackdrop(image: image, anchor: backdropAnchor,
+                                                  animated: !reduceMotion)
+                            .brightness(0.45)
                     }
-                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-                    .clipped()
                 }
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: image)
+                .clipped()
                 .mask { glyphs }
             }
             .accessibilityElement(children: .ignore)

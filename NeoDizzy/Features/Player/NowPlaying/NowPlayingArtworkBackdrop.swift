@@ -3,35 +3,8 @@ import SwiftUI
 import UIKit
 
 extension EnvironmentValues {
-    /// 播放页背景在全局坐标系里的位置，供独立的列表 hosting 视图对齐。
-    @Entry var nowPlayingBackdropFrame: CGRect = .zero
+    @Entry var nowPlayingBackdropAnchor: NowPlayingBackdropAnchor? = nil
     @Entry var nowPlayingBackdropImage: UIImage? = nil
-}
-
-extension View {
-    /// 在这个视图底下垫一份和播放页背景完全对齐的副本。
-    /// 外层有遮罩或透明度时内容会单独合成，叠加提亮的文字碰不到真背景，只能和副本叠加；
-    /// 副本和真背景重合，遮罩渐隐的地方也看不出来。
-    func nowPlayingBackdropUnderlay(artworkURL: URL?) -> some View {
-        background {
-            NowPlayingBackdropUnderlay(artworkURL: artworkURL)
-        }
-    }
-}
-
-private struct NowPlayingBackdropUnderlay: View {
-    let artworkURL: URL?
-    @Environment(\.nowPlayingBackdropFrame) private var backdropFrame
-
-    var body: some View {
-        GeometryReader { proxy in
-            let frame = proxy.frame(in: .global)
-            NowPlayingArtworkBackdrop(artworkURL: artworkURL, ignoresSafeArea: false, isUnderlay: true)
-                .frame(width: backdropFrame.width, height: backdropFrame.height)
-                .offset(x: backdropFrame.minX - frame.minX, y: backdropFrame.minY - frame.minY)
-        }
-        .allowsHitTesting(false)
-    }
 }
 
 /// 从封面颜色生成静态背景；只在换歌时交叉淡入。
@@ -43,6 +16,7 @@ struct NowPlayingArtworkBackdrop: View {
     /// 背景实际铺开的范围（含安全区），给背景副本对齐用。
     var onFrameChange: ((CGRect) -> Void)? = nil
     var onImageChange: ((UIImage?) -> Void)? = nil
+    var anchor: NowPlayingBackdropAnchor?
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @State private var image: UIImage?
@@ -52,13 +26,15 @@ struct NowPlayingArtworkBackdrop: View {
         ignoresSafeArea: Bool = true,
         isUnderlay: Bool = false,
         onFrameChange: ((CGRect) -> Void)? = nil,
-        onImageChange: ((UIImage?) -> Void)? = nil
+        onImageChange: ((UIImage?) -> Void)? = nil,
+        anchor: NowPlayingBackdropAnchor? = nil
     ) {
         self.artworkURL = artworkURL
         self.ignoresSafeArea = ignoresSafeArea
         self.isUnderlay = isUnderlay
         self.onFrameChange = onFrameChange
         self.onImageChange = onImageChange
+        self.anchor = anchor
         // 已经缓存的封面直接拿来用，第一次出现就有图，不会先黑一下再淡入。
         _image = State(initialValue: Self.request(for: artworkURL).flatMap {
             ImagePipeline.shared.cache.cachedImage(for: $0)?.image
@@ -83,11 +59,8 @@ struct NowPlayingArtworkBackdrop: View {
                 }
 
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
+                    NowPlayingBackdropImage(image: image, animated: !accessibilityReduceMotion)
                         .frame(width: proxy.size.width, height: proxy.size.height)
-                        .id(image)
-                        .transition(.opacity)
                 }
 
 
@@ -96,8 +69,9 @@ struct NowPlayingArtworkBackdrop: View {
             .clipped()
             // 在铺满安全区之后的里层量：外层量到的是不含安全区的框，副本会按错的大小画，
             // 和真背景错开，列表顶部的渐隐带里就会显出一道印子。
+            .background { if let anchor { NowPlayingBackdropAnchorView(anchor: anchor) } }
             .onGeometryChange(for: CGRect.self) {
-                $0.frame(in: .global)
+                $0.frame(in: .named(NowPlayingContentCoordinateSpace.name))
             } action: {
                 onFrameChange?($0)
             }
@@ -106,19 +80,14 @@ struct NowPlayingArtworkBackdrop: View {
         .accessibilityHidden(true)
         .onChange(of: image, initial: true) { _, value in onImageChange?(value) }
         .task(id: artworkURL) {
-            guard let request = Self.request(for: artworkURL) else {
-                image = nil
-                return
-            }
+            // Keep the last visible backdrop through missing URLs and loading failures.
+            guard let request = Self.request(for: artworkURL) else { return }
             guard let loaded = try? await ImagePipeline.shared.image(for: request),
                   !Task.isCancelled,
                   let rendered = NowPlayingBackdropRenderer.render(loaded),
                   rendered !== image else { return }
-            // 只有换歌（已经有旧封面）时才交叉淡入；第一次出现直接显示。
-            let animates = image != nil && !accessibilityReduceMotion
-            withAnimation(animates ? .easeInOut(duration: 0.6) : nil) {
-                image = rendered
-            }
+            // The image view owns the overlay fade; the opaque base stays in place.
+            image = rendered
         }
     }
 }

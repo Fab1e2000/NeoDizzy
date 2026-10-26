@@ -125,28 +125,54 @@ struct MiniPlayerControls: View {
     let togglePlayback: () -> Void
     let next: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reducesMotion
+    @State private var nextTrigger = 0
+    @State private var showsLoadingIndicator = false
+
     var body: some View {
         HStack(spacing: 0) {
             Button(action: togglePlayback) {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .opacity(isLoading ? 0 : 1)
-                    .frame(width: 44, height: 44)
-                    .overlay { if isLoading { ProgressView().allowsHitTesting(false) } }
-                    .contentShape(.rect)
+                ZStack {
+                    NowPlayingPlayPauseIcon(isPlaying: isPlaying, reducesMotion: reducesMotion,
+                                            cornerRadius: 2.2)
+                        .frame(width: 14, height: 18)
+                        .opacity(showsLoadingIndicator ? 0 : 1)
+                        .scaleEffect(showsLoadingIndicator ? 0.6 : 1)
+                    if showsLoadingIndicator {
+                        ProgressView().allowsHitTesting(false).transition(.opacity)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .task(id: isLoading) {
+                    if isLoading {
+                        try? await Task.sleep(for: .milliseconds(300))
+                        guard !Task.isCancelled else { return }
+                    }
+                    withAnimation(reducesMotion ? nil : .smooth(duration: 0.2)) {
+                        showsLoadingIndicator = isLoading
+                    }
+                }
             }
+            .buttonStyle(NowPlayingTransportButtonStyle(reducesMotion: reducesMotion,
+                                                        springsBack: true, diameter: 44))
             .accessibilityLabel(isPlaying ? "暂停" : "播放")
             .accessibilityIdentifier("mini.playPause")
             if !compact {
-                Button(action: next) {
-                    Image(systemName: "forward.fill").frame(width: 44, height: 44).contentShape(.rect)
+                Button {
+                    nextTrigger += 1
+                    next()
+                } label: {
+                    NowPlayingSkipIcon(direction: .forward, trigger: nextTrigger,
+                                       reducesMotion: reducesMotion, cornerRadius: 1.3)
+                        .frame(width: 23, height: 15.5)
+                        .frame(width: 44, height: 44)
                 }
+                .buttonStyle(NowPlayingTransportButtonStyle(reducesMotion: reducesMotion, diameter: 44))
                 .disabled(!canPlayNext)
                 .accessibilityLabel("下一首")
                 .accessibilityIdentifier("mini.next")
             }
         }
-        .font(.system(size: 17, weight: .semibold))
-        .buttonStyle(.plain)
         .tint(colorScheme == .dark ? Color.white : .black)
         .foregroundStyle(colorScheme == .dark ? Color.white : .black)
         .environment(\.colorScheme, colorScheme)

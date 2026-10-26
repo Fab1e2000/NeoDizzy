@@ -6,13 +6,15 @@ struct NowPlayingTransportButtonStyle: ButtonStyle {
     let reducesMotion: Bool
     /// 松手时图标用带过冲的弹簧弹回（播放/暂停按钮用），否则平缓回到原大。
     var springsBack = false
+    var diameter: CGFloat = 64
 
     func makeBody(configuration: Configuration) -> some View {
         NowPlayingTransportButtonStyleBody(
             label: configuration.label,
             isPressed: configuration.isPressed,
             reducesMotion: reducesMotion,
-            springsBack: springsBack
+            springsBack: springsBack,
+            diameter: diameter
         )
     }
 }
@@ -22,6 +24,7 @@ private struct NowPlayingTransportButtonStyleBody<Label: View>: View {
     let isPressed: Bool
     let reducesMotion: Bool
     let springsBack: Bool
+    let diameter: CGFloat
 
     @State private var iconScale: CGFloat = 1
     @State private var highlightScale =
@@ -37,8 +40,8 @@ private struct NowPlayingTransportButtonStyleBody<Label: View>: View {
                     )
                 )
                 .frame(
-                    width: NowPlayingTransportButtonAnimation.diameter,
-                    height: NowPlayingTransportButtonAnimation.diameter
+                    width: diameter,
+                    height: diameter
                 )
                 .scaleEffect(highlightScale)
                 .opacity(highlightOpacity)
@@ -47,8 +50,8 @@ private struct NowPlayingTransportButtonStyleBody<Label: View>: View {
                 .scaleEffect(iconScale)
         }
         .frame(
-            width: NowPlayingTransportButtonAnimation.diameter,
-            height: NowPlayingTransportButtonAnimation.diameter
+            width: diameter,
+            height: diameter
         )
         .contentShape(.circle)
         .onAppear {
@@ -129,7 +132,6 @@ private struct NowPlayingTransportButtonStyleBody<Label: View>: View {
 }
 
 private enum NowPlayingTransportButtonAnimation {
-    static let diameter: CGFloat = 64
     static let pressedIconScale: CGFloat = 0.8
     static let pressedHighlightScale: CGFloat = 0.86
     static let highlightOpacity = 0.1
